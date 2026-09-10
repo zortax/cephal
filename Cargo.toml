@@ -1,0 +1,66 @@
+[package]
+name = "cephal"
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+description = "Retained, incremental CSS layout (block, flexbox, grid) with spineless invalidation"
+
+[features]
+default = ["block", "flex", "grid"]
+block = []
+flex = []
+grid = []
+parallel = ["dep:rayon"]
+serde = ["dep:serde"]
+# Counters of queries, hits and measures, for profiling.
+stats = []
+taffy-compat = ["dep:taffy"]
+
+[dependencies]
+rayon = { version = "1.12", optional = true }
+serde = { version = "1", features = ["derive", "rc"], optional = true }
+# Pinned to the main revision the vendored fixtures were generated from.
+taffy = { git = "https://github.com/DioxusLabs/taffy", rev = "a1c3f8fb3e2c978c3a4f062873bdb16d5eaf6cfd", optional = true, default-features = false, features = [
+  "std",
+  "taffy_tree",
+  "flexbox",
+  "flexbox_balance",
+  "grid",
+  "block_layout",
+  "float_layout",
+  "calc",
+  "content_size",
+  "detailed_layout_info",
+] }
+
+[dev-dependencies]
+cephal = { path = ".", features = ["taffy-compat"] }
+roxmltree = "0.21"
+proptest = "1.11"
+criterion = "0.8"
+taffy = { git = "https://github.com/DioxusLabs/taffy", rev = "a1c3f8fb3e2c978c3a4f062873bdb16d5eaf6cfd", default-features = false, features = [
+  "std",
+  "taffy_tree",
+  "flexbox",
+  "flexbox_balance",
+  "grid",
+  "block_layout",
+  "float_layout",
+  "calc",
+  "content_size",
+  "detailed_layout_info",
+] }
+
+[profile.bench]
+debug = 1
+
+[lib]
+bench = false
+
+[[bench]]
+name = "layout"
+harness = false
+
+# Line tables let `perf` attribute samples to source lines.
+[profile.release]
+debug = "line-tables-only"

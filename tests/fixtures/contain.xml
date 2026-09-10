@@ -1,0 +1,658 @@
+<tests>
+<test name="contain_content_block__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="ltr" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" direction="ltr" height="10px" margin-bottom="10px"/>
+      <div display="block" direction="ltr" contain="content">
+        <div display="block" direction="ltr" height="10px" margin-top="20px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="54">
+      <node x="2" y="2" width="96" height="10"/>
+      <node x="2" y="22" width="96" height="30">
+        <node x="0" y="20" width="96" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="contain_content_block__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="rtl" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" direction="rtl" height="10px" margin-bottom="10px"/>
+      <div display="block" direction="rtl" contain="content">
+        <div display="block" direction="rtl" height="10px" margin-top="20px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="54">
+      <node x="2" y="2" width="96" height="10"/>
+      <node x="2" y="22" width="96" height="30">
+        <node x="0" y="20" width="96" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="contain_content_block__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" box-sizing="content-box" direction="ltr" height="10px" margin-bottom="10px"/>
+      <div display="block" box-sizing="content-box" direction="ltr" contain="content">
+        <div display="block" box-sizing="content-box" direction="ltr" height="10px" margin-top="20px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="104" height="54">
+      <node x="2" y="2" width="100" height="10"/>
+      <node x="2" y="22" width="100" height="30">
+        <node x="0" y="20" width="100" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="contain_content_block__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" box-sizing="content-box" direction="rtl" height="10px" margin-bottom="10px"/>
+      <div display="block" box-sizing="content-box" direction="rtl" contain="content">
+        <div display="block" box-sizing="content-box" direction="rtl" height="10px" margin-top="20px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="104" height="54">
+      <node x="2" y="2" width="100" height="10"/>
+      <node x="2" y="22" width="100" height="30">
+        <node x="0" y="20" width="100" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="contain_layout_block_avoids_float__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="ltr" width="100px">
+      <div display="block" direction="ltr" float="left" width="30px" height="30px"/>
+      <div display="block" direction="ltr" contain="layout" height="50px">
+        <div display="block" direction="ltr" height="10px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="50">
+      <node x="0" y="0" width="30" height="30"/>
+      <node x="30" y="0" width="70" height="50">
+        <node x="0" y="0" width="70" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="contain_layout_block_avoids_float__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="rtl" width="100px">
+      <div display="block" direction="rtl" float="left" width="30px" height="30px"/>
+      <div display="block" direction="rtl" contain="layout" height="50px">
+        <div display="block" direction="rtl" height="10px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="50">
+      <node x="0" y="0" width="30" height="30"/>
+      <node x="30" y="0" width="70" height="50">
+        <node x="0" y="0" width="70" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="contain_layout_block_avoids_float__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" width="100px">
+      <div display="block" box-sizing="content-box" direction="ltr" float="left" width="30px" height="30px"/>
+      <div display="block" box-sizing="content-box" direction="ltr" contain="layout" height="50px">
+        <div display="block" box-sizing="content-box" direction="ltr" height="10px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="50">
+      <node x="0" y="0" width="30" height="30"/>
+      <node x="30" y="0" width="70" height="50">
+        <node x="0" y="0" width="70" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="contain_layout_block_avoids_float__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" width="100px">
+      <div display="block" box-sizing="content-box" direction="rtl" float="left" width="30px" height="30px"/>
+      <div display="block" box-sizing="content-box" direction="rtl" contain="layout" height="50px">
+        <div display="block" box-sizing="content-box" direction="rtl" height="10px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="50">
+      <node x="0" y="0" width="30" height="30"/>
+      <node x="30" y="0" width="70" height="50">
+        <node x="0" y="0" width="70" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="contain_layout_block_contains_floats__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="ltr" width="100px">
+      <div display="block" direction="ltr" contain="layout">
+        <div display="block" direction="ltr" float="left" width="30px" height="30px"/>
+      </div>
+      <div display="block" direction="ltr" height="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="40">
+      <node x="0" y="0" width="100" height="30">
+        <node x="0" y="0" width="30" height="30"/>
+      </node>
+      <node x="0" y="30" width="100" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="contain_layout_block_contains_floats__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="rtl" width="100px">
+      <div display="block" direction="rtl" contain="layout">
+        <div display="block" direction="rtl" float="left" width="30px" height="30px"/>
+      </div>
+      <div display="block" direction="rtl" height="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="40">
+      <node x="0" y="0" width="100" height="30">
+        <node x="0" y="0" width="30" height="30"/>
+      </node>
+      <node x="0" y="30" width="100" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="contain_layout_block_contains_floats__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" width="100px">
+      <div display="block" box-sizing="content-box" direction="ltr" contain="layout">
+        <div display="block" box-sizing="content-box" direction="ltr" float="left" width="30px" height="30px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="ltr" height="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="40">
+      <node x="0" y="0" width="100" height="30">
+        <node x="0" y="0" width="30" height="30"/>
+      </node>
+      <node x="0" y="30" width="100" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="contain_layout_block_contains_floats__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" width="100px">
+      <div display="block" box-sizing="content-box" direction="rtl" contain="layout">
+        <div display="block" box-sizing="content-box" direction="rtl" float="left" width="30px" height="30px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="rtl" height="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="40">
+      <node x="0" y="0" width="100" height="30">
+        <node x="0" y="0" width="30" height="30"/>
+      </node>
+      <node x="0" y="30" width="100" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="contain_layout_block_margin_collapse__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="ltr" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" direction="ltr" height="10px" margin-bottom="10px"/>
+      <div display="block" direction="ltr" contain="layout">
+        <div display="block" direction="ltr" height="10px" margin-top="20px" margin-bottom="20px"/>
+      </div>
+      <div display="block" direction="ltr" height="10px" margin-top="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="94">
+      <node x="2" y="2" width="96" height="10"/>
+      <node x="2" y="22" width="96" height="50">
+        <node x="0" y="20" width="96" height="10"/>
+      </node>
+      <node x="2" y="82" width="96" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="contain_layout_block_margin_collapse__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="rtl" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" direction="rtl" height="10px" margin-bottom="10px"/>
+      <div display="block" direction="rtl" contain="layout">
+        <div display="block" direction="rtl" height="10px" margin-top="20px" margin-bottom="20px"/>
+      </div>
+      <div display="block" direction="rtl" height="10px" margin-top="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="94">
+      <node x="2" y="2" width="96" height="10"/>
+      <node x="2" y="22" width="96" height="50">
+        <node x="0" y="20" width="96" height="10"/>
+      </node>
+      <node x="2" y="82" width="96" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="contain_layout_block_margin_collapse__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" box-sizing="content-box" direction="ltr" height="10px" margin-bottom="10px"/>
+      <div display="block" box-sizing="content-box" direction="ltr" contain="layout">
+        <div display="block" box-sizing="content-box" direction="ltr" height="10px" margin-top="20px" margin-bottom="20px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="ltr" height="10px" margin-top="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="104" height="94">
+      <node x="2" y="2" width="100" height="10"/>
+      <node x="2" y="22" width="100" height="50">
+        <node x="0" y="20" width="100" height="10"/>
+      </node>
+      <node x="2" y="82" width="100" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="contain_layout_block_margin_collapse__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" box-sizing="content-box" direction="rtl" height="10px" margin-bottom="10px"/>
+      <div display="block" box-sizing="content-box" direction="rtl" contain="layout">
+        <div display="block" box-sizing="content-box" direction="rtl" height="10px" margin-top="20px" margin-bottom="20px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="rtl" height="10px" margin-top="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="104" height="94">
+      <node x="2" y="2" width="100" height="10"/>
+      <node x="2" y="22" width="100" height="50">
+        <node x="0" y="20" width="100" height="10"/>
+      </node>
+      <node x="2" y="82" width="100" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="contain_layout_flex_baseline__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div direction="ltr" align-items="baseline" width="200px">
+      <div direction="ltr" width="50px" height="60px">
+        <div direction="ltr" width="50px" height="30px"/>
+      </div>
+      <div direction="ltr" contain="layout" width="50px" height="20px">
+        <div direction="ltr" width="50px" height="10px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="200" height="60">
+      <node x="0" y="0" width="50" height="60">
+        <node x="0" y="0" width="50" height="30"/>
+      </node>
+      <node x="50" y="10" width="50" height="20">
+        <node x="0" y="0" width="50" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="contain_layout_flex_baseline__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div direction="rtl" align-items="baseline" width="200px">
+      <div direction="rtl" width="50px" height="60px">
+        <div direction="rtl" width="50px" height="30px"/>
+      </div>
+      <div direction="rtl" contain="layout" width="50px" height="20px">
+        <div direction="rtl" width="50px" height="10px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="200" height="60">
+      <node x="150" y="0" width="50" height="60">
+        <node x="0" y="0" width="50" height="30"/>
+      </node>
+      <node x="100" y="10" width="50" height="20">
+        <node x="0" y="0" width="50" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="contain_layout_flex_baseline__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div box-sizing="content-box" direction="ltr" align-items="baseline" width="200px">
+      <div box-sizing="content-box" direction="ltr" width="50px" height="60px">
+        <div box-sizing="content-box" direction="ltr" width="50px" height="30px"/>
+      </div>
+      <div box-sizing="content-box" direction="ltr" contain="layout" width="50px" height="20px">
+        <div box-sizing="content-box" direction="ltr" width="50px" height="10px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="200" height="60">
+      <node x="0" y="0" width="50" height="60">
+        <node x="0" y="0" width="50" height="30"/>
+      </node>
+      <node x="50" y="10" width="50" height="20">
+        <node x="0" y="0" width="50" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="contain_layout_flex_baseline__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div box-sizing="content-box" direction="rtl" align-items="baseline" width="200px">
+      <div box-sizing="content-box" direction="rtl" width="50px" height="60px">
+        <div box-sizing="content-box" direction="rtl" width="50px" height="30px"/>
+      </div>
+      <div box-sizing="content-box" direction="rtl" contain="layout" width="50px" height="20px">
+        <div box-sizing="content-box" direction="rtl" width="50px" height="10px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="200" height="60">
+      <node x="150" y="0" width="50" height="60">
+        <node x="0" y="0" width="50" height="30"/>
+      </node>
+      <node x="100" y="10" width="50" height="20">
+        <node x="0" y="0" width="50" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="contain_paint_block_contains_floats__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="ltr" width="100px">
+      <div display="block" direction="ltr" contain="paint">
+        <div display="block" direction="ltr" float="left" width="30px" height="30px"/>
+      </div>
+      <div display="block" direction="ltr" height="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="40">
+      <node x="0" y="0" width="100" height="30">
+        <node x="0" y="0" width="30" height="30"/>
+      </node>
+      <node x="0" y="30" width="100" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="contain_paint_block_contains_floats__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="rtl" width="100px">
+      <div display="block" direction="rtl" contain="paint">
+        <div display="block" direction="rtl" float="left" width="30px" height="30px"/>
+      </div>
+      <div display="block" direction="rtl" height="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="40">
+      <node x="0" y="0" width="100" height="30">
+        <node x="0" y="0" width="30" height="30"/>
+      </node>
+      <node x="0" y="30" width="100" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="contain_paint_block_contains_floats__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" width="100px">
+      <div display="block" box-sizing="content-box" direction="ltr" contain="paint">
+        <div display="block" box-sizing="content-box" direction="ltr" float="left" width="30px" height="30px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="ltr" height="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="40">
+      <node x="0" y="0" width="100" height="30">
+        <node x="0" y="0" width="30" height="30"/>
+      </node>
+      <node x="0" y="30" width="100" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="contain_paint_block_contains_floats__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" width="100px">
+      <div display="block" box-sizing="content-box" direction="rtl" contain="paint">
+        <div display="block" box-sizing="content-box" direction="rtl" float="left" width="30px" height="30px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="rtl" height="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="40">
+      <node x="0" y="0" width="100" height="30">
+        <node x="0" y="0" width="30" height="30"/>
+      </node>
+      <node x="0" y="30" width="100" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="contain_paint_block_margin_collapse__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="ltr" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" direction="ltr" height="10px" margin-bottom="10px"/>
+      <div display="block" direction="ltr" contain="paint">
+        <div display="block" direction="ltr" height="10px" margin-top="20px" margin-bottom="20px"/>
+      </div>
+      <div display="block" direction="ltr" height="10px" margin-top="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="94">
+      <node x="2" y="2" width="96" height="10"/>
+      <node x="2" y="22" width="96" height="50">
+        <node x="0" y="20" width="96" height="10"/>
+      </node>
+      <node x="2" y="82" width="96" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="contain_paint_block_margin_collapse__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="rtl" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" direction="rtl" height="10px" margin-bottom="10px"/>
+      <div display="block" direction="rtl" contain="paint">
+        <div display="block" direction="rtl" height="10px" margin-top="20px" margin-bottom="20px"/>
+      </div>
+      <div display="block" direction="rtl" height="10px" margin-top="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="94">
+      <node x="2" y="2" width="96" height="10"/>
+      <node x="2" y="22" width="96" height="50">
+        <node x="0" y="20" width="96" height="10"/>
+      </node>
+      <node x="2" y="82" width="96" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="contain_paint_block_margin_collapse__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" box-sizing="content-box" direction="ltr" height="10px" margin-bottom="10px"/>
+      <div display="block" box-sizing="content-box" direction="ltr" contain="paint">
+        <div display="block" box-sizing="content-box" direction="ltr" height="10px" margin-top="20px" margin-bottom="20px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="ltr" height="10px" margin-top="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="104" height="94">
+      <node x="2" y="2" width="100" height="10"/>
+      <node x="2" y="22" width="100" height="50">
+        <node x="0" y="20" width="100" height="10"/>
+      </node>
+      <node x="2" y="82" width="100" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="contain_paint_block_margin_collapse__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" box-sizing="content-box" direction="rtl" height="10px" margin-bottom="10px"/>
+      <div display="block" box-sizing="content-box" direction="rtl" contain="paint">
+        <div display="block" box-sizing="content-box" direction="rtl" height="10px" margin-top="20px" margin-bottom="20px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="rtl" height="10px" margin-top="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="104" height="94">
+      <node x="2" y="2" width="100" height="10"/>
+      <node x="2" y="22" width="100" height="50">
+        <node x="0" y="20" width="100" height="10"/>
+      </node>
+      <node x="2" y="82" width="100" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="contain_paint_flex_baseline__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div direction="ltr" align-items="baseline" width="200px">
+      <div direction="ltr" width="50px" height="60px">
+        <div direction="ltr" width="50px" height="30px"/>
+      </div>
+      <div direction="ltr" contain="paint" width="50px" height="20px">
+        <div direction="ltr" width="50px" height="10px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="200" height="60">
+      <node x="0" y="0" width="50" height="60">
+        <node x="0" y="0" width="50" height="30"/>
+      </node>
+      <node x="50" y="20" width="50" height="20">
+        <node x="0" y="0" width="50" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="contain_paint_flex_baseline__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div direction="rtl" align-items="baseline" width="200px">
+      <div direction="rtl" width="50px" height="60px">
+        <div direction="rtl" width="50px" height="30px"/>
+      </div>
+      <div direction="rtl" contain="paint" width="50px" height="20px">
+        <div direction="rtl" width="50px" height="10px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="200" height="60">
+      <node x="150" y="0" width="50" height="60">
+        <node x="0" y="0" width="50" height="30"/>
+      </node>
+      <node x="100" y="20" width="50" height="20">
+        <node x="0" y="0" width="50" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="contain_paint_flex_baseline__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div box-sizing="content-box" direction="ltr" align-items="baseline" width="200px">
+      <div box-sizing="content-box" direction="ltr" width="50px" height="60px">
+        <div box-sizing="content-box" direction="ltr" width="50px" height="30px"/>
+      </div>
+      <div box-sizing="content-box" direction="ltr" contain="paint" width="50px" height="20px">
+        <div box-sizing="content-box" direction="ltr" width="50px" height="10px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="200" height="60">
+      <node x="0" y="0" width="50" height="60">
+        <node x="0" y="0" width="50" height="30"/>
+      </node>
+      <node x="50" y="20" width="50" height="20">
+        <node x="0" y="0" width="50" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="contain_paint_flex_baseline__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div box-sizing="content-box" direction="rtl" align-items="baseline" width="200px">
+      <div box-sizing="content-box" direction="rtl" width="50px" height="60px">
+        <div box-sizing="content-box" direction="rtl" width="50px" height="30px"/>
+      </div>
+      <div box-sizing="content-box" direction="rtl" contain="paint" width="50px" height="20px">
+        <div box-sizing="content-box" direction="rtl" width="50px" height="10px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="200" height="60">
+      <node x="150" y="0" width="50" height="60">
+        <node x="0" y="0" width="50" height="30"/>
+      </node>
+      <node x="100" y="20" width="50" height="20">
+        <node x="0" y="0" width="50" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+</tests>

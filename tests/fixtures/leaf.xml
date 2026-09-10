@@ -1,0 +1,586 @@
+<tests>
+<test name="leaf_overflow_scrollbars_affect_available_space_x_axis__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text direction="ltr" overflow-x="scroll" scrollbar-width="15" width="45px" height="45px">
+      HHHHHHHHHHHHHHHHHHHHH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="45" height="45" scroll_width="165" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_affect_available_space_x_axis__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text direction="rtl" overflow-x="scroll" scrollbar-width="15" width="45px" height="45px">
+      HHHHHHHHHHHHHHHHHHHHH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="45" height="45" scroll_width="165" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_affect_available_space_x_axis__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text box-sizing="content-box" direction="ltr" overflow-x="scroll" scrollbar-width="15" width="45px" height="45px">
+      HHHHHHHHHHHHHHHHHHHHH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="45" height="45" scroll_width="165" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_affect_available_space_x_axis__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text box-sizing="content-box" direction="rtl" overflow-x="scroll" scrollbar-width="15" width="45px" height="45px">
+      HHHHHHHHHHHHHHHHHHHHH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="45" height="45" scroll_width="165" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_affect_available_space_y_axis__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text direction="ltr" overflow-y="scroll" scrollbar-width="15" width="45px" height="45px">
+      HHHHHHHHHHHHHHHHHHHHH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="45" height="45" scroll_width="180" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_affect_available_space_y_axis__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text direction="rtl" overflow-y="scroll" scrollbar-width="15" width="45px" height="45px">
+      HHHHHHHHHHHHHHHHHHHHH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="45" height="45" scroll_width="180" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_affect_available_space_y_axis__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text box-sizing="content-box" direction="ltr" overflow-y="scroll" scrollbar-width="15" width="45px" height="45px">
+      HHHHHHHHHHHHHHHHHHHHH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="45" height="45" scroll_width="180" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_affect_available_space_y_axis__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text box-sizing="content-box" direction="rtl" overflow-y="scroll" scrollbar-width="15" width="45px" height="45px">
+      HHHHHHHHHHHHHHHHHHHHH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="45" height="45" scroll_width="180" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_overridden_by_available_space__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div direction="ltr" width="2px" height="4px">
+      <div direction="ltr" overflow-x="scroll" overflow-y="scroll" scrollbar-width="15" flex-grow="1"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="2" height="4">
+      <node x="0" y="0" width="2" height="4" scroll_width="0" scroll_height="0"/>
+    </node>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_overridden_by_available_space__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div direction="rtl" width="2px" height="4px">
+      <div direction="rtl" overflow-x="scroll" overflow-y="scroll" scrollbar-width="15" flex-grow="1"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="2" height="4">
+      <node x="0" y="0" width="2" height="4" scroll_width="0" scroll_height="0"/>
+    </node>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_overridden_by_available_space__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div box-sizing="content-box" direction="ltr" width="2px" height="4px">
+      <div box-sizing="content-box" direction="ltr" overflow-x="scroll" overflow-y="scroll" scrollbar-width="15" flex-grow="1"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="2" height="4">
+      <node x="0" y="0" width="2" height="4" scroll_width="0" scroll_height="0"/>
+    </node>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_overridden_by_available_space__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div box-sizing="content-box" direction="rtl" width="2px" height="4px">
+      <div box-sizing="content-box" direction="rtl" overflow-x="scroll" overflow-y="scroll" scrollbar-width="15" flex-grow="1"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="2" height="4">
+      <node x="0" y="0" width="2" height="4" scroll_width="0" scroll_height="0"/>
+    </node>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_overridden_by_max_size__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div direction="ltr" overflow-x="scroll" overflow-y="scroll" scrollbar-width="15" max-width="2px" max-height="4px"/>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="2" height="4" scroll_width="0" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_overridden_by_max_size__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div direction="rtl" overflow-x="scroll" overflow-y="scroll" scrollbar-width="15" max-width="2px" max-height="4px"/>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="2" height="4" scroll_width="0" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_overridden_by_max_size__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div box-sizing="content-box" direction="ltr" overflow-x="scroll" overflow-y="scroll" scrollbar-width="15" max-width="2px" max-height="4px"/>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="2" height="4" scroll_width="0" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_overridden_by_max_size__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div box-sizing="content-box" direction="rtl" overflow-x="scroll" overflow-y="scroll" scrollbar-width="15" max-width="2px" max-height="4px"/>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="2" height="4" scroll_width="0" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_overridden_by_size__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div direction="ltr" overflow-x="scroll" overflow-y="scroll" scrollbar-width="15" width="2px" height="4px"/>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="2" height="4" scroll_width="0" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_overridden_by_size__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div direction="rtl" overflow-x="scroll" overflow-y="scroll" scrollbar-width="15" width="2px" height="4px"/>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="2" height="4" scroll_width="0" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_overridden_by_size__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div box-sizing="content-box" direction="ltr" overflow-x="scroll" overflow-y="scroll" scrollbar-width="15" width="2px" height="4px"/>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="2" height="4" scroll_width="0" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_overridden_by_size__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div box-sizing="content-box" direction="rtl" overflow-x="scroll" overflow-y="scroll" scrollbar-width="15" width="2px" height="4px"/>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="2" height="4" scroll_width="0" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_take_up_space_both_axis__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text direction="ltr" overflow-x="scroll" overflow-y="scroll" scrollbar-width="15">
+      HH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="35" height="25" scroll_width="0" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_take_up_space_both_axis__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text direction="rtl" overflow-x="scroll" overflow-y="scroll" scrollbar-width="15">
+      HH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="35" height="25" scroll_width="0" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_take_up_space_both_axis__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text box-sizing="content-box" direction="ltr" overflow-x="scroll" overflow-y="scroll" scrollbar-width="15">
+      HH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="35" height="25" scroll_width="0" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_take_up_space_both_axis__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text box-sizing="content-box" direction="rtl" overflow-x="scroll" overflow-y="scroll" scrollbar-width="15">
+      HH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="35" height="25" scroll_width="0" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_take_up_space_x_axis__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text direction="ltr" overflow-x="scroll" scrollbar-width="15">
+      HH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="20" height="25" scroll_width="0" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_take_up_space_x_axis__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text direction="rtl" overflow-x="scroll" scrollbar-width="15">
+      HH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="20" height="25" scroll_width="0" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_take_up_space_x_axis__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text box-sizing="content-box" direction="ltr" overflow-x="scroll" scrollbar-width="15">
+      HH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="20" height="25" scroll_width="0" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_take_up_space_x_axis__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text box-sizing="content-box" direction="rtl" overflow-x="scroll" scrollbar-width="15">
+      HH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="20" height="25" scroll_width="0" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_take_up_space_y_axis__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text direction="ltr" overflow-y="scroll" scrollbar-width="15">
+      HH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="35" height="10" scroll_width="0" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_take_up_space_y_axis__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text direction="rtl" overflow-y="scroll" scrollbar-width="15">
+      HH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="35" height="10" scroll_width="0" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_take_up_space_y_axis__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text box-sizing="content-box" direction="ltr" overflow-y="scroll" scrollbar-width="15">
+      HH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="35" height="10" scroll_width="0" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_overflow_scrollbars_take_up_space_y_axis__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text box-sizing="content-box" direction="rtl" overflow-y="scroll" scrollbar-width="15">
+      HH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="35" height="10" scroll_width="0" scroll_height="0"/>
+  </expectations>
+</test>
+<test name="leaf_padding_border_overrides_max_size__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div direction="ltr" max-width="12px" max-height="12px" padding-top="2px" padding-left="8px" padding-bottom="6px" padding-right="4px" border-top="1px" border-left="7px" border-bottom="5px" border-right="3px"/>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="22" height="14"/>
+  </expectations>
+</test>
+<test name="leaf_padding_border_overrides_max_size__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div direction="rtl" max-width="12px" max-height="12px" padding-top="2px" padding-left="8px" padding-bottom="6px" padding-right="4px" border-top="1px" border-left="7px" border-bottom="5px" border-right="3px"/>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="22" height="14"/>
+  </expectations>
+</test>
+<test name="leaf_padding_border_overrides_max_size__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div box-sizing="content-box" direction="ltr" max-width="12px" max-height="12px" padding-top="2px" padding-left="8px" padding-bottom="6px" padding-right="4px" border-top="1px" border-left="7px" border-bottom="5px" border-right="3px"/>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="22" height="14"/>
+  </expectations>
+</test>
+<test name="leaf_padding_border_overrides_max_size__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div box-sizing="content-box" direction="rtl" max-width="12px" max-height="12px" padding-top="2px" padding-left="8px" padding-bottom="6px" padding-right="4px" border-top="1px" border-left="7px" border-bottom="5px" border-right="3px"/>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="22" height="14"/>
+  </expectations>
+</test>
+<test name="leaf_padding_border_overrides_min_size__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div direction="ltr" min-width="0px" min-height="0px" padding-top="2px" padding-left="8px" padding-bottom="6px" padding-right="4px" border-top="1px" border-left="7px" border-bottom="5px" border-right="3px"/>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="22" height="14"/>
+  </expectations>
+</test>
+<test name="leaf_padding_border_overrides_min_size__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div direction="rtl" min-width="0px" min-height="0px" padding-top="2px" padding-left="8px" padding-bottom="6px" padding-right="4px" border-top="1px" border-left="7px" border-bottom="5px" border-right="3px"/>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="22" height="14"/>
+  </expectations>
+</test>
+<test name="leaf_padding_border_overrides_min_size__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div box-sizing="content-box" direction="ltr" min-width="0px" min-height="0px" padding-top="2px" padding-left="8px" padding-bottom="6px" padding-right="4px" border-top="1px" border-left="7px" border-bottom="5px" border-right="3px"/>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="22" height="14"/>
+  </expectations>
+</test>
+<test name="leaf_padding_border_overrides_min_size__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div box-sizing="content-box" direction="rtl" min-width="0px" min-height="0px" padding-top="2px" padding-left="8px" padding-bottom="6px" padding-right="4px" border-top="1px" border-left="7px" border-bottom="5px" border-right="3px"/>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="22" height="14"/>
+  </expectations>
+</test>
+<test name="leaf_padding_border_overrides_size__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div direction="ltr" width="12px" height="12px" padding-top="2px" padding-left="8px" padding-bottom="6px" padding-right="4px" border-top="1px" border-left="7px" border-bottom="5px" border-right="3px"/>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="22" height="14"/>
+  </expectations>
+</test>
+<test name="leaf_padding_border_overrides_size__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div direction="rtl" width="12px" height="12px" padding-top="2px" padding-left="8px" padding-bottom="6px" padding-right="4px" border-top="1px" border-left="7px" border-bottom="5px" border-right="3px"/>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="22" height="14"/>
+  </expectations>
+</test>
+<test name="leaf_padding_border_overrides_size__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div box-sizing="content-box" direction="ltr" width="12px" height="12px" padding-top="2px" padding-left="8px" padding-bottom="6px" padding-right="4px" border-top="1px" border-left="7px" border-bottom="5px" border-right="3px"/>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="34" height="26"/>
+  </expectations>
+</test>
+<test name="leaf_padding_border_overrides_size__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div box-sizing="content-box" direction="rtl" width="12px" height="12px" padding-top="2px" padding-left="8px" padding-bottom="6px" padding-right="4px" border-top="1px" border-left="7px" border-bottom="5px" border-right="3px"/>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="34" height="26"/>
+  </expectations>
+</test>
+<test name="leaf_with_content_and_border__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text direction="ltr" border-top="2px" border-left="8px" border-bottom="6px" border-right="4px">
+      HHHH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="52" height="18"/>
+  </expectations>
+</test>
+<test name="leaf_with_content_and_border__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text direction="rtl" border-top="2px" border-left="8px" border-bottom="6px" border-right="4px">
+      HHHH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="52" height="18"/>
+  </expectations>
+</test>
+<test name="leaf_with_content_and_border__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text box-sizing="content-box" direction="ltr" border-top="2px" border-left="8px" border-bottom="6px" border-right="4px">
+      HHHH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="52" height="18"/>
+  </expectations>
+</test>
+<test name="leaf_with_content_and_border__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text box-sizing="content-box" direction="rtl" border-top="2px" border-left="8px" border-bottom="6px" border-right="4px">
+      HHHH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="52" height="18"/>
+  </expectations>
+</test>
+<test name="leaf_with_content_and_padding__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text direction="ltr" padding-top="2px" padding-left="8px" padding-bottom="6px" padding-right="4px">
+      HHHH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="52" height="18"/>
+  </expectations>
+</test>
+<test name="leaf_with_content_and_padding__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text direction="rtl" padding-top="2px" padding-left="8px" padding-bottom="6px" padding-right="4px">
+      HHHH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="52" height="18"/>
+  </expectations>
+</test>
+<test name="leaf_with_content_and_padding__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text box-sizing="content-box" direction="ltr" padding-top="2px" padding-left="8px" padding-bottom="6px" padding-right="4px">
+      HHHH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="52" height="18"/>
+  </expectations>
+</test>
+<test name="leaf_with_content_and_padding__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text box-sizing="content-box" direction="rtl" padding-top="2px" padding-left="8px" padding-bottom="6px" padding-right="4px">
+      HHHH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="52" height="18"/>
+  </expectations>
+</test>
+<test name="leaf_with_content_and_padding_border__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text direction="ltr" padding-top="2px" padding-left="8px" padding-bottom="6px" padding-right="4px" border-top="1px" border-left="7px" border-bottom="5px" border-right="3px">
+      HHHH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="62" height="24"/>
+  </expectations>
+</test>
+<test name="leaf_with_content_and_padding_border__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text direction="rtl" padding-top="2px" padding-left="8px" padding-bottom="6px" padding-right="4px" border-top="1px" border-left="7px" border-bottom="5px" border-right="3px">
+      HHHH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="62" height="24"/>
+  </expectations>
+</test>
+<test name="leaf_with_content_and_padding_border__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text box-sizing="content-box" direction="ltr" padding-top="2px" padding-left="8px" padding-bottom="6px" padding-right="4px" border-top="1px" border-left="7px" border-bottom="5px" border-right="3px">
+      HHHH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="62" height="24"/>
+  </expectations>
+</test>
+<test name="leaf_with_content_and_padding_border__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <text box-sizing="content-box" direction="rtl" padding-top="2px" padding-left="8px" padding-bottom="6px" padding-right="4px" border-top="1px" border-left="7px" border-bottom="5px" border-right="3px">
+      HHHH
+    </text>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="62" height="24"/>
+  </expectations>
+</test>
+</tests>

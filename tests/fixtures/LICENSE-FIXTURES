@@ -1,0 +1,8 @@
+The XML fixtures in this directory are generated from the taffy project's test fixtures
+(https://github.com/DioxusLabs/taffy, tests/xml), themselves partly imported from facebook/yoga.
+Expected values were produced by Chrome. Both projects are MIT licensed:
+
+MIT License
+Copyright (c) 2018 Visly Inc.
+Copyright (c) 2026 Taffy Authors
+Copyright (c) Meta Platforms, Inc. and affiliates.

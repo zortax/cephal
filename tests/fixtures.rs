@@ -1,0 +1,394 @@
+//! Chrome-generated fixtures vendored from taffy (see tests/fixtures/LICENSE-FIXTURES).
+
+use cephal::geometry::{AbsoluteAxis, AvailableSpace, Line, Point, Rect, Size};
+use cephal::style::parse::*;
+use cephal::style::{Dimension, LengthPercentage, LengthPercentageAuto, Style};
+use cephal::tree::{MeasureInput, MeasureOutput, NodeId};
+use cephal::Tree;
+use roxmltree::{Document, Node};
+use std::fmt::Write as _;
+
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+enum WritingMode {
+    #[default]
+    Horizontal,
+    Vertical,
+}
+
+struct Ahem {
+    text: String,
+    writing_mode: WritingMode,
+}
+
+/// Ahem text: every glyph is 10 by 10, zero-width spaces are break opportunities.
+fn measure_ahem(ctx: &mut Ahem, input: MeasureInput, _style: &Style) -> MeasureOutput {
+    const H: f32 = 10.0;
+    let known = input.known_dimensions;
+    if let Size { width: Some(w), height: Some(h) } = known {
+        return MeasureOutput::from_size(Size { width: w, height: h });
+    }
+    let inline_axis = match ctx.writing_mode {
+        WritingMode::Horizontal => AbsoluteAxis::Horizontal,
+        WritingMode::Vertical => AbsoluteAxis::Vertical,
+    };
+    let block_axis = inline_axis.other();
+    let lines: Vec<&str> = ctx.text.split('\u{200B}').collect();
+    let min_line = lines.iter().map(|l| l.len()).max().unwrap_or(0) as f32 * H;
+    let max_line = lines.iter().map(|l| l.len()).sum::<usize>() as f32 * H;
+    let inline_size = known
+        .get(inline_axis)
+        .unwrap_or_else(|| match input.available_space.get(inline_axis) {
+            AvailableSpace::MinContent => min_line,
+            AvailableSpace::MaxContent => max_line,
+            AvailableSpace::Definite(w) => w.min(max_line),
+        })
+        .max(min_line);
+    let block_size = known.get(block_axis).unwrap_or_else(|| {
+        let per_line = (inline_size / H).floor() as usize;
+        let mut count = 1;
+        let mut current = 0;
+        for line in &lines {
+            if current + line.len() > per_line {
+                if current > 0 {
+                    count += 1;
+                }
+                current = line.len();
+            } else {
+                current += line.len();
+            }
+        }
+        count as f32 * H
+    });
+    let size = match ctx.writing_mode {
+        WritingMode::Horizontal => Size { width: inline_size, height: block_size },
+        WritingMode::Vertical => Size { width: block_size, height: inline_size },
+    };
+    MeasureOutput::from_size(Size {
+        width: known.width.unwrap_or(size.width),
+        height: known.height.unwrap_or(size.height),
+    })
+}
+
+#[derive(Debug)]
+struct Expected {
+    location: Point<f32>,
+    size: Size<f32>,
+    scroll: Option<Size<f32>>,
+    resolved_rows: Option<String>,
+    resolved_columns: Option<String>,
+    children: Vec<Expected>,
+}
+
+/// Compares resolved track lists: names exactly, sizes within 0.1.
+fn track_lists_match(expected: &str, actual: &str) -> bool {
+    fn tokens(s: &str) -> Vec<String> {
+        let s = s.trim();
+        if s == "none" {
+            return Vec::new();
+        }
+        let mut out = Vec::new();
+        let mut rest = s;
+        while !rest.is_empty() {
+            rest = rest.trim_start();
+            if rest.is_empty() {
+                break;
+            }
+            if let Some(after) = rest.strip_prefix('[') {
+                let end = after.find(']').unwrap();
+                let names: Vec<&str> = after[..end].split_whitespace().collect();
+                out.push(format!("[{}]", names.join(" ")));
+                rest = &after[end + 1..];
+            } else {
+                let end = rest.find(' ').unwrap_or(rest.len());
+                let px: f32 = rest[..end].strip_suffix("px").unwrap().parse().unwrap();
+                out.push(format!("{:.1}", (px * 10.0).round() / 10.0));
+                rest = &rest[end..];
+            }
+        }
+        out
+    }
+    let (e, a) = (tokens(expected), tokens(actual));
+    e.len() == a.len()
+        && e.iter().zip(a.iter()).all(|(e, a)| {
+            if e.starts_with('[') {
+                e == a
+            } else {
+                (e.parse::<f32>().unwrap() - a.parse::<f32>().unwrap()).abs() < 0.1
+            }
+        })
+}
+
+fn attr<T>(node: Node, name: &str, parse: impl FnOnce(&str) -> Option<T>) -> Option<T> {
+    node.attribute(name).map(|v| parse(v).unwrap_or_else(|| panic!("cannot parse {name}={v:?}")))
+}
+
+fn build_style(node: Node, tree: &mut Tree<Ahem>) -> Style {
+    let mut s = Style::DEFAULT;
+    // Fixtures inherit `div { display: flex }` from the base stylesheet.
+    s.display = cephal::style::Display::Flex;
+    let mut intern = |name: &str| tree.intern(name);
+    if let Some(v) = attr(node, "display", parse_display) {
+        s.display = v;
+    }
+    if let Some(v) = attr(node, "direction", parse_direction) {
+        s.direction = v;
+    }
+    if let Some(v) = attr(node, "box-sizing", parse_box_sizing) {
+        s.box_sizing = v;
+    }
+    if let Some(v) = attr(node, "overflow-x", parse_overflow) {
+        s.overflow.x = v;
+    }
+    if let Some(v) = attr(node, "overflow-y", parse_overflow) {
+        s.overflow.y = v;
+    }
+    if let Some(v) = attr(node, "scrollbar-width", |v| v.parse().ok()) {
+        s.scrollbar_width = v;
+    }
+    if let Some(v) = attr(node, "contain", parse_contain) {
+        s.contain = v;
+    }
+    if let Some(v) = attr(node, "float", parse_float) {
+        s.float = v;
+    }
+    if let Some(v) = attr(node, "clear", parse_clear) {
+        s.clear = v;
+    }
+    if let Some(v) = attr(node, "position", parse_position) {
+        s.position = v;
+    }
+    let dim = |n: &str| attr(node, n, parse_dimension).unwrap_or(Dimension::AUTO);
+    let lpa = |n: &str, d: LengthPercentageAuto| attr(node, n, parse_length_percentage_auto).unwrap_or(d);
+    let lp = |n: &str| attr(node, n, parse_length_percentage).unwrap_or(LengthPercentage::ZERO);
+    s.size = Size { width: dim("width"), height: dim("height") };
+    s.min_size = Size { width: lpa("min-width", LengthPercentageAuto::AUTO), height: lpa("min-height", LengthPercentageAuto::AUTO) };
+    s.max_size = Size { width: lpa("max-width", LengthPercentageAuto::AUTO), height: lpa("max-height", LengthPercentageAuto::AUTO) };
+    s.inset = Rect {
+        top: lpa("top", LengthPercentageAuto::AUTO),
+        left: lpa("left", LengthPercentageAuto::AUTO),
+        bottom: lpa("bottom", LengthPercentageAuto::AUTO),
+        right: lpa("right", LengthPercentageAuto::AUTO),
+    };
+    s.margin = Rect {
+        top: lpa("margin-top", LengthPercentageAuto::ZERO),
+        left: lpa("margin-left", LengthPercentageAuto::ZERO),
+        bottom: lpa("margin-bottom", LengthPercentageAuto::ZERO),
+        right: lpa("margin-right", LengthPercentageAuto::ZERO),
+    };
+    s.padding = Rect { top: lp("padding-top"), left: lp("padding-left"), bottom: lp("padding-bottom"), right: lp("padding-right") };
+    s.border = Rect { top: lp("border-top"), left: lp("border-left"), bottom: lp("border-bottom"), right: lp("border-right") };
+    s.gap = Size { width: lp("column-gap"), height: lp("row-gap") };
+    s.aspect_ratio = attr(node, "aspect-ratio", |v| v.parse().ok());
+    s.align_items = attr(node, "align-items", parse_align_items);
+    s.align_self = attr(node, "align-self", parse_align_items);
+    s.justify_items = attr(node, "justify-items", parse_align_items);
+    s.justify_self = attr(node, "justify-self", parse_align_items);
+    s.align_content = attr(node, "align-content", parse_align_content);
+    s.justify_content = attr(node, "justify-content", parse_align_content);
+    if let Some(v) = attr(node, "text-align", parse_text_align) {
+        s.text_align = v;
+    }
+    if let Some(v) = attr(node, "flex-direction", parse_flex_direction) {
+        s.flex_direction = v;
+    }
+    if let Some(v) = attr(node, "flex-wrap", parse_flex_wrap) {
+        s.flex_wrap = v;
+    }
+    if let Some(v) = attr(node, "flex-line-count", |v| v.parse().ok()) {
+        s.flex_line_count = v;
+    }
+    if let Some(v) = attr(node, "flex-grow", |v| v.parse().ok()) {
+        s.flex_grow = v;
+    }
+    if let Some(v) = attr(node, "flex-shrink", |v| v.parse().ok()) {
+        s.flex_shrink = v;
+    }
+    s.flex_basis = dim("flex-basis");
+    let rows = attr(node, "grid-template-rows", |v| parse_grid_template(v, &mut intern));
+    let cols = attr(node, "grid-template-columns", |v| parse_grid_template(v, &mut intern));
+    let auto_rows = attr(node, "grid-auto-rows", parse_grid_auto_tracks);
+    let auto_cols = attr(node, "grid-auto-columns", parse_grid_auto_tracks);
+    let flow = attr(node, "grid-auto-flow", parse_grid_auto_flow);
+    if rows.is_some() || cols.is_some() || auto_rows.is_some() || auto_cols.is_some() || flow.is_some() {
+        let g = s.grid_mut();
+        if let Some((t, n)) = rows {
+            g.template_rows = t;
+            g.template_row_names = n;
+        }
+        if let Some((t, n)) = cols {
+            g.template_columns = t;
+            g.template_column_names = n;
+        }
+        g.auto_rows = auto_rows.unwrap_or_default();
+        g.auto_columns = auto_cols.unwrap_or_default();
+        g.auto_flow = flow.unwrap_or_default();
+    }
+    let mut placement = |n: &str| attr(node, n, |v| parse_grid_placement(v, &mut intern)).unwrap_or_default();
+    s.grid_row = Line { start: placement("grid-row-start"), end: placement("grid-row-end") };
+    s.grid_column = Line { start: placement("grid-column-start"), end: placement("grid-column-end") };
+    s
+}
+
+fn build(input: Node, expected: Node, tree: &mut Tree<Ahem>) -> (NodeId, Expected) {
+    let style = build_style(input, tree);
+    let has_children = input.first_element_child().is_some();
+    let id = if has_children {
+        tree.new_leaf(style)
+    } else {
+        let text = input.text().map(str::trim).filter(|t| !t.is_empty());
+        match text {
+            Some(t) => {
+                let writing_mode = input
+                    .attribute("writing-mode")
+                    .map(|w| if w.contains("vertical") { WritingMode::Vertical } else { WritingMode::Horizontal })
+                    .unwrap_or_default();
+                tree.new_leaf_with_context(style, Ahem { text: t.to_owned(), writing_mode })
+            }
+            None => tree.new_leaf(style),
+        }
+    };
+    let f = |n: &str| expected.attribute(n).and_then(|v| v.parse::<f32>().ok());
+    let mut exp = Expected {
+        location: Point { x: f("x").unwrap(), y: f("y").unwrap() },
+        size: Size { width: f("width").unwrap(), height: f("height").unwrap() },
+        scroll: match (f("scroll_width"), f("scroll_height")) {
+            (Some(w), Some(h)) => Some(Size { width: w, height: h }),
+            _ => None,
+        },
+        resolved_rows: expected.attribute("resolved-rows").map(str::to_owned),
+        resolved_columns: expected.attribute("resolved-columns").map(str::to_owned),
+        children: Vec::new(),
+    };
+    for (ci, ce) in input.children().filter(|n| n.is_element()).zip(expected.children().filter(|n| n.is_element())) {
+        let (cid, cexp) = build(ci, ce, tree);
+        tree.append_child(id, cid);
+        exp.children.push(cexp);
+    }
+    (id, exp)
+}
+
+fn check(tree: &Tree<Ahem>, id: NodeId, exp: &Expected, path: &str, errors: &mut String) {
+    let l = tree.layout(id);
+    let near = |a: f32, b: f32| (a - b).abs() < 0.1;
+    let ok = near(l.location.x, exp.location.x)
+        && near(l.location.y, exp.location.y)
+        && near(l.size.width, exp.size.width)
+        && near(l.size.height, exp.size.height)
+        && exp.scroll.is_none_or(|s| near(l.scroll_width(), s.width) && near(l.scroll_height(), s.height));
+    let info = tree.detailed_grid_info(id);
+    let name_of = |i: cephal::style::Ident| tree.ident_name(i).to_owned();
+    let tracks_ok = match (info, &exp.resolved_rows, &exp.resolved_columns) {
+        (Some(info), Some(rows), Some(cols)) => {
+            track_lists_match(rows, &info.rows.track_list_string(name_of)) && track_lists_match(cols, &info.columns.track_list_string(name_of))
+        }
+        _ => true,
+    };
+    if !tracks_ok {
+        let info = info.unwrap();
+        let _ = writeln!(
+            errors,
+            "  {path}: tracks expected rows={:?} cols={:?}; got rows={:?} cols={:?}",
+            exp.resolved_rows,
+            exp.resolved_columns,
+            info.rows.track_list_string(name_of),
+            info.columns.track_list_string(name_of)
+        );
+    }
+    if !ok {
+        let _ = writeln!(
+            errors,
+            "  {path}: expected x={} y={} w={} h={} scroll={:?}; got x={} y={} w={} h={} scroll={}x{}",
+            exp.location.x, exp.location.y, exp.size.width, exp.size.height, exp.scroll,
+            l.location.x, l.location.y, l.size.width, l.size.height, l.scroll_width(), l.scroll_height()
+        );
+    }
+    for (i, (cid, cexp)) in tree.children(id).zip(exp.children.iter()).enumerate() {
+        check(tree, cid, cexp, &format!("{path}/{i}"), errors);
+    }
+}
+
+fn run_group(group: &str) {
+    let path = format!("{}/tests/fixtures/{group}.xml", env!("CARGO_MANIFEST_DIR"));
+    let raw = std::fs::read_to_string(&path).expect("fixture file");
+    let doc = Document::parse(&raw).unwrap();
+    let filter = std::env::var("CEPHAL_FIXTURE").ok();
+    let mut total = 0;
+    let mut failed = Vec::new();
+    for test in doc.root_element().children().filter(|n| n.has_tag_name("test")) {
+        let name = test.attribute("name").unwrap();
+        if let Some(f) = &filter
+            && !name.contains(f.as_str())
+        {
+            continue;
+        }
+        total += 1;
+        let use_rounding = test.attribute("use-rounding").is_none_or(|v| v == "true");
+        let viewport = test.children().find(|n| n.has_tag_name("viewport")).unwrap();
+        let input = test.children().find(|n| n.has_tag_name("input")).unwrap();
+        let expectations = test.children().find(|n| n.has_tag_name("expectations")).unwrap();
+        let available_space = Size {
+            width: viewport.attribute("width").map_or(AvailableSpace::MaxContent, |v| parse_available_space(v).unwrap()),
+            height: viewport.attribute("height").map_or(AvailableSpace::MaxContent, |v| parse_available_space(v).unwrap()),
+        };
+        let mut tree: Tree<Ahem> = Tree::new();
+        tree.enable_detailed_grid_info();
+        if use_rounding {
+            tree.enable_rounding();
+        } else {
+            tree.disable_rounding();
+        }
+        let (root, expected) = build(input.first_element_child().unwrap(), expectations.first_element_child().unwrap(), &mut tree);
+        tree.compute_layout_with_measure(root, available_space, measure_ahem);
+        let mut errors = String::new();
+        check(&tree, root, &expected, "root", &mut errors);
+        if !errors.is_empty() {
+            failed.push(format!("{name}\n{errors}"));
+        }
+    }
+    let shown = failed.iter().take(25).cloned().collect::<Vec<_>>().join("");
+    let names = failed.iter().map(|f| f.lines().next().unwrap_or("")).collect::<Vec<_>>().join("\n");
+    assert!(
+        failed.is_empty(),
+        "{group}: {} of {total} fixtures failed\n{shown}{}\nALL FAILING:\n{names}\n",
+        failed.len(),
+        if failed.len() > 25 { format!("  ... and {} more\n", failed.len() - 25) } else { String::new() }
+    );
+    eprintln!("{group}: {total} fixtures passed");
+}
+
+#[test]
+fn leaf() {
+    run_group("leaf");
+}
+#[test]
+fn block() {
+    run_group("block");
+}
+#[test]
+fn contain() {
+    run_group("contain");
+}
+#[test]
+fn float() {
+    run_group("float");
+}
+#[test]
+fn flex() {
+    run_group("flex");
+}
+#[test]
+fn blockflex() {
+    run_group("blockflex");
+}
+#[test]
+fn grid() {
+    run_group("grid");
+}
+#[test]
+fn blockgrid() {
+    run_group("blockgrid");
+}
+#[test]
+fn gridflex() {
+    run_group("gridflex");
+}
