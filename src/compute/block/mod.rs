@@ -227,6 +227,7 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
     let mut inflow_overflow_rect = flow.overflow_rect;
     let mut intrinsic_outer_height = flow.content_height;
     let mut first_baseline = flow.first_baseline;
+    let mut last_baseline = flow.last_baseline;
     // A BFC root contains its floats.
     if block_ctx.is_bfc_root() || establishes_new_bfc {
         intrinsic_outer_height = intrinsic_outer_height.max(block_ctx.floated_content_height_contribution());
@@ -251,6 +252,7 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
             let keyword = apply_alignment_fallback(free_space, 1, align_content);
             let group_offset = compute_alignment_offset(free_space, 1, 0.0, keyword, true, false);
             first_baseline = first_baseline.map(|b| b + group_offset);
+            last_baseline = last_baseline.map(|b| b + group_offset);
             for item in items.iter_mut() {
                 if let Some(layout) = item.final_layout.as_mut() {
                     layout.location.y += group_offset;
@@ -293,7 +295,7 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
         size: final_outer_size,
         scrollable_overflow_rect: Rect::ZERO,
         inflow_overflow_rect: Rect::ZERO,
-        baselines: Baselines::from_first(first_baseline),
+        baselines: Baselines { first: first_baseline, last: last_baseline },
         top_margin: if own_margins_collapse_with_children.start {
             flow.first_child_top_margin_set
         } else {

@@ -57,6 +57,8 @@ pub(super) struct FlexItem {
     target_size: Size<f32>,
     outer_target_size: Size<f32>,
     baseline: f32,
+    /// The last baseline, from the final pass only.
+    last_baseline: f32,
     offset_main: f32,
     offset_cross: f32,
 }
@@ -273,7 +275,17 @@ fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized>(
         }
     });
 
-    LayoutOutput::from_sizes_and_baselines(constants.container_size, Rect::ZERO, Baselines::from_first(first_vertical_baseline))
+    // No item takes part in last-baseline alignment, so the last baseline is the endmost item's on
+    // the last line.
+    let last_line = if constants.is_wrap_reverse { lines.first() } else { lines.last() };
+    let last_vertical_baseline = last_line.and_then(|line| {
+        let line_items = line.items(&items);
+        let item = if constants.is_column && dir.is_reverse() { line_items.first() } else { line_items.last() };
+        item.map(|c| c.last_baseline)
+    });
+
+    let baselines = Baselines { first: first_vertical_baseline, last: last_vertical_baseline };
+    LayoutOutput::from_sizes_and_baselines(constants.container_size, Rect::ZERO, baselines)
         .with_overflow(inflow_overflow_rect, absolute_overflow_rect)
 }
 
@@ -412,6 +424,7 @@ fn generate_anonymous_flex_items<T: LayoutTree + ?Sized>(tree: &T, node: NodeId,
             outer_target_size: Size::ZERO,
             content_flex_fraction: 0.0,
             baseline: 0.0,
+            last_baseline: 0.0,
             offset_main: 0.0,
             offset_cross: 0.0,
         });

@@ -65,12 +65,16 @@ fn calculate_flex_item<T: LayoutTree + CacheAccess + ?Sized>(
 
     if dir.is_row() {
         let baseline_offset_cross = total_offset_cross + item.offset_cross + effective_line_offset_cross + item.margin.cross_start(dir);
-        let baseline = out.baselines.first.unwrap_or(size.height);
-        let inner_baseline = if item.overflow.y.is_scroll_container() { baseline.min(size.height).max(0.0) } else { baseline };
-        item.baseline = baseline_offset_cross + inner_baseline;
+        let inner_baseline = |baseline: Option<f32>| {
+            let baseline = baseline.unwrap_or(size.height);
+            if item.overflow.y.is_scroll_container() { baseline.min(size.height).max(0.0) } else { baseline }
+        };
+        item.baseline = baseline_offset_cross + inner_baseline(out.baselines.first);
+        item.last_baseline = baseline_offset_cross + inner_baseline(out.baselines.last);
     } else {
         let baseline_offset_main = *total_offset_main + item.offset_main + item.margin.main_start(dir);
         item.baseline = baseline_offset_main + out.baselines.first.unwrap_or(size.height);
+        item.last_baseline = baseline_offset_main + out.baselines.last.unwrap_or(size.height);
     }
 
     let location = if dir.is_row() { Point { x: offset_main, y: offset_cross } } else { Point { x: offset_cross, y: offset_main } };

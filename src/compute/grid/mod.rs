@@ -379,10 +379,14 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
     let mut outputs: Scratch<LayoutOutput> = Scratch::with_capacity(requests.len());
     tree.compute_child_layouts(&requests, &mut outputs);
     for ((index, item), (prep, out)) in items.iter_mut().enumerate().zip(preps.iter().zip(outputs.drain(..))) {
+        let last_baseline = out.baselines.last;
         let (contribution, y, height) =
             place_item(tree, prep, out, index as u32, direction, container_border_box.width, border, is_scroll_container);
         item.y_position = y;
         item.height = height;
+        // Scroll containers clamp their baseline to the border box, synthesising one from the bottom edge.
+        let last_baseline = last_baseline.unwrap_or(height);
+        item.last_baseline = if item.overflow.y.is_scroll_container() { last_baseline.min(height).max(0.0) } else { last_baseline };
         item_overflow_rect = union(item_overflow_rect, contribution);
     }
 
@@ -486,16 +490,25 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
     }
 
     // The container's baseline is its first row's first baseline-aligned item's, else the first item's.
-    let baseline = if contain.suppresses_baseline() {
-        None
+    // No item takes part in last-baseline alignment, so the last baseline is that of the last item
+    // in row-major order among those reaching the last row.
+    let baselines = if contain.suppresses_baseline() {
+        Baselines::NONE
     } else {
         items.sort_by_key(|i| i.row_indexes.start);
         let first_row = items[0].row_indexes.start;
         let first_row_items = &items[..items.iter().position(|i| i.row_indexes.start != first_row).unwrap_or(items.len())];
         let item = first_row_items.iter().find(|i| i.participates_in_baseline_alignment()).unwrap_or(&first_row_items[0]);
-        Some(item.y_position + item.baseline.unwrap_or(item.height))
+        let first = item.y_position + item.baseline.unwrap_or(item.height);
+        let last_row_end = items.iter().map(|i| i.row_indexes.end).max().unwrap_or(0);
+        let last = items
+            .iter()
+            .filter(|i| i.row_indexes.end == last_row_end)
+            .max_by_key(|i| (i.row_indexes.start, i.column_indexes.start))
+            .map(|i| i.y_position + i.last_baseline);
+        Baselines { first: Some(first), last }
     };
-    LayoutOutput::from_sizes_and_baselines(container_border_box, Rect::ZERO, Baselines::from_first(baseline))
+    LayoutOutput::from_sizes_and_baselines(container_border_box, Rect::ZERO, baselines)
         .with_overflow(inflow_overflow_rect, absolute_overflow_rect)
 }
 

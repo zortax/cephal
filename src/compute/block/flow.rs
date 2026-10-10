@@ -28,6 +28,7 @@ pub(super) struct FlowResult {
     pub first_child_top_margin_set: CollapsibleMarginSet,
     pub last_child_bottom_margin_set: CollapsibleMarginSet,
     pub first_baseline: Option<f32>,
+    pub last_baseline: Option<f32>,
 }
 
 /// `stretch` is the only block-axis keyword that needs resolving; intrinsic keywords equal `auto`.
@@ -78,6 +79,7 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
     let mut active_collapsible_margin_set = CollapsibleMarginSet::ZERO;
     let mut is_collapsing_with_first_margin_set = true;
     let mut first_baseline: Option<f32> = None;
+    let mut last_baseline: Option<f32> = None;
     // Margins of a self-collapsing cleared box stay inside the parent.
     let mut active_margin_set_has_clearance = false;
     let mut has_active_floats = block_ctx.has_active_floats(committed_y_offset);
@@ -362,14 +364,15 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
             }
         }
 
-        // Scroll containers clamp their baseline to the border box, synthesising one from the bottom edge.
+        // Scroll containers clamp their baselines to the border box, synthesising them from the bottom edge.
+        let child_baseline = |b: Option<f32>| {
+            if item.overflow.y.is_scroll_container() { Some(b.unwrap_or(final_size.height).min(final_size.height).max(0.0)) } else { b }
+        };
         if first_baseline.is_none() {
-            let child_baseline = if item.overflow.y.is_scroll_container() {
-                Some(item_layout.baselines.first.unwrap_or(final_size.height).min(final_size.height).max(0.0))
-            } else {
-                item_layout.baselines.first
-            };
-            first_baseline = child_baseline.map(|b| location.y + b);
+            first_baseline = child_baseline(item_layout.baselines.first).map(|b| location.y + b);
+        }
+        if let Some(b) = child_baseline(item_layout.baselines.last) {
+            last_baseline = Some(location.y + b);
         }
 
         item.final_layout = Some(Layout {
@@ -441,5 +444,6 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
         first_child_top_margin_set,
         last_child_bottom_margin_set,
         first_baseline,
+        last_baseline,
     }
 }

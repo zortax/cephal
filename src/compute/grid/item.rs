@@ -44,6 +44,8 @@ pub(super) struct GridItem {
     pub max_content_contribution_cache: Size<Option<f32>>,
     pub y_position: f32,
     pub height: f32,
+    /// The last baseline from the final layout, relative to the item's border box.
+    pub last_baseline: f32,
 }
 
 impl GridItem {
@@ -86,6 +88,7 @@ impl GridItem {
             max_content_contribution_cache: Size::NONE,
             minimum_contribution_cache: Size::NONE,
             y_position: 0.0,
+            last_baseline: 0.0,
             height: 0.0,
         }
     }
