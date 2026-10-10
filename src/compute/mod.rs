@@ -13,7 +13,7 @@ pub mod scratch;
 
 use crate::geometry::{AvailableSpace, Line, Point, Size};
 use crate::style::Display;
-use crate::tree::{CacheAccess, ChildRequest, Layout, LayoutInput, LayoutOutput, LayoutTree, NodeId, RequestedAxis, RunMode, SizingMode};
+use crate::tree::{AnswerSource, CacheAccess, ChildRequest, Layout, LayoutInput, LayoutOutput, LayoutTree, NodeId, RequestedAxis, RunMode, SizingMode};
 use block::BlockContext;
 
 /// Query counters, enabled by the `stats` feature.
@@ -63,7 +63,9 @@ pub fn compute_child_layout<T: LayoutTree + CacheAccess + ?Sized>(
     if meta.cheap_leaf {
         #[cfg(feature = "stats")]
         stats::bump(&stats::CHEAP_LEAF);
-        return tree.compute_leaf(node, inputs, block_ctx);
+        let output = tree.compute_leaf(node, inputs, block_ctx);
+        tree.observe_answer(node, &inputs, &output, AnswerSource::CheapLeaf);
+        return output;
     }
     normalize(&mut inputs, meta);
     let generation = tree.generation();
@@ -71,6 +73,7 @@ pub fn compute_child_layout<T: LayoutTree + CacheAccess + ?Sized>(
     if let Some(hit) = tree.cache(node).get_keyed(&key, inputs.run_mode, generation) {
         #[cfg(feature = "stats")]
         stats::bump(if inputs.run_mode == RunMode::PerformLayout { &stats::HIT_FINAL } else { &stats::HIT_SIZE });
+        tree.observe_answer(node, &inputs, &hit, AnswerSource::Cached);
         return hit;
     }
     #[cfg(feature = "stats")]
@@ -84,6 +87,7 @@ pub fn compute_child_layout<T: LayoutTree + CacheAccess + ?Sized>(
     if tree.speculation() == 0 {
         tree.cache_mut(node).store_keyed(key, inputs.run_mode, output, generation);
     }
+    tree.observe_answer(node, &inputs, &output, AnswerSource::Computed);
     output
 }
 

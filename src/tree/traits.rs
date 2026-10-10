@@ -149,6 +149,13 @@ pub trait LayoutTree {
     /// Lays out one child; implementations normally forward to [`crate::compute::compute_child_layout`].
     fn compute_child_layout(&mut self, node: NodeId, inputs: LayoutInput, block_ctx: Option<&mut BlockContext<'_>>) -> LayoutOutput;
 
+    /// Sees every answer [`crate::compute::compute_child_layout`] hands out, before the asking
+    /// algorithm reads it; hidden answers excepted. Runs during speculative passes too (see
+    /// [`CacheAccess::speculation`]) and on whichever thread answered. For counting and recording
+    /// only: the answer is fixed by its question, and nothing a later query reads may change here.
+    #[inline]
+    fn observe_answer(&mut self, _node: NodeId, _inputs: &LayoutInput, _output: &LayoutOutput, _source: AnswerSource) {}
+
     /// Whether [`Self::compute_child_layouts`] may beat asking one by one; algorithms then spend
     /// extra work collecting questions that a serial tree would rather answer lazily.
     #[inline]
@@ -164,6 +171,17 @@ pub trait LayoutTree {
             out.push(output);
         }
     }
+}
+
+/// Where an answer passed to [`LayoutTree::observe_answer`] came from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AnswerSource {
+    /// Recomputed because the node is a leaf cheaper to measure than to look up; never cached.
+    CheapLeaf,
+    /// Served from the node's cache.
+    Cached,
+    /// Computed by the node's algorithm, and stored unless speculating.
+    Computed,
 }
 
 /// Per-node query caches.
