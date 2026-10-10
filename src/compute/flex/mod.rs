@@ -20,7 +20,7 @@ use crate::compute::scratch::Scratch;
 use crate::geometry::{AvailableSpace, Line, MaybeMath, Point, Rect, Size};
 use crate::style::{
     AlignContent, AlignItems, AlignSelf, BoxSizing, Contain, Dimension, Direction, FlexDirection, JustifyContent,
-    Overflow, Position,
+    Overflow,
 };
 use crate::tree::{
     Baselines, CacheAccess, Layout, LayoutInput, LayoutOutput, LayoutTree, NodeId, RequestedAxis, RunMode, SizingMode,
@@ -368,7 +368,7 @@ fn generate_anonymous_flex_items<T: LayoutTree + ?Sized>(tree: &T, node: NodeId,
     let mut items = Scratch::with_capacity(tree.child_count(node));
     for (index, child) in tree.children(node).enumerate() {
         let style = tree.style(child);
-        if style.position == Position::Absolute || style.generates_no_box() {
+        if style.position.is_out_of_flow() || style.generates_no_box() {
             continue;
         }
         let aspect_ratio = style.aspect_ratio;

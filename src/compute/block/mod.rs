@@ -171,7 +171,7 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
     let has_styles_preventing_being_collapsed_through = !style.is_block()
         || block_ctx.is_bfc_root()
         || establishes_new_bfc
-        || style.position == Position::Absolute
+        || style.position.is_out_of_flow()
         || padding.top > 0.0
         || padding.bottom > 0.0
         || border.top > 0.0
@@ -284,7 +284,7 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
     }
 
     let all_in_flow_children_can_be_collapsed_through =
-        items.iter().all(|item| item.is_floated() || item.position == Position::Absolute || item.can_be_collapsed_through);
+        items.iter().all(|item| item.is_floated() || item.position.is_out_of_flow() || item.can_be_collapsed_through);
     let can_be_collapsed_through =
         !has_styles_preventing_being_collapsed_through && all_in_flow_children_can_be_collapsed_through;
 

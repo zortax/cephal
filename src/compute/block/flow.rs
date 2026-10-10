@@ -7,7 +7,7 @@ use crate::compute::LayoutTreeExt;
 use crate::compute::common::overflow::{scrollable_overflow_contribution, union};
 use crate::compute::common::sizing_keyword::{SizingKeywordResolution, resolve_sizing_keyword};
 use crate::geometry::{AbsoluteAxis, AvailableSpace, Line, MaybeMath, Point, Rect, Size};
-use crate::style::{Dimension, Direction, Overflow, Position, TextAlign};
+use crate::style::{Dimension, Direction, Overflow, TextAlign};
 use crate::tree::{CacheAccess, CollapsibleMarginSet, Layout, LayoutInput, LayoutTree, RequestedAxis, RunMode, SizingMode};
 
 pub(super) struct FlowParams {
@@ -83,7 +83,7 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
     let mut has_active_floats = block_ctx.has_active_floats(committed_y_offset);
 
     for item in items.iter_mut() {
-        if item.position == Position::Absolute {
+        if item.position.is_out_of_flow() {
             let x = match p.direction {
                 Direction::Ltr => p.resolved_content_box_inset.left,
                 Direction::Rtl => p.container_outer_width - p.resolved_content_box_inset.right,

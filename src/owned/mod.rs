@@ -12,7 +12,7 @@ pub use parallel::{Executor, Inline, Parallel, SyncMeasureFn};
 pub use styles::StyleTable;
 
 use crate::geometry::{AvailableSpace, Size};
-use crate::style::{CalcId, CalcOp, CalcTable, Ident, Position, Style};
+use crate::style::{CalcId, CalcOp, CalcTable, Ident, Style};
 use crate::schedule::{META_MASK, ROUND_PENDING, Scheduler};
 use crate::tree::{Layout, MeasureInput, MeasureOutput, NodeCache, NodeId};
 use std::sync::Arc;
@@ -453,8 +453,8 @@ impl<Ctx> Tree<Ctx> {
             return;
         }
         // An absolutely positioned box that stays absolute cannot move its siblings.
-        let absolute_only = old_style.position == Position::Absolute
-            && style.position == Position::Absolute
+        let absolute_only = old_style.position.is_out_of_flow()
+            && style.position.is_out_of_flow()
             && !old_style.generates_no_box()
             && !style.generates_no_box()
             && self.links[i].parent != NONE;

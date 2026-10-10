@@ -137,7 +137,7 @@ pub fn to_taffy(s: &Style, name: &impl Fn(Ident) -> String) -> taffy::Style {
     };
     t.position = match s.position {
         Position::Relative => taffy::Position::Relative,
-        Position::Absolute => taffy::Position::Absolute,
+        Position::Absolute | Position::Fixed => taffy::Position::Absolute,
     };
     t.inset = taffy::Rect { left: lpa(s.inset.left.0), right: lpa(s.inset.right.0), top: lpa(s.inset.top.0), bottom: lpa(s.inset.bottom.0) };
     t.size = taffy::Size { width: dimension(s.size.width.0), height: dimension(s.size.height.0) };

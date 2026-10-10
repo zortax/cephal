@@ -174,7 +174,7 @@ pub(super) fn prepare_item<T: LayoutTree + CacheAccess + ?Sized>(
         .then(|| resolve_sizing_keyword(size_style.height.raw(), Some(area_minus_margins.height), Some(grid_area_size.height)));
     let keyword_measured: Size<Option<f32>> = match (&keyword_width, &keyword_height) {
         (Some(Some(SizingKeywordResolution::Measure(aw))), Some(Some(SizingKeywordResolution::Measure(ah))))
-            if position != Position::Absolute =>
+            if !position.is_out_of_flow() =>
         {
             tree.measure_child_size_both(
                 node,
@@ -192,7 +192,7 @@ pub(super) fn prepare_item<T: LayoutTree + CacheAccess + ?Sized>(
     let width = match inherent_size.width {
         Some(w) => Some(w),
         None => 'w: {
-            if position == Position::Absolute
+            if position.is_out_of_flow()
                 && let (Some(l), Some(r)) = (inset_h.start, inset_h.end)
             {
                 break 'w Some((area_minus_margins.width - l - r).max(0.0));
@@ -214,7 +214,7 @@ pub(super) fn prepare_item<T: LayoutTree + CacheAccess + ?Sized>(
                     },
                 });
             }
-            if margin.left.is_some() && margin.right.is_some() && alignment_h == AlignSelf::STRETCH && position != Position::Absolute {
+            if margin.left.is_some() && margin.right.is_some() && alignment_h == AlignSelf::STRETCH && !position.is_out_of_flow() {
                 break 'w Some(area_minus_margins.width);
             }
             None
@@ -224,7 +224,7 @@ pub(super) fn prepare_item<T: LayoutTree + CacheAccess + ?Sized>(
     let height = match height {
         Some(h) => Some(h),
         None => 'h: {
-            if position == Position::Absolute
+            if position.is_out_of_flow()
                 && let (Some(t), Some(b)) = (inset_v.start, inset_v.end)
             {
                 break 'h Some((area_minus_margins.height - t - b).max(0.0));
@@ -249,14 +249,14 @@ pub(super) fn prepare_item<T: LayoutTree + CacheAccess + ?Sized>(
                     },
                 });
             }
-            if margin.top.is_some() && margin.bottom.is_some() && alignment_v == AlignSelf::STRETCH && position != Position::Absolute {
+            if margin.top.is_some() && margin.bottom.is_some() && alignment_v == AlignSelf::STRETCH && !position.is_out_of_flow() {
                 break 'h Some(area_minus_margins.height);
             }
             None
         }
     };
     let size = Size { width, height }.maybe_apply_aspect_ratio(aspect_ratio).maybe_clamp(min_size, max_size);
-    let size = if position == Position::Absolute && (size.width.is_none() || size.height.is_none()) {
+    let size = if position.is_out_of_flow() && (size.width.is_none() || size.height.is_none()) {
         tree.measure_child_size_both(
             node,
             size,
@@ -414,7 +414,7 @@ fn align_item_within_area(
         AlignItemsKeyword::Center => (area_size - resolved_size + resolved_margin.start - resolved_margin.end) / 2.0,
         AlignItemsKeyword::SelfStart | AlignItemsKeyword::SelfEnd => unreachable!("resolved earlier"),
     };
-    let offset = if position == Position::Absolute {
+    let offset = if position.is_out_of_flow() {
         match (inset.start, inset.end) {
             (Some(start), Some(end)) => {
                 if rtl { area_size - end - resolved_size - non_auto_margin.end } else { start + non_auto_margin.start }

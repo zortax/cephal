@@ -94,13 +94,19 @@ fn edit(rng: &mut Rng, tree: &mut Tree<Text>, root: NodeId) -> String {
             tree.append_child(new_parent, target);
             format!("reparent {target:?} under {new_parent:?}")
         }
-        7 if tree.style(target).position == Position::Absolute => {
+        7 if tree.style(target).position.is_out_of_flow() => {
+            if rng.chance(1, 3) {
+                // Absolute and fixed boxes are placed alike; only the container's overflow moves.
+                let position = if tree.style(target).position == Position::Fixed { Position::Absolute } else { Position::Fixed };
+                tree.patch_style(target, |s| s.position = position);
+                return format!("patch position {target:?} to {position:?}");
+            }
             tree.patch_style(target, |s| {
                 s.inset.left = lpa(rng);
                 s.inset.top = lpa(rng);
                 s.size.width = dimension(rng);
             });
-            format!("patch absolute inset {target:?}")
+            format!("patch out-of-flow inset {target:?}")
         }
         _ => {
             tree.patch_style(target, |s| s.flex_grow = rng.pick(&[0.0, 1.0, 3.0]));

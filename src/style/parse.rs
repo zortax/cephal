@@ -125,6 +125,7 @@ pub fn parse_position(s: &str) -> Option<Position> {
     Some(match s.trim() {
         "relative" => Position::Relative,
         "absolute" => Position::Absolute,
+        "fixed" => Position::Fixed,
         _ => return None,
     })
 }

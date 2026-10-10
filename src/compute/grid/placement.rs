@@ -6,7 +6,7 @@ use super::named::NamedLineResolver;
 use super::occupancy::{CellOccupancyMatrix, CellOccupancyState};
 use crate::compute::scratch::Scratch;
 use crate::geometry::{AbsoluteAxis, Line};
-use crate::style::{AlignItems, GridAutoFlow, OriginZeroLine, Position};
+use crate::style::{AlignItems, GridAutoFlow, OriginZeroLine};
 use crate::tree::{LayoutTree, NodeId};
 
 #[inline]
@@ -58,7 +58,7 @@ pub(super) fn place_grid_items<T: LayoutTree + ?Sized>(
         .enumerate()
         .filter(|(_, child)| {
             let s = tree.style(*child);
-            !s.generates_no_box() && s.position != Position::Absolute
+            !s.generates_no_box() && !s.position.is_out_of_flow()
         })
         .map(|(index, child)| {
             let s = tree.style(child);

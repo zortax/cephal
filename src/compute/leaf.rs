@@ -1,7 +1,7 @@
 //! The box model around a measured leaf.
 
 use crate::geometry::{AvailableSpace, MaybeMath, Rect, Size};
-use crate::style::{BoxSizing, Overflow, Position};
+use crate::style::{BoxSizing, Overflow};
 use crate::tree::{
     Baselines, CollapsibleMarginSet, LayoutInput, LayoutOutput, LayoutTree, MeasureInput, NodeId, RunMode, SizingMode,
 };
@@ -108,7 +108,7 @@ pub fn compute_leaf_layout<T: LayoutTree + ?Sized>(tree: &mut T, node: NodeId, i
     let has_styles_preventing_being_collapsed_through = !style.is_block()
         || overflow.x.is_scroll_container()
         || overflow.y.is_scroll_container()
-        || style.position == Position::Absolute
+        || style.position.is_out_of_flow()
         || style.contain.establishes_independent_formatting_context()
         || padding.top > 0.0
         || padding.bottom > 0.0

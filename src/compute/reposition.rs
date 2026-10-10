@@ -7,7 +7,7 @@
 
 use crate::compute::common::overflow::union;
 use crate::geometry::{Point, Rect, Size};
-use crate::style::{Direction, Position};
+use crate::style::Direction;
 use crate::tree::{CacheAccess, LayoutOutput, LayoutTree, NodeId};
 
 /// Geometry a container used when placing its absolutely positioned children.
@@ -70,7 +70,7 @@ pub fn reposition_absolute_child<T: LayoutTree + CacheAccess + ?Sized>(
 ) -> Reposition {
     let Some(mut context) = tree.absolute_context(parent) else { return Reposition::NeedsParent };
     let child_style = tree.style(child);
-    if child_style.position != Position::Absolute || child_style.generates_no_box() {
+    if !child_style.position.is_out_of_flow() || child_style.generates_no_box() {
         return Reposition::NeedsParent;
     }
     // Block containers place inset-less axes at the static position, which only the flow knows.

@@ -3,9 +3,9 @@
 use super::items::BlockItem;
 use crate::compute::LayoutTreeExt;
 use crate::compute::absolute::{AbsoluteItemSizing, resolve_absolute_item_size};
-use crate::compute::common::overflow::{scrollable_overflow_contribution, union};
+use crate::compute::common::overflow::{out_of_flow_contribution, scrollable_overflow_contribution, union};
 use crate::geometry::{AvailableSpace, Line, MaybeMath, Point, Rect, Size};
-use crate::style::{Contain, Direction, Overflow, Position};
+use crate::style::{Contain, Direction, Overflow};
 use crate::tree::NodeId;
 use crate::tree::{CacheAccess, Layout, LayoutTree, SizingMode};
 
@@ -19,7 +19,7 @@ pub(super) fn perform_absolute_layout_on_absolute_children<T: LayoutTree + Cache
     is_scroll_container: bool,
 ) -> Rect<f32> {
     let mut absolute_overflow_rect = Rect::ZERO;
-    if !items.iter().any(|item| item.position == Position::Absolute) {
+    if !items.iter().any(|item| item.position.is_out_of_flow()) {
         return absolute_overflow_rect;
     }
     let mut record = crate::compute::reposition::AbsoluteContext::new(crate::compute::reposition::AbsoluteGeometry::Block {
@@ -28,7 +28,7 @@ pub(super) fn perform_absolute_layout_on_absolute_children<T: LayoutTree + Cache
         direction,
         is_scroll_container,
     });
-    for item in items.iter().filter(|item| item.position == Position::Absolute) {
+    for item in items.iter().filter(|item| item.position.is_out_of_flow()) {
         let contribution = layout_absolute_block_item(
             tree,
             item.node,
@@ -155,7 +155,9 @@ pub(crate) fn layout_absolute_block_item<T: LayoutTree + CacheAccess + ?Sized>(
         } else {
             Point { x: location.x - area_offset.x, y: location.y - area_offset.y }
         };
-        scrollable_overflow_contribution(relative_location, final_size, layout_output.scrollable_overflow_rect, overflow, contain, is_scroll_container)
+        let contribution =
+            scrollable_overflow_contribution(relative_location, final_size, layout_output.scrollable_overflow_rect, overflow, contain, is_scroll_container);
+        out_of_flow_contribution(tree.style(node).position, contribution)
     }
 }
 

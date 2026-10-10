@@ -25,9 +25,9 @@ use track_sizing::{
 
 use crate::compute::LayoutTreeExt;
 use crate::compute::scratch::Scratch;
-use crate::compute::common::overflow::union;
+use crate::compute::common::overflow::{out_of_flow_contribution, union};
 use crate::geometry::{AbsoluteAxis, AbstractAxis, AvailableSpace, Line, MaybeMath, Rect, Size};
-use crate::style::{AlignContent, AlignItems, BoxSizing, Direction, JustifyContent, Overflow, Position};
+use crate::style::{AlignContent, AlignItems, BoxSizing, Direction, JustifyContent, Overflow};
 use crate::tree::{
     Baselines, CacheAccess, DetailedGridInfo, DetailedGridItem, DetailedGridTracks, Layout, LayoutInput, LayoutOutput,
     LayoutTree, NodeId, RequestedAxis, RunMode, SizingMode,
@@ -134,7 +134,7 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
     let detailed_row_line_names = if wants_detailed { name_resolver.detailed_line_names(AbsoluteAxis::Vertical) } else { Vec::new() };
 
     // 3. Implicit grid estimate and 4. placement.
-    let in_flow_styles = tree.children(node).map(|c| tree.style(c)).filter(|s| !s.generates_no_box() && s.position != Position::Absolute);
+    let in_flow_styles = tree.children(node).map(|c| tree.style(c)).filter(|s| !s.generates_no_box() && !s.position.is_out_of_flow());
     let (est_col_counts, est_row_counts) = compute_grid_size_estimate(explicit_col_count, explicit_row_count, in_flow_styles);
     let mut items = Scratch::with_capacity(tree.child_count(node));
     let mut matrix = CellOccupancyMatrix::with_track_counts(est_col_counts, est_row_counts);
@@ -394,7 +394,7 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
         .children(node)
         .filter(|c| {
             let s = tree.style(*c);
-            s.generates_no_box() || s.position == Position::Absolute
+            s.generates_no_box() || s.position.is_out_of_flow()
         })
         .collect();
     for child in others {
@@ -405,7 +405,7 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
             order += 1;
             continue;
         }
-        if child_style.position != Position::Absolute {
+        if !child_style.position.is_out_of_flow() {
             continue;
         }
         let ctx = absolute_ctx.get_or_insert_with(|| AbsoluteGridContext {
@@ -600,7 +600,7 @@ fn layout_absolute_grid_child<T: LayoutTree + CacheAccess + ?Sized>(
         c.border,
         c.is_scroll_container,
     );
-    contribution
+    out_of_flow_contribution(tree.style(child).position, contribution)
 }
 
 /// Places one absolutely positioned child of a laid-out grid from its recorded context.

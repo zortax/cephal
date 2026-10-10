@@ -66,7 +66,7 @@ pub(super) fn generate_item_list<T: LayoutTree + ?Sized>(
         let contain = style.contain;
         let is_in_same_bfc = style.is_block()
             && !is_table
-            && position != Position::Absolute
+            && !position.is_out_of_flow()
             && float == Float::None
             && !style.is_scroll_container()
             && !contain.establishes_independent_formatting_context();

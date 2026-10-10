@@ -6,9 +6,9 @@ use crate::style::{AlignItems, FlexDirection};
 use crate::compute::LayoutTreeExt;
 use crate::compute::absolute::{AbsoluteItemSizing, resolve_absolute_item_size};
 use crate::compute::common::alignment::resolve_self_alignment_safety;
-use crate::compute::common::overflow::{scrollable_overflow_contribution, union};
+use crate::compute::common::overflow::{out_of_flow_contribution, scrollable_overflow_contribution, union};
 use crate::geometry::{AvailableSpace, Line, MaybeMath, Point, Rect, Size};
-use crate::style::{AlignContentKeyword, AlignItemsKeyword, Direction, JustifyContent, Overflow, Position};
+use crate::style::{AlignContentKeyword, AlignItemsKeyword, Direction, JustifyContent, Overflow};
 use crate::tree::{CacheAccess, Layout, LayoutTree, NodeId, SizingMode};
 
 /// The container state absolute placement reads.
@@ -63,7 +63,7 @@ pub(super) fn perform_absolute_layout_on_absolute_children<T: LayoutTree + Cache
         .enumerate()
         .filter(|(_, c)| {
             let s = tree.style(*c);
-            !s.generates_no_box() && s.position == Position::Absolute
+            !s.generates_no_box() && s.position.is_out_of_flow()
         }),
     );
     if absolute.is_empty() {
@@ -249,6 +249,8 @@ pub(crate) fn layout_absolute_flex_child<T: LayoutTree + CacheAccess + ?Sized>(
         } else {
             relative_location
         };
-        scrollable_overflow_contribution(contribution_location, final_size, out.scrollable_overflow_rect, overflow, contain, c.is_scroll_container)
+        let contribution =
+            scrollable_overflow_contribution(contribution_location, final_size, out.scrollable_overflow_rect, overflow, contain, c.is_scroll_container);
+        out_of_flow_contribution(tree.style(child).position, contribution)
     }
 }

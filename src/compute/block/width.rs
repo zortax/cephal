@@ -5,7 +5,6 @@ use super::items::BlockItem;
 use crate::compute::LayoutTreeExt;
 use crate::compute::common::sizing_keyword::{SizingKeywordResolution, resolve_sizing_keyword};
 use crate::geometry::{AbsoluteAxis, AvailableSpace, Line, MaybeMath, Size};
-use crate::style::Position;
 use crate::tree::{CacheAccess, LayoutTree, SizingMode};
 
 /// The widest in-flow child, margins included; floats stack horizontally until cleared.
@@ -17,7 +16,7 @@ pub(super) fn determine_content_based_container_width<T: LayoutTree + CacheAcces
     let available_space = Size { width: available_width, height: AvailableSpace::MinContent };
     let mut max_child_width = 0.0f32;
     let mut floats = FloatIntrinsicWidthCalculator::new(available_width);
-    for item in items.iter().filter(|item| item.position != Position::Absolute) {
+    for item in items.iter().filter(|item| !item.position.is_out_of_flow()) {
         let known_dimensions = item.size.maybe_clamp(item.min_size, item.max_size);
         let calc = |id, basis| tree.resolve_calc(id, basis);
         let item_x_margin_sum =

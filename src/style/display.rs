@@ -33,6 +33,18 @@ pub enum Position {
     #[default]
     Relative,
     Absolute,
+    /// Placed exactly like [`Position::Absolute`], against the parent; the host anchors the box to
+    /// the viewport, through where it parents it or how it composes scroll offsets. A fixed box
+    /// scrolls with nothing, so it adds no scrollable overflow to its container.
+    Fixed,
+}
+
+impl Position {
+    /// Whether the box is positioned out of flow (`absolute` or `fixed`).
+    #[inline]
+    pub fn is_out_of_flow(self) -> bool {
+        matches!(self, Position::Absolute | Position::Fixed)
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
