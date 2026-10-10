@@ -98,4 +98,9 @@ Use `CEPHAL_SEEDS` and `CEPHAL_STEPS` to set the size of the random test suites.
 
 ## License
 
-Cephal is licensed under the Apache License 2.0. See [LICENSE](LICENSE).
+Cephal is licensed under either of
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- MIT license ([LICENSE-MIT](LICENSE-MIT))
+
+at your option.

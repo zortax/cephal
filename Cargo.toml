@@ -2,25 +2,31 @@
 name = "cephal"
 version = "0.1.0"
 edition = "2024"
-license = "Apache-2.0"
+authors = ["Leonard Seibold <git@zrtx.de>"]
+rust-version = "1.90"
+license = "MIT OR Apache-2.0"
 description = "Retained, incremental CSS layout (block, flexbox, grid) with spineless invalidation"
+repository = "https://github.com/zortax/cephal"
+readme = "README.md"
+keywords = ["layout", "css", "flexbox", "grid", "incremental"]
+categories = ["gui", "graphics"]
+include = ["/src", "/README.md", "/LICENSE-APACHE", "/LICENSE-MIT"]
 
 [features]
 default = ["block", "flex", "grid"]
 block = []
 flex = []
 grid = []
-parallel = ["dep:rayon"]
 serde = ["dep:serde"]
 # Counters of queries, hits and measures, for profiling.
 stats = []
 taffy-compat = ["dep:taffy"]
 
 [dependencies]
-rayon = { version = "1.12", optional = true }
 serde = { version = "1", features = ["derive", "rc"], optional = true }
-# Pinned to the main revision the vendored fixtures were generated from.
-taffy = { git = "https://github.com/DioxusLabs/taffy", rev = "a1c3f8fb3e2c978c3a4f062873bdb16d5eaf6cfd", optional = true, default-features = false, features = [
+# Local builds use the main revision the vendored fixtures were generated from; the published
+# crate depends on the 0.14 release, which the conversions also compile against.
+taffy = { version = "0.14", git = "https://github.com/DioxusLabs/taffy", rev = "a1c3f8fb3e2c978c3a4f062873bdb16d5eaf6cfd", optional = true, default-features = false, features = [
   "std",
   "taffy_tree",
   "flexbox",
