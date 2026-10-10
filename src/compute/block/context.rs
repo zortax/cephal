@@ -79,6 +79,12 @@ impl BlockContext<'_> {
         self.content_box_insets[0] = self.insets[0] + content_box_x_insets[0];
         self.content_box_insets[1] = self.insets[1] + content_box_x_insets[1];
     }
+    /// Whether any float was placed in the formatting context, including floats placed by
+    /// ancestors and earlier siblings sharing it, not only this box's own.
+    #[inline]
+    pub fn has_floats(&self) -> bool {
+        self.bfc.floats.has_floats()
+    }
     #[inline]
     pub fn has_active_floats(&self, min_y: f32) -> bool {
         self.bfc.floats.has_active_floats(min_y + self.y_offset)
