@@ -2,7 +2,7 @@
 
 use crate::tree::NodeId;
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub(super) struct DepthQueue {
     buckets: Vec<Vec<NodeId>>,
     /// Upper bound on the deepest non-empty bucket.

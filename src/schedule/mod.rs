@@ -24,7 +24,7 @@ pub trait Incremental: LayoutTree + CacheAccess {
     fn set_flags(&mut self, node: NodeId, flags: u8);
 }
 
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct Scheduler {
     queue: DepthQueue,
     scratch: Vec<(LayoutInput, LayoutOutput)>,
