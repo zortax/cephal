@@ -27,6 +27,7 @@ impl AbsoluteAxis {
 
 /// A width/height pair.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Size<T> {
     pub width: T,
     pub height: T,
@@ -34,6 +35,7 @@ pub struct Size<T> {
 
 /// A position.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Point<T> {
     pub x: T,
     pub y: T,
@@ -41,6 +43,7 @@ pub struct Point<T> {
 
 /// Four edges.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Rect<T> {
     pub left: T,
     pub right: T,
@@ -50,6 +53,7 @@ pub struct Rect<T> {
 
 /// A start/end pair along one axis.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Line<T> {
     pub start: T,
     pub end: T,

@@ -34,8 +34,9 @@ taffy = { git = "https://github.com/DioxusLabs/taffy", rev = "a1c3f8fb3e2c978c3a
 ] }
 
 [dev-dependencies]
-cephal = { path = ".", features = ["taffy-compat"] }
+cephal = { path = ".", features = ["serde", "taffy-compat"] }
 roxmltree = "0.21"
+serde_json = "1"
 proptest = "1.11"
 criterion = "0.8"
 taffy = { git = "https://github.com/DioxusLabs/taffy", rev = "a1c3f8fb3e2c978c3a4f062873bdb16d5eaf6cfd", default-features = false, features = [

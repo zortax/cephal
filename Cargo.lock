@@ -97,6 +97,7 @@ dependencies = [
  "rayon",
  "roxmltree",
  "serde",
+ "serde_json",
  "taffy",
 ]
 
