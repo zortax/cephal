@@ -3,6 +3,7 @@
 use super::axis::{FlexAxisSize, FlexAxisSum, abs_main, sum_axis_gaps};
 use super::{AlgoConstants, FlexItem, FlexLine};
 use crate::compute::LayoutTreeExt;
+use crate::compute::common::sizing_keyword::SizingKeywordResolution;
 use crate::geometry::{AvailableSpace, Line, MaybeMath, Size};
 use crate::style::AlignSelf;
 use crate::tree::{CacheAccess, LayoutTree, SizingMode};
@@ -113,24 +114,32 @@ pub(super) fn determine_container_main_size<T: LayoutTree + CacheAccess + ?Sized
                                 let cross_axis_margin_sum = c.margin.cross_axis_sum(dir);
                                 let child_min_cross = item.min_size.cross(dir).maybe_add(cross_axis_margin_sum);
                                 let child_max_cross = item.max_size.cross(dir).maybe_add(cross_axis_margin_sum);
-                                let cross_axis_available_space = available_space
+                                let mut cross_axis_available_space = available_space
                                     .cross(dir)
                                     .map_definite(|val| c.divided_cross_space(cross_axis_parent_size.unwrap_or(val)))
                                     .maybe_clamp(child_min_cross, child_max_cross);
-                                let child_available_space = available_space.with_cross(dir, cross_axis_available_space);
                                 let child_known_dimensions = {
                                     let mut ckd = item.size.with_main(dir, None);
-                                    if item.align_self == AlignSelf::STRETCH && ckd.cross(dir).is_none() {
-                                        ckd.set_cross(
-                                            dir,
-                                            cross_axis_available_space
-                                                .into_option()
-                                                .maybe_sub(item.margin.cross_axis_sum(dir))
-                                                .maybe_max(0.0),
-                                        );
+                                    let keyword = match ckd.cross(dir) {
+                                        Some(_) => None,
+                                        None => super::base_size::cross_sizing_keyword(c, item),
+                                    };
+                                    match keyword {
+                                        Some(SizingKeywordResolution::Exact(size)) => ckd.set_cross(dir, Some(size)),
+                                        Some(SizingKeywordResolution::Measure(space)) => cross_axis_available_space = space,
+                                        None => {
+                                            if item.align_self == AlignSelf::STRETCH && ckd.cross(dir).is_none() {
+                                                let stretched = c.indefinite_stretch_cross.or(cross_axis_available_space.into_option());
+                                                ckd.set_cross(
+                                                    dir,
+                                                    stretched.maybe_sub(item.margin.cross_axis_sum(dir)).maybe_max(0.0),
+                                                );
+                                            }
+                                        }
                                     }
                                     ckd
                                 };
+                                let child_available_space = available_space.with_cross(dir, cross_axis_available_space);
                                 let measured_main_size = tree.measure_child_size(
                                     item.node,
                                     child_known_dimensions,

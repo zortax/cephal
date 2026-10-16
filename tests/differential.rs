@@ -3,23 +3,39 @@
 mod common;
 
 use cephal::geometry::{AvailableSpace, Size};
-use cephal::style::Display;
+use cephal::style::{Dimension, Display};
 use cephal::Tree;
 use common::*;
 
 /// Lays out the tree of `seed` in both engines and lists every node where they disagree.
 ///
-/// `without_container_ratio` removes `aspect-ratio` from every flex and grid container first.
-fn run(seed: u64, without_container_ratio: bool) -> Vec<String> {
+/// `relaxed` first removes what the engines treat differently by design: `aspect-ratio` on flex and
+/// grid containers, and sizing keywords on the cross size of flex items.
+fn run(seed: u64, relaxed: bool) -> Vec<String> {
     let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
     let mut tree: Tree<Text> = Tree::new();
     let root = build_subtree(&mut rng, &mut tree, 0);
-    if without_container_ratio {
+    if relaxed {
         let mut nodes = Vec::new();
         all_nodes(&tree, root, &mut nodes);
         for node in nodes {
-            if tree.children(node).next().is_some() && matches!(tree.style(node).display, Display::Flex | Display::Grid) {
+            if tree.children(node).next().is_none() {
+                continue;
+            }
+            let display = tree.style(node).display;
+            let is_row = tree.style(node).flex_direction.is_row();
+            if matches!(display, Display::Flex | Display::Grid) {
                 tree.patch_style(node, |style| style.aspect_ratio = None);
+            }
+            if display == Display::Flex {
+                for child in tree.children(node).collect::<Vec<_>>() {
+                    tree.patch_style(child, |style| {
+                        let cross = if is_row { &mut style.size.height } else { &mut style.size.width };
+                        if cross.is_sizing_keyword() {
+                            *cross = Dimension::AUTO;
+                        }
+                    });
+                }
             }
         }
     }
@@ -57,11 +73,18 @@ fn run(seed: u64, without_container_ratio: bool) -> Vec<String> {
 /// 188, 236 and 299: a grid measured under a min-content height. Cephal sizes it as under a
 /// max-content height (CSS Sizing 3 §5.1). Taffy gets no free space for the rows there, so its
 /// answer is smaller than the height the grid takes when it is laid out.
-const KNOWN_DIVERGENT: &[u64] = &[106, 188, 236, 299, 306, 563, 603, 1000, 1210, 1384, 1490];
+///
+/// 2 and 168: a stretched item in a column container whose width is indefinite. Cephal measures
+/// the item's height at the container's fit-content width, which the item gets in the end. Taffy
+/// measures it at the whole available width.
+const KNOWN_DIVERGENT: &[u64] = &[2, 106, 168, 188, 236, 299, 306, 563, 603, 1000, 1210, 1384, 1490];
 
-/// A flex or grid container transfers a known axis through `aspect-ratio`, as a block container
-/// does and as browsers do. Taffy 0.14 applies the ratio to style sizes only, so a tree that
-/// differs only through such a container is compared again without the containers' ratios.
+/// A tree that differs is compared again relaxed (see [`run`]):
+///
+/// - A flex or grid container transfers a known axis through `aspect-ratio`, as a block container
+///   does and as browsers do. Taffy 0.14 applies the ratio to style sizes only.
+/// - A flex item with a sizing keyword on its cross size has its main size measured at that size.
+///   Taffy 0.14 measures it stretched, and then lays it out at the keyword's size.
 #[test]
 fn matches_taffy_on_random_trees() {
     let seeds: u64 = std::env::var("CEPHAL_SEEDS").ok().and_then(|v| v.parse().ok()).unwrap_or(300);

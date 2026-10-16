@@ -125,6 +125,9 @@ pub(super) struct AlgoConstants {
     cross_axis_available_space_is_definite: bool,
     container_size: Size<f32>,
     inner_container_size: Size<f32>,
+    /// The inner cross size a stretched item takes while the main sizes are found, when the
+    /// container's own cross size is indefinite. See [`base_size::indefinite_stretch_cross`].
+    indefinite_stretch_cross: Option<f32>,
 }
 
 impl AlgoConstants {
@@ -224,6 +227,7 @@ fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized>(
         compute_constants(tree, node, known_dimensions, inputs.known_dimensions_are_definite, parent_size, available_space);
     let mut items = generate_anonymous_flex_items(tree, node, &constants);
     let available_space = determine_available_space(known_dimensions, available_space, &constants);
+    constants.indefinite_stretch_cross = base_size::indefinite_stretch_cross(tree, &constants, available_space, &items);
     base_size::determine_flex_base_size(tree, &constants, available_space, &mut items);
     let mut lines = if constants.is_balance {
         lines::collect_balanced_flex_lines(&constants, available_space, &items)
@@ -383,6 +387,7 @@ fn compute_constants<T: LayoutTree + ?Sized>(
         cross_axis_available_space_is_definite,
         container_size: Size::ZERO,
         inner_container_size: Size::ZERO,
+        indefinite_stretch_cross: None,
     }
 }
 
