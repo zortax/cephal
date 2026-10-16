@@ -45,7 +45,22 @@ pub(super) fn determine_hypothetical_cross_size<T: LayoutTree + CacheAccess + ?S
                 Some(SizingKeywordResolution::Measure(a)) => a,
                 _ => child_available_cross,
             };
-        let known = match child_cross {
+        // A stretched item in a column whose width was found first takes that width, as it does in
+        // the final layout, and needs no measurement.
+        let stretched_cross = c
+            .indefinite_stretch_cross
+            .filter(|_| {
+                child.align_self == AlignSelf::STRETCH
+                    && !child.margin_is_auto.cross_start(dir)
+                    && !child.margin_is_auto.cross_end(dir)
+                    && child.size_style.cross(dir).is_auto()
+            })
+            .map(|cross| {
+                (cross - child.margin.cross_axis_sum(dir))
+                    .maybe_clamp(transferred_min_cross, transferred_max_cross)
+                    .max(padding_border_sum)
+            });
+        let known = match child_cross.or(stretched_cross) {
             Some(v) => Ok(v),
             None => {
                 requests.push(ChildRequest {
