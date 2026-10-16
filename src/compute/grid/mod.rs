@@ -68,7 +68,9 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
     let gap = style.gap;
     let grid_style = style.grid_shared();
 
-    let styled = known_dimensions.or(preferred_size);
+    // A known axis transfers through `aspect-ratio`, as in block layout.
+    let styled =
+        known_dimensions.or(preferred_size).transfer_aspect_ratio(aspect_ratio, min_size, max_size, padding_border_size);
     let constrained_available_space = Size {
         width: styled.width.map_or(available_space.width, AvailableSpace::Definite),
         height: styled.height.map_or(available_space.height, AvailableSpace::Definite),
@@ -79,7 +81,7 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
         width: constrained_available_space.width.map_definite(|s| s - content_box_inset.horizontal_axis_sum()),
         height: constrained_available_space.height.map_definite(|s| s - content_box_inset.vertical_axis_sum()),
     };
-    let outer_node_size = known_dimensions.or(preferred_size).maybe_clamp(min_size, max_size).maybe_max(padding_border_size.map(Some));
+    let outer_node_size = styled.maybe_clamp(min_size, max_size).maybe_max(padding_border_size.map(Some));
     let inner_min_size = min_size.maybe_sub(content_box_inset.sum_axes());
     let inner_max_size = max_size.maybe_sub(content_box_inset.sum_axes());
     let mut inner_node_size = Size {
@@ -209,7 +211,7 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
     let initial_row_sum: f32 = rows.iter().map(|t| t.base_size).sum();
     inner_node_size.height = inner_node_size.height.or(Some(initial_row_sum));
 
-    let resolved_style_size = known_dimensions.or(preferred_size);
+    let resolved_style_size = styled;
     let mut container_border_box = Size {
         width: resolved_style_size
             .width

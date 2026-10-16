@@ -3,13 +3,26 @@
 mod common;
 
 use cephal::geometry::{AvailableSpace, Size};
+use cephal::style::Display;
 use cephal::Tree;
 use common::*;
 
-fn run(seed: u64) -> Vec<String> {
+/// Lays out the tree of `seed` in both engines and lists every node where they disagree.
+///
+/// `without_container_ratio` removes `aspect-ratio` from every flex and grid container first.
+fn run(seed: u64, without_container_ratio: bool) -> Vec<String> {
     let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
     let mut tree: Tree<Text> = Tree::new();
     let root = build_subtree(&mut rng, &mut tree, 0);
+    if without_container_ratio {
+        let mut nodes = Vec::new();
+        all_nodes(&tree, root, &mut nodes);
+        for node in nodes {
+            if tree.children(node).next().is_some() && matches!(tree.style(node).display, Display::Flex | Display::Grid) {
+                tree.patch_style(node, |style| style.aspect_ratio = None);
+            }
+        }
+    }
     tree.disable_rounding();
     let viewport = Size {
         width: AvailableSpace::Definite(rng.below(600) as f32 + 50.0),
@@ -42,12 +55,18 @@ fn run(seed: u64) -> Vec<String> {
 /// The others are grids with percentage `grid-auto-rows` in indefinite-height containers.
 const KNOWN_DIVERGENT: &[u64] = &[106, 306, 563, 603, 1000, 1210, 1384, 1490];
 
+/// A flex or grid container transfers a known axis through `aspect-ratio`, as a block container
+/// does and as browsers do. Taffy 0.14 applies the ratio to style sizes only, so a tree that
+/// differs only through such a container is compared again without the containers' ratios.
 #[test]
 fn matches_taffy_on_random_trees() {
     let seeds: u64 = std::env::var("CEPHAL_SEEDS").ok().and_then(|v| v.parse().ok()).unwrap_or(300);
     let mut failing = Vec::new();
     for seed in (1..=seeds).filter(|s| !KNOWN_DIVERGENT.contains(s)) {
-        let errors = run(seed);
+        if run(seed, false).is_empty() {
+            continue;
+        }
+        let errors = run(seed, true);
         if !errors.is_empty() {
             failing.push(errors);
         }

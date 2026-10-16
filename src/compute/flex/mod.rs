@@ -172,6 +172,25 @@ pub fn compute_flexbox_layout<T: LayoutTree + CacheAccess + ?Sized>(
     });
     let styled_known =
         known_dimensions.or(min_max_definite_size.or(clamped_style_size).maybe_max(padding_border_sum.map(Some)));
+    // A known axis transfers through `aspect-ratio`, as in block layout.
+    let transferred = styled_known.transfer_aspect_ratio(aspect_ratio, min_size, max_size, padding_border_sum);
+
+    let known_dimensions_are_definite =
+        inputs.known_dimensions_are_definite.zip_map(known_dimensions, |definite, known| definite || known.is_none());
+    // A transferred axis is as definite as the axis it came from.
+    let known_dimensions_are_definite = Size {
+        width: if styled_known.width.is_none() && transferred.width.is_some() {
+            known_dimensions_are_definite.height
+        } else {
+            known_dimensions_are_definite.width
+        },
+        height: if styled_known.height.is_none() && transferred.height.is_some() {
+            known_dimensions_are_definite.width
+        } else {
+            known_dimensions_are_definite.height
+        },
+    };
+    let styled_known = transferred;
 
     if run_mode == RunMode::ComputeSize {
         if let Size { width: Some(width), height: Some(height) } = styled_known {
@@ -184,8 +203,6 @@ pub fn compute_flexbox_layout<T: LayoutTree + CacheAccess + ?Sized>(
         }
     }
 
-    let known_dimensions_are_definite =
-        inputs.known_dimensions_are_definite.zip_map(known_dimensions, |definite, known| definite || known.is_none());
     let mut output = compute_preliminary(
         tree,
         node,

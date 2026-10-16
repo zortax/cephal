@@ -171,6 +171,19 @@ impl Size<Option<f32>> {
             None => self,
         }
     }
+    /// Fills a missing axis from the known one through an aspect ratio, clamped by `min` and
+    /// `max` and floored at `floor`. A known axis stays as it is.
+    #[inline]
+    pub fn transfer_aspect_ratio(self, ratio: Option<f32>, min: Self, max: Self, floor: Size<f32>) -> Self {
+        if ratio.is_none() || self.both_some() {
+            return self;
+        }
+        let derived = self.maybe_apply_aspect_ratio(ratio).maybe_clamp(min, max);
+        Size {
+            width: self.width.or(derived.width.map(|w| w.max(floor.width))),
+            height: self.height.or(derived.height.map(|h| h.max(floor.height))),
+        }
+    }
 }
 
 impl Size<AvailableSpace> {
