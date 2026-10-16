@@ -53,7 +53,11 @@ fn run(seed: u64, without_container_ratio: bool) -> Vec<String> {
 /// `margin-left: auto` inside a `min-content` row; both engines keep the ratio but pick
 /// different heights.
 /// The others are grids with percentage `grid-auto-rows` in indefinite-height containers.
-const KNOWN_DIVERGENT: &[u64] = &[106, 306, 563, 603, 1000, 1210, 1384, 1490];
+///
+/// 188, 236 and 299: a grid measured under a min-content height. Cephal sizes it as under a
+/// max-content height (CSS Sizing 3 §5.1). Taffy gets no free space for the rows there, so its
+/// answer is smaller than the height the grid takes when it is laid out.
+const KNOWN_DIVERGENT: &[u64] = &[106, 188, 236, 299, 306, 563, 603, 1000, 1210, 1384, 1490];
 
 /// A flex or grid container transfers a known axis through `aspect-ratio`, as a block container
 /// does and as browsers do. Taffy 0.14 applies the ratio to style sizes only, so a tree that

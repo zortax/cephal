@@ -34,7 +34,13 @@ use crate::tree::{
 };
 
 pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, node: NodeId, inputs: LayoutInput) -> LayoutOutput {
-    let LayoutInput { known_dimensions, parent_size, available_space, run_mode, .. } = inputs;
+    let LayoutInput { known_dimensions, parent_size, mut available_space, run_mode, .. } = inputs;
+    // The min-content block size equals the max-content block size (CSS Sizing 3 §5.1). Rows sized
+    // under a min-content constraint get no free space, so rows of scroll-container items would
+    // stay at their zero minimum.
+    if available_space.height == AvailableSpace::MinContent {
+        available_space.height = AvailableSpace::MaxContent;
+    }
     let style = tree.style(node);
     let calc = |id, basis| tree.resolve_calc(id, basis);
     let direction = style.direction;
