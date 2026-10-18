@@ -470,7 +470,7 @@ impl<Ctx> Tree<Ctx> {
     }
 
     /// See [`crate::tree::LayoutTree::query_meta`]; two loads per query, four for containers.
-    #[inline]
+    #[inline(always)]
     fn query_meta(&self, node: NodeId) -> crate::tree::QueryMeta {
         let i = self.index(node);
         let f = self.flags[i];

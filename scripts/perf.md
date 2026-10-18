@@ -44,7 +44,14 @@ which on wide trees are dominated by cache misses on per-node data.
 layout asks: cache hits and misses by run mode, cheap-leaf computations, measure calls, container
 runs by requested axis, and `collision`, the size misses whose answer equals one already cached
 for the node under another key. Collisions are what canonicalising questions
-(`compute::normalize`, observed min/max-content axes) could still save.
+(`compute::normalize`, observed min/max-content axes) could still save. `flex_fused` and
+`flex_not_fused` count the single-line flex container runs that took the fused path
+(`src/compute/flex/fused.rs`) and those whose items needed the general algorithm.
+
+## Fast paths
+
+`CEPHAL_GENERIC_FLEX=1` (read once per process) turns the fused flex path off, so its effect can be
+measured; `tests/fast_paths.rs` compares both paths bit for bit.
 
 ## Checking shortcuts
 

@@ -19,6 +19,16 @@ pub(super) struct View<'a, Ctx, F, E, A> {
     pub ctx: core::marker::PhantomData<Ctx>,
 }
 
+/// A leaf with a context, kept out of line so that inlining `compute_leaf` stays small.
+#[inline(never)]
+fn measured_leaf<Ctx, F: MeasureFn<Ctx>, E: Executor<Ctx>, A: TreeSlot<Ctx>>(
+    view: &mut View<'_, Ctx, F, E, A>,
+    node: NodeId,
+    inputs: LayoutInput,
+) -> LayoutOutput {
+    crate::compute::leaf::compute_leaf_layout(view, node, inputs)
+}
+
 impl<Ctx, F: MeasureFn<Ctx>, E: Executor<Ctx>, A: TreeSlot<Ctx>> LayoutTree for View<'_, Ctx, F, E, A> {
     type ChildIter<'b>
         = super::node::Children<'b>
@@ -41,7 +51,7 @@ impl<Ctx, F: MeasureFn<Ctx>, E: Executor<Ctx>, A: TreeSlot<Ctx>> LayoutTree for 
     fn style(&self, node: NodeId) -> &Style {
         self.tree.get().style(node)
     }
-    #[inline]
+    #[inline(always)]
     fn query_meta(&self, node: NodeId) -> crate::tree::QueryMeta {
         self.tree.get().query_meta(node)
     }
@@ -63,12 +73,14 @@ impl<Ctx, F: MeasureFn<Ctx>, E: Executor<Ctx>, A: TreeSlot<Ctx>> LayoutTree for 
         self.tree.get().context_slot[self.tree.get().index(node)] == NONE
     }
 
+    /// Inlined, so a caller reading part of an empty leaf's answer computes only that part.
+    #[inline(always)]
     fn compute_leaf(&mut self, node: NodeId, inputs: LayoutInput, _: Option<&mut BlockContext<'_>>) -> LayoutOutput {
         // Without a context there is nothing to measure.
         if self.tree.get().context_slot[self.tree.get().index(node)] == NONE {
             return crate::compute::leaf::compute_empty_leaf_layout(self, node, inputs);
         }
-        crate::compute::leaf::compute_leaf_layout(self, node, inputs)
+        measured_leaf(self, node, inputs)
     }
 
     fn measure(&mut self, node: NodeId, input: MeasureInput) -> MeasureOutput {
@@ -122,6 +134,11 @@ impl<Ctx, F: MeasureFn<Ctx>, E: Executor<Ctx>, A: TreeSlot<Ctx>> LayoutTree for 
 
     fn compute_child_layout(&mut self, node: NodeId, inputs: LayoutInput, block_ctx: Option<&mut BlockContext<'_>>) -> LayoutOutput {
         crate::compute::compute_child_layout(self, node, inputs, block_ctx)
+    }
+
+    #[inline]
+    fn forwards_child_layout(&self) -> bool {
+        true
     }
 
     #[inline]

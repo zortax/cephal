@@ -22,6 +22,9 @@ pub struct StylePlan {
     pub flex_basis: Option<f32>,
     /// `flex-basis` is a percentage or `calc()`; `flex_basis` does not hold it.
     pub flex_basis_is_relative: bool,
+    /// As a flex item, the style needs none of the general algorithm's handling of `aspect-ratio`,
+    /// auto margins, sizing keywords, or a `content` or relative `flex-basis`.
+    pub plain_flex_item: bool,
     /// The leaf algorithm's box.
     pub leaf: LeafBox,
 }
@@ -33,6 +36,11 @@ impl StylePlan {
         let calc = |_, _| 0.0;
         let raw = |s: Size<crate::style::Length>| Size { width: s.width.resolve(None, &calc), height: s.height.resolve(None, &calc) };
         let basis = style.flex_basis.raw();
+        let margin = style.margin;
+        let plain_flex_item = style.aspect_ratio.is_none()
+            && !(margin.left.is_auto() || margin.right.is_auto() || margin.top.is_auto() || margin.bottom.is_auto())
+            && !(basis.uses_percentage() || basis.is_content() || basis.is_sizing_keyword())
+            && !(style.size.width.is_sizing_keyword() || style.size.height.is_sizing_keyword());
         Some(Self {
             size: raw(style.size.map(|v| v.raw())),
             min_size: raw(style.min_size.map(|v| v.raw())),
@@ -43,6 +51,7 @@ impl StylePlan {
             border: style.border.map(|b| b.resolve_or_zero(None, &calc)),
             flex_basis: if basis.uses_percentage() { None } else { basis.resolve(None, &calc) },
             flex_basis_is_relative: basis.uses_percentage(),
+            plain_flex_item,
             leaf,
         })
     }

@@ -44,6 +44,16 @@ impl<'a, Ctx: Send + Sync, F> Worker<'a, Ctx, F> {
     }
 }
 
+/// A leaf with a context, kept out of line so that inlining `compute_leaf` stays small.
+#[inline(never)]
+fn measured_leaf<Ctx: Send + Sync + 'static, F: SyncMeasureFn<Ctx>>(
+    worker: &mut Worker<'_, Ctx, F>,
+    node: NodeId,
+    inputs: LayoutInput,
+) -> LayoutOutput {
+    crate::compute::leaf::compute_leaf_layout(worker, node, inputs)
+}
+
 impl<Ctx: Send + Sync + 'static, F: SyncMeasureFn<Ctx>> LayoutTree for Worker<'_, Ctx, F> {
     type ChildIter<'b>
         = crate::owned::node::Children<'b>
@@ -87,11 +97,13 @@ impl<Ctx: Send + Sync + 'static, F: SyncMeasureFn<Ctx>> LayoutTree for Worker<'_
         self.tree.context_slot[self.tree.index(node)] == NONE
     }
 
+    /// Inlined, so a caller reading part of an empty leaf's answer computes only that part.
+    #[inline(always)]
     fn compute_leaf(&mut self, node: NodeId, inputs: LayoutInput, _: Option<&mut BlockContext<'_>>) -> LayoutOutput {
         if self.tree.context_slot[self.tree.index(node)] == NONE {
             return crate::compute::leaf::compute_empty_leaf_layout(self, node, inputs);
         }
-        crate::compute::leaf::compute_leaf_layout(self, node, inputs)
+        measured_leaf(self, node, inputs)
     }
 
     fn measure(&mut self, node: NodeId, input: MeasureInput) -> MeasureOutput {

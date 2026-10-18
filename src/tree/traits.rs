@@ -222,6 +222,14 @@ pub trait LayoutTree {
     /// Lays out one child; implementations normally forward to [`crate::compute::compute_child_layout`].
     fn compute_child_layout(&mut self, node: NodeId, inputs: LayoutInput, block_ctx: Option<&mut BlockContext<'_>>) -> LayoutOutput;
 
+    /// Whether [`Self::compute_child_layout`] only forwards to
+    /// [`crate::compute::compute_child_layout`], so an algorithm that knows a child is a cheap leaf
+    /// may answer it as that function would, without the call.
+    #[inline]
+    fn forwards_child_layout(&self) -> bool {
+        false
+    }
+
     /// Sees every answer [`crate::compute::compute_child_layout`] hands out, before the asking
     /// algorithm reads it; hidden answers excepted. Runs during speculative passes too (see
     /// [`CacheAccess::speculation`]) and on whichever thread answered. For counting and recording

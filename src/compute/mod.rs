@@ -42,11 +42,14 @@ pub mod stats {
     pub static RUN_SIZE_AXIS: AtomicUsize = AtomicUsize::new(0);
     /// Container runs answering a two-axis size question.
     pub static RUN_SIZE_BOTH: AtomicUsize = AtomicUsize::new(0);
+    /// Single-line flex container runs that took the fused path, and that could not.
+    pub static FLEX_FUSED: AtomicUsize = AtomicUsize::new(0);
+    pub static FLEX_NOT_FUSED: AtomicUsize = AtomicUsize::new(0);
     pub fn bump(c: &AtomicUsize) {
         c.fetch_add(1, Relaxed);
     }
     pub fn report() -> String {
-        let all = [("hidden", &HIDDEN), ("cheap_leaf", &CHEAP_LEAF), ("hit_size", &HIT_SIZE), ("hit_final", &HIT_FINAL), ("miss_size", &MISS_SIZE), ("miss_final", &MISS_FINAL), ("measure", &MEASURE), ("speculative", &SPECULATIVE), ("relaxed_hit", &RELAXED_HIT), ("batches", &BATCHES), ("plan_few_requests", &PLAN_FEW_REQUESTS), ("plan_few_groups", &PLAN_FEW_GROUPS), ("plan_little_work", &PLAN_LITTLE_WORK), ("batch_us", &BATCH_NANOS), ("batch_requests", &BATCH_REQUESTS), ("collision", &COLLISION), ("run_size_axis", &RUN_SIZE_AXIS), ("run_size_both", &RUN_SIZE_BOTH)];
+        let all = [("hidden", &HIDDEN), ("cheap_leaf", &CHEAP_LEAF), ("hit_size", &HIT_SIZE), ("hit_final", &HIT_FINAL), ("miss_size", &MISS_SIZE), ("miss_final", &MISS_FINAL), ("measure", &MEASURE), ("speculative", &SPECULATIVE), ("relaxed_hit", &RELAXED_HIT), ("batches", &BATCHES), ("plan_few_requests", &PLAN_FEW_REQUESTS), ("plan_few_groups", &PLAN_FEW_GROUPS), ("plan_little_work", &PLAN_LITTLE_WORK), ("batch_us", &BATCH_NANOS), ("batch_requests", &BATCH_REQUESTS), ("collision", &COLLISION), ("run_size_axis", &RUN_SIZE_AXIS), ("run_size_both", &RUN_SIZE_BOTH), ("flex_fused", &FLEX_FUSED), ("flex_not_fused", &FLEX_NOT_FUSED)];
         let s = all.iter().map(|(n, c)| format!("{n}={}", c.swap(0, Relaxed))).collect::<Vec<_>>().join(" ");
         s
     }
@@ -85,11 +88,7 @@ pub fn compute_child_layout<T: LayoutTree + CacheAccess + ?Sized>(
     }
     // A leaf with nothing to measure costs less to recompute than to look up.
     if meta.cheap_leaf {
-        #[cfg(feature = "stats")]
-        stats::bump(&stats::CHEAP_LEAF);
-        let output = tree.compute_leaf(node, inputs, block_ctx);
-        tree.observe_answer(node, &inputs, &output, AnswerSource::CheapLeaf);
-        return verify::poison(&inputs, output);
+        return compute_cheap_leaf(tree, node, inputs, block_ctx);
     }
     #[cfg(feature = "verify-cache")]
     let raw_inputs = inputs;
@@ -130,6 +129,23 @@ pub fn compute_child_layout<T: LayoutTree + CacheAccess + ?Sized>(
         tree.cache_mut(node).store_observed(key, inputs.run_mode, output, generation, observed);
     }
     tree.observe_answer(node, &inputs, &output, AnswerSource::Computed);
+    verify::poison(&inputs, output)
+}
+
+/// [`compute_child_layout`]'s answer for a cheap leaf that is not hidden, asked for its layout or
+/// size; callers that know a child is one may call it directly when the tree
+/// [forwards](LayoutTree::forwards_child_layout) child layout.
+#[inline(always)]
+pub fn compute_cheap_leaf<T: LayoutTree + CacheAccess + ?Sized>(
+    tree: &mut T,
+    node: NodeId,
+    inputs: LayoutInput,
+    block_ctx: Option<&mut BlockContext<'_>>,
+) -> LayoutOutput {
+    #[cfg(feature = "stats")]
+    stats::bump(&stats::CHEAP_LEAF);
+    let output = tree.compute_leaf(node, inputs, block_ctx);
+    tree.observe_answer(node, &inputs, &output, AnswerSource::CheapLeaf);
     verify::poison(&inputs, output)
 }
 
@@ -506,6 +522,25 @@ impl<A: scratch::Pooled + Copy> Questions<A> {
     pub fn ask<T: LayoutTree + ?Sized>(&mut self, tree: &mut T, request: ChildRequest, read: impl FnOnce(&LayoutOutput) -> A) -> usize {
         if self.eager {
             let output = tree.compute_child_layout(request.node, request.input, None);
+            self.answers.push(read(&output));
+        } else {
+            self.requests.push(request);
+        }
+        self.asked += 1;
+        self.asked - 1
+    }
+
+    /// [`Self::ask`] for a child known to be a cheap leaf that is not hidden, of a tree that
+    /// [forwards](LayoutTree::forwards_child_layout) child layout.
+    #[inline]
+    pub fn ask_cheap_leaf<T: LayoutTree + CacheAccess + ?Sized>(
+        &mut self,
+        tree: &mut T,
+        request: ChildRequest,
+        read: impl FnOnce(&LayoutOutput) -> A,
+    ) -> usize {
+        if self.eager {
+            let output = compute_cheap_leaf(tree, request.node, request.input, None);
             self.answers.push(read(&output));
         } else {
             self.requests.push(request);

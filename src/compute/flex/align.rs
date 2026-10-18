@@ -4,7 +4,7 @@ use super::axis::FlexDir;
 use super::axis::{FlexAxisRect, FlexAxisSize, sum_axis_gaps};
 use super::{AlgoConstants, FlexItem, FlexLine};
 use crate::compute::common::alignment::{apply_alignment_fallback, compute_alignment_offset};
-use crate::style::{AlignItemsKeyword, Direction, JustifyContent};
+use crate::style::{AlignItemsKeyword, AlignSelf, Direction, JustifyContent};
 
 pub(super) fn distribute_remaining_free_space<D: FlexDir>(lines: &[FlexLine], items: &mut [FlexItem], c: &AlgoConstants<D>) {
     let dir = c.dir;
@@ -85,8 +85,26 @@ fn align_flex_items_along_cross_axis<D: FlexDir>(
     c: &AlgoConstants<D>,
 ) -> f32 {
     let dir = c.dir;
+    cross_axis_offset(ch.align_self, free_space, c, || {
+        if c.is_wrap_reverse {
+            let line_cross_size = free_space + ch.outer_target_size.cross(dir);
+            line_cross_size - max_baseline_to_bottom_distance - ch.baseline
+        } else {
+            max_baseline - ch.baseline
+        }
+    })
+}
+
+/// An item's cross offset in its line; `row_baseline` gives a baseline-aligned row item's.
+#[inline]
+pub(super) fn cross_axis_offset<D: FlexDir>(
+    align_self: AlignSelf,
+    free_space: f32,
+    c: &AlgoConstants<D>,
+    row_baseline: impl FnOnce() -> f32,
+) -> f32 {
     let cross_axis_should_reverse = c.is_column && c.layout_direction == Direction::Rtl;
-    let keyword = if ch.align_self.is_safe() && free_space < 0.0 { AlignItemsKeyword::Start } else { ch.align_self.keyword };
+    let keyword = if align_self.is_safe() && free_space < 0.0 { AlignItemsKeyword::Start } else { align_self.keyword };
     match keyword {
         AlignItemsKeyword::Start => {
             if cross_axis_should_reverse { free_space } else { 0.0 }
@@ -103,12 +121,7 @@ fn align_flex_items_along_cross_axis<D: FlexDir>(
         AlignItemsKeyword::Center => free_space / 2.0,
         AlignItemsKeyword::Baseline => {
             if c.is_row {
-                if c.is_wrap_reverse {
-                    let line_cross_size = free_space + ch.outer_target_size.cross(dir);
-                    line_cross_size - max_baseline_to_bottom_distance - ch.baseline
-                } else {
-                    max_baseline - ch.baseline
-                }
+                row_baseline()
             } else {
                 let baseline_column_should_reverse = cross_axis_should_reverse && !c.is_wrap;
                 if c.is_wrap_reverse ^ baseline_column_should_reverse { free_space } else { 0.0 }

@@ -8,10 +8,13 @@ mod base_size;
 mod cross;
 mod final_pass;
 mod flexible;
+mod fused;
 mod lines;
 mod main_size;
 
 pub use absolute::AbsoluteFlexContext;
+#[doc(hidden)]
+pub use fused::set_fused_flex;
 pub(crate) use absolute::layout_absolute_flex_child;
 use axis::{Column, FlexAxisRect, FlexAxisSize, FlexAxisSum, FlexDir, Row};
 
@@ -230,6 +233,15 @@ fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized, D: FlexDir>(
     let LayoutInput { known_dimensions, parent_size, available_space, run_mode, .. } = inputs;
     let mut constants =
         compute_constants(tree, node, dir, known_dimensions, inputs.known_dimensions_are_definite, parent_size, available_space);
+    if !constants.is_wrap && fused::enabled() {
+        if let Some(output) = fused::compute(tree, node, inputs, &mut constants) {
+            #[cfg(feature = "stats")]
+            crate::compute::stats::bump(&crate::compute::stats::FLEX_FUSED);
+            return output;
+        }
+        #[cfg(feature = "stats")]
+        crate::compute::stats::bump(&crate::compute::stats::FLEX_NOT_FUSED);
+    }
     let (mut items, has_other_children) = generate_anonymous_flex_items(tree, node, &constants);
     let available_space = determine_available_space(known_dimensions, available_space, &constants);
     // Line breaking and the intrinsic main size of a multi-line container tell min-content from
@@ -291,16 +303,7 @@ fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized, D: FlexDir>(
     align::align_flex_lines_per_align_content(&mut lines, &constants, total_line_cross_size);
     let inflow_overflow_rect = final_pass::final_layout_pass(tree, &lines, &mut items, &constants);
     // Absolutely positioned and hidden children were found while generating the items.
-    let mut absolute_overflow_rect = Rect::ZERO;
-    if has_other_children {
-        absolute_overflow_rect = absolute::perform_absolute_layout_on_absolute_children(tree, node, &constants);
-        let hidden: Scratch<(usize, NodeId)> =
-            Scratch::collect(tree.children(node).enumerate().filter(|(_, c)| tree.style(*c).generates_no_box()));
-        for &(order, child) in &hidden {
-            tree.set_unrounded_layout(child, &Layout::with_order(order as u32));
-            tree.perform_child_layout(child, Size::NONE, Size::NONE, Size::MAX_CONTENT, SizingMode::ContentSize, Line::FALSE);
-        }
-    }
+    let absolute_overflow_rect = if has_other_children { lay_out_other_children(tree, node, &constants) } else { Rect::ZERO };
 
     // The container's baseline comes from its first line's first baseline-participating item.
     let first_line = if constants.is_wrap_reverse { lines.last() } else { lines.first() };
@@ -330,6 +333,18 @@ fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized, D: FlexDir>(
     let baselines = Baselines { first: first_vertical_baseline, last: last_vertical_baseline };
     LayoutOutput::from_sizes_and_baselines(constants.container_size, Rect::ZERO, baselines)
         .with_overflow(inflow_overflow_rect, absolute_overflow_rect)
+}
+
+/// Lays out the absolutely positioned and hidden children; returns the absolute overflow.
+fn lay_out_other_children<T: LayoutTree + CacheAccess + ?Sized, D: FlexDir>(tree: &mut T, node: NodeId, constants: &AlgoConstants<D>) -> Rect<f32> {
+    let absolute_overflow_rect = absolute::perform_absolute_layout_on_absolute_children(tree, node, constants);
+    let hidden: Scratch<(usize, NodeId)> =
+        Scratch::collect(tree.children(node).enumerate().filter(|(_, c)| tree.style(*c).generates_no_box()));
+    for &(order, child) in &hidden {
+        tree.set_unrounded_layout(child, &Layout::with_order(order as u32));
+        tree.perform_child_layout(child, Size::NONE, Size::NONE, Size::MAX_CONTENT, SizingMode::ContentSize, Line::FALSE);
+    }
+    absolute_overflow_rect
 }
 
 fn compute_constants<T: LayoutTree + ?Sized, D: FlexDir>(
