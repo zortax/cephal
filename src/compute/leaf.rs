@@ -52,6 +52,15 @@ impl LeafBox {
         let none: Size<Option<f32>> = Size::NONE;
         Some(resolve_box(style, none, &calc))
     }
+
+    /// Resolves `style` against `parent_size`, for any style.
+    pub fn resolve(
+        style: &crate::style::Style,
+        parent_size: Size<Option<f32>>,
+        calc: &impl Fn(crate::style::CalcId, f32) -> f32,
+    ) -> Self {
+        resolve_box(style, parent_size, calc)
+    }
 }
 
 /// The resolved box of a leaf against `parent_size`.
@@ -175,9 +184,13 @@ fn prepare(resolved: &LeafBox, known_dimensions: Size<Option<f32>>, sizing_mode:
     }
 }
 
-/// `measured`: whether `measure` may read the available space, which it then observes.
+/// The leaf algorithm around any measurement, for trees whose leaves measure through the tree
+/// itself, e.g. by laying out nested content.
+///
+/// `measured`: whether `measure` may read the available space, which is then recorded through
+/// [`LayoutTree::note_observed`] on the axes it leaves indefinite.
 #[inline(always)]
-fn compute_leaf_layout_with<T: LayoutTree + ?Sized>(
+pub fn compute_leaf_layout_with<T: LayoutTree + ?Sized>(
     tree: &mut T,
     node: NodeId,
     inputs: LayoutInput,
