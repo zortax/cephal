@@ -42,7 +42,6 @@ pub(super) struct FlexItem {
     flex_grow: f32,
     flex_basis_is_definite: bool,
     resolved_minimum_main_size: f32,
-    inset: Rect<Option<f32>>,
     margin: Rect<f32>,
     margin_is_auto: Rect<bool>,
     padding: Rect<f32>,
@@ -128,6 +127,9 @@ pub(super) struct AlgoConstants<D> {
     /// The inner cross size a stretched item takes while the main sizes are found, when the
     /// container's own cross size is indefinite. See [`base_size::indefinite_stretch_cross`].
     indefinite_stretch_cross: Option<f32>,
+    /// The basis items' percentage insets resolve against: the inner size when the items were
+    /// generated, before an indefinite main size is found.
+    inset_basis: Size<Option<f32>>,
 }
 
 impl<D: FlexDir> AlgoConstants<D> {
@@ -408,6 +410,7 @@ fn compute_constants<T: LayoutTree + ?Sized, D: FlexDir>(
         container_size: Size::ZERO,
         inner_container_size: Size::ZERO,
         indefinite_stretch_cross: None,
+        inset_basis: node_inner_size,
     }
 }
 
@@ -430,15 +433,14 @@ fn generate_anonymous_flex_items<D: FlexDir, T: LayoutTree + ?Sized>(tree: &T, n
         }
         let aspect_ratio = style.aspect_ratio;
         // Lengths that resolve against nothing are the same against any basis.
-        let (size, min_size, max_size, inset, margin, padding, border) = match tree.style_plan(child) {
-            Some(p) => (p.size, p.min_size, p.max_size, p.inset, p.margin, p.padding, p.border),
+        let (size, min_size, max_size, margin, padding, border) = match tree.style_plan(child) {
+            Some(p) => (p.size, p.min_size, p.max_size, p.margin, p.padding, p.border),
             None => {
                 let resolve = |s: Size<crate::style::Length>| crate::compute::block::resolve_size(s, percent_resolution_size, &calc);
                 (
                     resolve(style.size.map(|v| v.raw())),
                     resolve(style.min_size.map(|v| v.raw())),
                     resolve(style.max_size.map(|v| v.raw())),
-                    style.inset.zip_size(constants.node_inner_size, |i, basis| i.resolve(basis, &calc)),
                     style.margin.map(|m| m.resolve_or_zero(constants.node_inner_size.width, &calc)),
                     style.padding.map(|p| p.resolve_or_zero(constants.node_inner_size.width, &calc)),
                     style.border.map(|b| b.resolve_or_zero(constants.node_inner_size.width, &calc)),
@@ -455,7 +457,6 @@ fn generate_anonymous_flex_items<D: FlexDir, T: LayoutTree + ?Sized>(tree: &T, n
             min_size: min_size.maybe_add(box_sizing_adjustment),
             max_size: max_size.maybe_add(box_sizing_adjustment),
             aspect_ratio,
-            inset,
             margin,
             margin_is_auto: style.margin.map(|m| m.is_auto()),
             padding,

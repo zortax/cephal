@@ -45,15 +45,23 @@ fn calculate_flex_item<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     let is_rtl_row = dir.is_row() && c.layout_direction == Direction::Rtl;
     let is_rtl_column = dir.is_column() && c.layout_direction == Direction::Rtl;
 
+    // Insets are read only here; resolve them as item generation would have.
+    let inset = match tree.style_plan(item.node) {
+        Some(p) => p.inset,
+        None => {
+            let calc = |id, basis| tree.resolve_calc(id, basis);
+            tree.style(item.node).inset.zip_size(c.inset_basis, |i, basis| i.resolve(basis, &calc))
+        }
+    };
     let main_relative_inset = if is_rtl_row {
-        item.inset.main_end(dir).or(item.inset.main_start(dir).map(|p| -p)).unwrap_or(0.0)
+        inset.main_end(dir).or(inset.main_start(dir).map(|p| -p)).unwrap_or(0.0)
     } else {
-        item.inset.main_start(dir).or(item.inset.main_end(dir).map(|p| -p)).unwrap_or(0.0)
+        inset.main_start(dir).or(inset.main_end(dir).map(|p| -p)).unwrap_or(0.0)
     };
     let cross_relative_inset = if is_rtl_column {
-        item.inset.cross_end(dir).map(|p| -p).or(item.inset.cross_start(dir)).unwrap_or(0.0)
+        inset.cross_end(dir).map(|p| -p).or(inset.cross_start(dir)).unwrap_or(0.0)
     } else {
-        item.inset.cross_start(dir).or(item.inset.cross_end(dir).map(|p| -p)).unwrap_or(0.0)
+        inset.cross_start(dir).or(inset.cross_end(dir).map(|p| -p)).unwrap_or(0.0)
     };
     let effective_line_offset_cross = if is_rtl_column { 0.0 } else { line_offset_cross };
     let offset_main = if is_rtl_row {
