@@ -66,13 +66,6 @@ impl<T> Column<T> {
     pub fn iter_mut(&mut self) -> core::slice::IterMut<'_, T> {
         self.0.get_mut().iter_mut()
     }
-
-    pub fn to_vec(&self) -> Vec<T>
-    where
-        T: Clone,
-    {
-        self.vec().clone()
-    }
 }
 
 impl<T> From<Vec<T>> for Column<T> {

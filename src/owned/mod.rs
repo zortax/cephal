@@ -11,13 +11,16 @@ pub use id::NodeHandle;
 pub use parallel::{Executor, Inline, Parallel, SyncMeasureFn};
 pub use styles::StyleTable;
 
-use crate::geometry::{AvailableSpace, Size};
+use crate::geometry::{AvailableSpace, Point, Size};
 use crate::style::{CalcId, CalcOp, CalcTable, Ident, Style};
 use crate::schedule::{META_MASK, ROUND_PENDING, Scheduler};
 use crate::tree::{Layout, MeasureInput, MeasureOutput, NodeCache, NodeId};
 use std::sync::Arc;
 use crate::hash::FxHashMap;
 use node::{Links, NONE};
+
+/// Origin of a node no rounding pass has placed; differs from every origin, so it re-rounds.
+const UNPLACED: Point<f32> = Point { x: f32::NAN, y: f32::NAN };
 
 /// Measures leaf content: `(context, input, style)`.
 pub trait MeasureFn<Ctx>: FnMut(&mut Ctx, MeasureInput, &Style) -> MeasureOutput {}
@@ -31,7 +34,13 @@ pub struct Tree<Ctx = ()> {
     unrounded: column::Column<Layout>,
     rounded: Vec<Layout>,
     /// Absolute unrounded origin used by the last rounding pass.
-    abs_origin: Vec<crate::geometry::Point<f32>>,
+    abs_origin: Vec<Point<f32>>,
+    /// Whether `rounded` and `abs_origin` hold the last rounding pass for every node; when not,
+    /// they keep their allocation for the next full pass.
+    rounded_valid: bool,
+    /// Traversal stacks of the rounding passes, kept between frames.
+    round_stack: Vec<(usize, f32, f32, bool)>,
+    round_pending: Vec<u32>,
     caches: column::Column<NodeCache>,
     context_slot: Vec<u32>,
     generations: Vec<u16>,
@@ -77,6 +86,9 @@ impl<Ctx> Tree<Ctx> {
             unrounded: column::Column::with_capacity(n),
             rounded: Vec::new(),
             abs_origin: Vec::new(),
+            rounded_valid: false,
+            round_stack: Vec::new(),
+            round_pending: Vec::new(),
             caches: column::Column::with_capacity(n),
             context_slot: Vec::with_capacity(n),
             generations: Vec::with_capacity(n),
@@ -182,11 +194,11 @@ impl<Ctx> Tree<Ctx> {
                 self.flags[i] = meta;
                 self.touched_gen[i] = 0;
                 self.unrounded[i] = Layout::ZERO;
-                if !self.rounded.is_empty() {
+                if self.rounded_valid {
                     self.rounded[i] = Layout::ZERO;
-                    self.abs_origin[i] = crate::geometry::Point { x: f32::NAN, y: f32::NAN };
+                    self.abs_origin[i] = UNPLACED;
                 }
-                self.caches[i] = NodeCache::new();
+                self.caches[i].clear();
                 self.context_slot[i] = context_slot;
                 i
             }
@@ -196,9 +208,9 @@ impl<Ctx> Tree<Ctx> {
                 self.flags.push(meta);
                 self.touched_gen.push(0);
                 self.unrounded.push(Layout::ZERO);
-                if !self.rounded.is_empty() {
+                if self.rounded_valid {
                     self.rounded.push(Layout::ZERO);
-                    self.abs_origin.push(crate::geometry::Point { x: f32::NAN, y: f32::NAN });
+                    self.abs_origin.push(UNPLACED);
                 }
                 self.caches.push(NodeCache::new());
                 self.context_slot.push(context_slot);
@@ -338,6 +350,7 @@ impl<Ctx> Tree<Ctx> {
         self.unrounded.clear();
         self.rounded.clear();
         self.abs_origin.clear();
+        self.rounded_valid = false;
         self.caches.clear();
         self.context_slot.clear();
         self.generations.clear();
@@ -363,8 +376,7 @@ impl<Ctx> Tree<Ctx> {
         for l in self.unrounded.iter_mut() {
             *l = Layout::ZERO;
         }
-        self.rounded.clear();
-        self.abs_origin.clear();
+        self.rounded_valid = false;
         self.touched.clear();
         self.changed.clear();
         self.detailed_grid.clear();
@@ -386,6 +398,9 @@ impl<Ctx> Tree<Ctx> {
             unrounded: vec![Layout::ZERO; self.unrounded.len()].into(),
             rounded: Vec::new(),
             abs_origin: Vec::new(),
+            rounded_valid: false,
+            round_stack: Vec::new(),
+            round_pending: Vec::new(),
             caches: (0..self.caches.len()).map(|_| NodeCache::new()).collect::<Vec<_>>().into(),
             context_slot: self.context_slot.clone(),
             generations: self.generations.clone(),
@@ -536,7 +551,7 @@ impl<Ctx> Tree<Ctx> {
     /// Rounded layout when rounding is enabled, otherwise the unrounded one.
     pub fn layout(&self, node: NodeId) -> &Layout {
         let i = self.index(node);
-        if self.use_rounding && !self.rounded.is_empty() { &self.rounded[i] } else { &self.unrounded[i] }
+        if self.use_rounding && self.rounded_valid { &self.rounded[i] } else { &self.unrounded[i] }
     }
 
     pub fn unrounded_layout(&self, node: NodeId) -> &Layout {
@@ -635,11 +650,8 @@ impl<Ctx> Tree<Ctx> {
             }
         }
         if self.use_rounding {
-            if self.rounded.len() != self.unrounded.len() {
-                // First rounding pass, or nodes were added: round everything.
-                self.rounded = self.unrounded.to_vec();
-                self.abs_origin = vec![crate::geometry::Point { x: f32::NAN, y: f32::NAN }; self.unrounded.len()];
-                self.round_subtree(root, 0.0, 0.0, true);
+            if !self.rounded_valid {
+                self.round_all(root);
             } else if !self.changed.is_empty() {
                 self.round_changed();
             }
@@ -647,10 +659,44 @@ impl<Ctx> Tree<Ctx> {
         let _ = root_query_changed;
     }
 
+    /// Rounds every node under `root`; every other node takes its unrounded layout, unplaced.
+    fn round_all(&mut self, root: NodeId) {
+        let n = self.unrounded.len();
+        self.rounded.resize(n, Layout::ZERO);
+        self.abs_origin.resize(n, UNPLACED);
+        self.rounded_valid = true;
+        if self.round_subtree(root, 0.0, 0.0, true) == self.node_count() {
+            return;
+        }
+        // Detached subtrees, free slots, and ancestors and siblings of a non-top root.
+        let r = self.index(root);
+        let mut stack = core::mem::take(&mut self.round_pending);
+        for top in 0..n {
+            if self.links[top].parent != NONE {
+                continue;
+            }
+            stack.push(top as u32);
+            while let Some(i) = stack.pop() {
+                let i = i as usize;
+                if i == r {
+                    continue;
+                }
+                self.rounded[i] = self.unrounded[i];
+                self.abs_origin[i] = UNPLACED;
+                let mut c = self.links[i].first_child;
+                while c != NONE {
+                    stack.push(c);
+                    c = self.links[c as usize].next;
+                }
+            }
+        }
+        self.round_pending = stack;
+    }
+
     /// Re-rounds the rewritten nodes and their ancestors, and every subtree whose origin moved;
     /// nothing else is visited, so a contained edit costs its own ancestor chain only.
     fn round_changed(&mut self) {
-        let mut pending: Vec<u32> = Vec::with_capacity(self.changed.len() * 2);
+        let mut pending = core::mem::take(&mut self.round_pending);
         for &node in &self.changed {
             let (index, _) = id::split(node);
             let mut i = index;
@@ -669,7 +715,7 @@ impl<Ctx> Tree<Ctx> {
         }
         // Parents first, so a node reads its parent's already updated origin.
         pending.sort_unstable_by_key(|&i| self.links[i as usize].depth);
-        for i in pending {
+        for &i in &pending {
             let i = i as usize;
             // Already re-rounded by a moved ancestor's subtree walk.
             if self.flags[i] & ROUND_PENDING == 0 {
@@ -677,12 +723,12 @@ impl<Ctx> Tree<Ctx> {
             }
             self.flags[i] &= !ROUND_PENDING;
             let p = self.links[i].parent;
-            let origin = if p == NONE { crate::geometry::Point { x: 0.0, y: 0.0 } } else { self.abs_origin[p as usize] };
+            let origin = if p == NONE { Point { x: 0.0, y: 0.0 } } else { self.abs_origin[p as usize] };
             let u = self.unrounded[i];
             let x = origin.x + u.location.x;
             let y = origin.y + u.location.y;
             let moved = self.abs_origin[i].x != x || self.abs_origin[i].y != y;
-            self.abs_origin[i] = crate::geometry::Point { x, y };
+            self.abs_origin[i] = Point { x, y };
             self.rounded[i] = crate::round::round_one(&u, x, y);
             if moved {
                 let mut c = self.links[i].first_child;
@@ -692,11 +738,16 @@ impl<Ctx> Tree<Ctx> {
                 }
             }
         }
+        pending.clear();
+        self.round_pending = pending;
     }
 
-    /// Rounds `node`; descends where a descendant was rewritten or the origin moved.
-    fn round_subtree(&mut self, root: NodeId, parent_x: f32, parent_y: f32, force: bool) {
-        let mut stack: Vec<(usize, f32, f32, bool)> = vec![(self.index(root), parent_x, parent_y, force)];
+    /// Rounds `node`; descends where a descendant was rewritten or the origin moved. Returns the
+    /// number of nodes rounded.
+    fn round_subtree(&mut self, root: NodeId, parent_x: f32, parent_y: f32, force: bool) -> usize {
+        let mut stack = core::mem::take(&mut self.round_stack);
+        stack.push((self.index(root), parent_x, parent_y, force));
+        let mut rounded = 0;
         while let Some((i, px, py, force)) = stack.pop() {
             let u = self.unrounded[i];
             let x = px + u.location.x;
@@ -707,14 +758,17 @@ impl<Ctx> Tree<Ctx> {
             if !(force || pending || moved) {
                 continue;
             }
-            self.abs_origin[i] = crate::geometry::Point { x, y };
+            self.abs_origin[i] = Point { x, y };
             self.rounded[i] = crate::round::round_one(&u, x, y);
+            rounded += 1;
             let mut c = self.links[i].first_child;
             while c != NONE {
                 stack.push((c as usize, x, y, force || moved));
                 c = self.links[c as usize].next;
             }
         }
+        self.round_stack = stack;
+        rounded
     }
 
     // --- internals ----------------------------------------------------------------------------
