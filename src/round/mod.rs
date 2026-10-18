@@ -58,6 +58,28 @@ pub fn round_one(u: &Layout, cx: f32, cy: f32) -> Layout {
     let bottom = cy + u.size.height;
     let [rcx, rright, rcy, rbottom] = round4([cx, right, cy, bottom]);
     let [lx, ly, sw, sh] = round4([u.location.x, u.location.y, u.scrollbar_size.width, u.scrollbar_size.height]);
+    // A box without border, padding, margin, scrollbar or overflow: each of those edges rounds to
+    // the border box's own rounded edge, so each extent is exactly zero.
+    let zero = |r: Rect<f32>| r.left == 0.0 && r.right == 0.0 && r.top == 0.0 && r.bottom == 0.0;
+    if zero(u.border)
+        && zero(u.padding)
+        && zero(u.margin)
+        && zero(u.scrollable_overflow_rect)
+        && u.scrollbar_size.width == 0.0
+        && u.scrollbar_size.height == 0.0
+        && (rcx - rright + rcy - rbottom).is_finite()
+    {
+        return Layout {
+            order: u.order,
+            location: Point { x: lx, y: ly },
+            size: Size { width: rright - rcx, height: rbottom - rcy },
+            scrollbar_size: Size::ZERO,
+            border: Rect::ZERO,
+            padding: Rect::ZERO,
+            margin: Rect::ZERO,
+            scrollable_overflow_rect: Rect::ZERO,
+        };
+    }
     let b = round4([cx + u.border.left, right - u.border.right, cy + u.border.top, bottom - u.border.bottom]);
     let p = round4([cx + u.padding.left, right - u.padding.right, cy + u.padding.top, bottom - u.padding.bottom]);
     let m = round4([cx - u.margin.left, right + u.margin.right, cy - u.margin.top, bottom + u.margin.bottom]);
