@@ -3,7 +3,7 @@
 mod common;
 
 use cephal::geometry::{AvailableSpace, Size};
-use cephal::style::Position;
+use cephal::style::{Dimension, FlexWrap, Position};
 use cephal::tree::{Layout, NodeId};
 use cephal::{Parallel, Tree};
 use common::*;
@@ -42,7 +42,7 @@ fn edit(rng: &mut Rng, tree: &mut Tree<Text>, root: NodeId) -> String {
     let mut nodes = Vec::new();
     all_nodes(tree, root, &mut nodes);
     let target = rng.pick(&nodes);
-    match rng.below(9) {
+    match rng.below(12) {
         0 | 1 => {
             let container = tree.child_count(target) > 0;
             tree.set_style(target, random_style(rng, container));
@@ -107,6 +107,26 @@ fn edit(rng: &mut Rng, tree: &mut Tree<Text>, root: NodeId) -> String {
                 s.size.width = dimension(rng);
             });
             format!("patch out-of-flow inset {target:?}")
+        }
+        // Transitions that change how questions are canonicalised: a leaf starting or stopping
+        // to measure, a container's line mode, and clamps that tell min- from max-content apart.
+        9 if tree.child_count(target) == 0 => {
+            let context = if tree.context(target).is_some() { None } else { Some(Text(rng.below(12) as u32 + 1)) };
+            let what = if context.is_some() { "add" } else { "remove" };
+            tree.set_context(target, context);
+            format!("{what} context {target:?}")
+        }
+        10 => {
+            tree.patch_style(target, |s| s.flex_wrap = rng.pick(&[FlexWrap::NoWrap, FlexWrap::Wrap, FlexWrap::WrapReverse]));
+            format!("patch flex-wrap {target:?}")
+        }
+        11 => {
+            tree.patch_style(target, |s| {
+                s.min_size.height = lpa(rng);
+                s.max_size.width = lpa(rng);
+                s.size.height = rng.pick(&[Dimension::AUTO, Dimension::MIN_CONTENT, Dimension::MAX_CONTENT, Dimension::length(20.0)]);
+            });
+            format!("patch clamps {target:?}")
         }
         _ => {
             tree.patch_style(target, |s| s.flex_grow = rng.pick(&[0.0, 1.0, 3.0]));
@@ -184,6 +204,13 @@ fn run_script(seed: u64, steps: usize) {
         got.dedup();
         assert_eq!(got, expected, "{label}: changed() mismatch");
     }
+}
+
+/// Scripts that once failed: a reparented subtree keeping its own layout under a parent at another
+/// fractional offset was not rounded again.
+#[test]
+fn regressions() {
+    run_script(368, 40);
 }
 
 #[test]
