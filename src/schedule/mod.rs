@@ -27,7 +27,7 @@ pub trait Incremental: LayoutTree + CacheAccess {
 #[derive(Debug, Default)]
 pub struct Scheduler {
     queue: DepthQueue,
-    scratch: Vec<(LayoutInput, LayoutOutput)>,
+    scratch: Vec<(LayoutInput, LayoutOutput, u8)>,
 }
 
 impl Scheduler {
@@ -122,14 +122,14 @@ impl Scheduler {
     fn recompute<T: Incremental + ?Sized>(&mut self, tree: &mut T, node: NodeId) -> bool {
         self.scratch.clear();
         let evicted = tree.cache_mut(node).had_eviction();
-        tree.cache_mut(node).drain_all(&mut self.scratch);
+        tree.cache_mut(node).drain_observed(&mut self.scratch);
         // Nothing cached (hidden, never laid out, or already cleared): only the parent can tell.
         if self.scratch.is_empty() {
             return true;
         }
         // Answers given inside a shared block formatting context depend on siblings; let the
         // parent recompute them with the real context.
-        let context_bound = self.scratch.iter().any(|(input, _)| {
+        let context_bound = self.scratch.iter().any(|(input, _, _)| {
             input.context_key != 0 || input.vertical_margins_are_collapsible != Line::FALSE
         });
         if context_bound {
@@ -138,9 +138,15 @@ impl Scheduler {
         }
         let mut changed = evicted;
         for i in 0..self.scratch.len() {
-            let (input, old) = self.scratch[i];
+            let (input, old, old_observed) = self.scratch[i];
             let new = crate::compute::compute_child_layout(tree, node, input, None);
             if answer_changed(tree, node, input.run_mode, new, old) {
+                changed = true;
+            }
+            // An answer that now tells min-content from max-content no longer stands for the
+            // questions it answered on axes it did not observe before.
+            let observed = tree.cache(node).observed(&input).unwrap_or(crate::compute::OBSERVED_ALL);
+            if observed & !old_observed != 0 {
                 changed = true;
             }
         }

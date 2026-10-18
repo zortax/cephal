@@ -266,7 +266,8 @@ pub struct Log {
     pub(super) absolute: Vec<(u32, AbsoluteContext)>,
     /// Outputs of the batch's requests, by request index; the caller must use these rather than
     /// ask the cache again, since a later store in the same group may have evicted them.
-    pub(super) answers: Vec<(usize, LayoutOutput)>,
+    /// Each with the axes its answer observed, which the asking frame inherits.
+    pub(super) answers: Vec<(usize, LayoutOutput, u8)>,
 }
 
 impl Log {
@@ -298,8 +299,9 @@ pub(super) fn finish_batch<T: LayoutTree + ?Sized>(
     if let Some(logs) = logs {
         answered.resize(requests.len(), None);
         for log in logs {
-            for &(r, output) in &log.answers {
+            for &(r, output, observed) in &log.answers {
                 answered[r] = Some(output);
+                tree.note_observed(observed);
             }
             commit(tree, log);
         }

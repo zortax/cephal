@@ -19,22 +19,23 @@ pub(super) struct Worker<'a, Ctx, F> {
     pool: &'a Pool,
     log: Log,
     speculation: u32,
+    observed: u8,
 }
 
 impl<'a, Ctx: Send + Sync, F> Worker<'a, Ctx, F> {
     pub fn new(tree: &'a Arc<Tree<Ctx>>, measure: &'a Arc<F>, config: Config, pool: &'a Pool, nodes: usize) -> Self {
         let mut log = Log::default();
         log.touched.reserve(nodes);
-        Self { tree, measure, config, pool, log, speculation: 0 }
+        Self { tree, measure, config, pool, log, speculation: 0, observed: 0 }
     }
 
     pub fn into_log(self) -> Log {
         self.log
     }
 
-    /// Records the output of the batch request `r`.
-    pub fn answered(&mut self, r: usize, output: LayoutOutput) {
-        self.log.answers.push((r, output));
+    /// Records the output of the batch request `r` and the axes it observed.
+    pub fn answered(&mut self, r: usize, output: LayoutOutput, observed: u8) {
+        self.log.answers.push((r, output, observed));
     }
 
     #[inline]
@@ -143,6 +144,21 @@ impl<Ctx: Send + Sync + 'static, F: SyncMeasureFn<Ctx>> LayoutTree for Worker<'_
 
     fn compute_child_layout(&mut self, node: NodeId, inputs: LayoutInput, block_ctx: Option<&mut BlockContext<'_>>) -> LayoutOutput {
         crate::compute::compute_child_layout(self, node, inputs, block_ctx)
+    }
+
+    #[inline]
+    fn take_observed(&mut self) -> u8 {
+        core::mem::take(&mut self.observed)
+    }
+
+    #[inline]
+    fn note_observed(&mut self, axes: u8) {
+        self.observed |= axes;
+    }
+
+    #[inline]
+    fn measure_ignores_available_height(&self) -> bool {
+        self.tree.measure_ignores_available_height
     }
 
     #[inline]

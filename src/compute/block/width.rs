@@ -42,6 +42,10 @@ pub(super) fn determine_content_based_container_width<T: LayoutTree + CacheAcces
         };
         let width = width.max(item.padding_border_sum.width) + item_x_margin_sum;
         if let Some(direction) = item.float.direction() {
+            // Floats stack under max-content space and not under min-content space.
+            if !available_width.is_definite() {
+                tree.note_observed(crate::compute::OBSERVED_WIDTH);
+            }
             floats.add_float(width, direction, item.clear);
             continue;
         }

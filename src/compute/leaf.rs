@@ -122,7 +122,22 @@ fn resolve_box(style: &crate::style::Style, parent_size: Size<Option<f32>>, calc
 }
 
 pub fn compute_leaf_layout<T: LayoutTree + ?Sized>(tree: &mut T, node: NodeId, inputs: LayoutInput) -> LayoutOutput {
-    compute_leaf_layout_with(tree, node, inputs, |tree, input| tree.measure(node, input))
+    compute_leaf_layout_with(tree, node, inputs, |tree, input| {
+        // The measure function may tell min-content from max-content space on an axis it is not
+        // given a size for.
+        let mut observed = 0;
+        if input.known_dimensions.width.is_none() && !input.available_space.width.is_definite() {
+            observed |= crate::compute::OBSERVED_WIDTH;
+        }
+        if input.known_dimensions.height.is_none()
+            && !input.available_space.height.is_definite()
+            && !tree.measure_ignores_available_height()
+        {
+            observed |= crate::compute::OBSERVED_HEIGHT;
+        }
+        tree.note_observed(observed);
+        tree.measure(node, input)
+    })
 }
 
 /// [`compute_leaf_layout`] with an empty leaf's measurement: the known size, else nothing.

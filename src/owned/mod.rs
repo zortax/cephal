@@ -646,7 +646,7 @@ impl<Ctx> Tree<Ctx> {
         let root_query_changed = this.last_root != Some((root, available_space));
         let mut scheduler = core::mem::take(&mut this.scheduler);
         {
-            let mut view = view::View { tree: &mut slot, measure, executor, speculation: 0, ctx: core::marker::PhantomData };
+            let mut view = view::View { tree: &mut slot, measure, executor, speculation: 0, observed: 0, ctx: core::marker::PhantomData };
             scheduler.run(&mut view, root, root_query_changed);
             if root_query_changed {
                 let tree = view.tree.get_mut();

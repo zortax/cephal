@@ -308,6 +308,8 @@ fn main() {
         if !rounding {
             tree.disable_rounding();
         }
+        // The text measurement wraps at the available width and never reads the height.
+        tree.set_measure_ignores_available_height(true);
         let root = build(name, &mut tree);
         let nodes = tree.node_count();
         let run = |tree: &mut Tree<Text>| {

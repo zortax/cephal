@@ -113,13 +113,13 @@ impl NodeCache {
         }
     }
 
-    /// The observed axes of the entry stored under exactly `input`'s key.
+    /// The observed axes of the entry that answers `input`, without marking it live.
     pub fn observed(&self, input: &LayoutInput) -> Option<u8> {
         let c = self.0.as_deref()?;
         let key = CacheKey::from_input(input);
         match input.run_mode {
             RunMode::PerformLayout => c.final_entry.as_ref().filter(|e| e.key == key).map(|e| e.observed),
-            RunMode::ComputeSize => c.size_entries().flatten().find(|e| e.key == key).map(|e| e.observed),
+            RunMode::ComputeSize => c.size_entries().flatten().find(|e| e.key.answers_unobserved(&key, e.observed)).map(|e| e.observed),
             RunMode::PerformHiddenLayout => None,
         }
     }

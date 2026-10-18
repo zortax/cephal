@@ -230,6 +230,11 @@ fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized, D: FlexDir>(
         compute_constants(tree, node, dir, known_dimensions, inputs.known_dimensions_are_definite, parent_size, available_space);
     let (mut items, has_other_children) = generate_anonymous_flex_items(tree, node, &constants);
     let available_space = determine_available_space(known_dimensions, available_space, &constants);
+    // Line breaking and the intrinsic main size of a multi-line container tell min-content from
+    // max-content main space; everything else only passes the kind on to the items' questions.
+    if constants.is_wrap && !available_space.main(dir).is_definite() {
+        tree.note_observed(crate::compute::observed_bit(dir.main_axis()));
+    }
     constants.indefinite_stretch_cross = base_size::indefinite_stretch_cross(tree, &constants, available_space, &items);
     base_size::determine_flex_base_size(tree, &constants, available_space, &mut items);
     let mut lines = if constants.is_balance {

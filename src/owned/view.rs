@@ -14,6 +14,8 @@ pub(super) struct View<'a, Ctx, F, E, A> {
     pub measure: F,
     pub executor: &'a E,
     pub speculation: u32,
+    /// See [`LayoutTree::take_observed`].
+    pub observed: u8,
     pub ctx: core::marker::PhantomData<Ctx>,
 }
 
@@ -120,6 +122,21 @@ impl<Ctx, F: MeasureFn<Ctx>, E: Executor<Ctx>, A: TreeSlot<Ctx>> LayoutTree for 
 
     fn compute_child_layout(&mut self, node: NodeId, inputs: LayoutInput, block_ctx: Option<&mut BlockContext<'_>>) -> LayoutOutput {
         crate::compute::compute_child_layout(self, node, inputs, block_ctx)
+    }
+
+    #[inline]
+    fn take_observed(&mut self) -> u8 {
+        core::mem::take(&mut self.observed)
+    }
+
+    #[inline]
+    fn note_observed(&mut self, axes: u8) {
+        self.observed |= axes;
+    }
+
+    #[inline]
+    fn measure_ignores_available_height(&self) -> bool {
+        self.tree.get().measure_ignores_available_height
     }
 
     #[inline]
