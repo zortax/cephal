@@ -1,6 +1,6 @@
 //! Interned styles with reference counts, stored once and looked up by hash.
 
-use crate::compute::leaf::LeafBox;
+use crate::compute::plan::StylePlan;
 use crate::geometry::Size;
 use crate::hash::{FxHashMap, FxHasher};
 use crate::style::Style;
@@ -19,8 +19,8 @@ pub struct StyleTable {
     free: Vec<u32>,
     /// Bit 0: the width depends on the parent's width; bit 1: the height on its height.
     dependency: Vec<u8>,
-    /// Resolved leaf boxes for styles without percentages.
-    leaf_boxes: Vec<Option<LeafBox>>,
+    /// Resolved lengths for styles without percentages.
+    plans: Vec<Option<StylePlan>>,
 }
 
 impl StyleTable {
@@ -47,7 +47,7 @@ impl StyleTable {
         let head = self.heads.get(&hash).copied().unwrap_or(NONE);
         let dep = style.parent_size_dependency();
         let dep = dep.width as u8 | (dep.height as u8) << 1;
-        let leaf_box = LeafBox::from_style(&style);
+        let plan = StylePlan::from_style(&style);
         let id = match self.free.pop() {
             Some(id) => {
                 self.styles[id as usize] = style;
@@ -55,7 +55,7 @@ impl StyleTable {
                 self.hashes[id as usize] = hash;
                 self.chain[id as usize] = head;
                 self.dependency[id as usize] = dep;
-                self.leaf_boxes[id as usize] = leaf_box;
+                self.plans[id as usize] = plan;
                 id
             }
             None => {
@@ -64,7 +64,7 @@ impl StyleTable {
                 self.hashes.push(hash);
                 self.chain.push(head);
                 self.dependency.push(dep);
-                self.leaf_boxes.push(leaf_box);
+                self.plans.push(plan);
                 self.styles.len() as u32 - 1
             }
         };
@@ -103,8 +103,8 @@ impl StyleTable {
     }
 
     #[inline]
-    pub fn leaf_box(&self, id: u32) -> Option<LeafBox> {
-        self.leaf_boxes[id as usize]
+    pub fn plan(&self, id: u32) -> Option<&StylePlan> {
+        self.plans[id as usize].as_ref()
     }
 
     /// See [`Style::parent_size_dependency`], precomputed.

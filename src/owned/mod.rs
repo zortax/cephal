@@ -428,8 +428,8 @@ impl<Ctx> Tree<Ctx> {
     }
 
     #[inline]
-    fn leaf_box(&self, node: NodeId) -> Option<crate::compute::leaf::LeafBox> {
-        self.styles.leaf_box(self.style_ids[self.index(node)])
+    fn style_plan(&self, node: NodeId) -> Option<&crate::compute::plan::StylePlan> {
+        self.styles.plan(self.style_ids[self.index(node)])
     }
 
     /// See [`crate::tree::LayoutTree::query_meta`]; two loads per query.

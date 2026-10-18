@@ -70,8 +70,8 @@ impl<Ctx: Send + Sync + 'static, F: SyncMeasureFn<Ctx>> LayoutTree for Worker<'_
         self.tree.query_meta(node)
     }
     #[inline]
-    fn leaf_box(&self, node: NodeId) -> Option<crate::compute::leaf::LeafBox> {
-        self.tree.leaf_box(node)
+    fn style_plan(&self, node: NodeId) -> Option<&crate::compute::plan::StylePlan> {
+        self.tree.style_plan(node)
     }
     #[inline]
     fn resolve_calc(&self, id: CalcId, basis: f32) -> f32 {

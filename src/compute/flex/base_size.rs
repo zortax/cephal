@@ -80,18 +80,29 @@ pub(super) fn determine_flex_base_size<T: LayoutTree + CacheAccess + ?Sized>(
             ckd
         };
 
+        let plan = tree.style_plan(child.node);
         let container_main = c.node_inner_size.main(dir);
         let box_sizing_adjustment = if style.box_sizing == BoxSizing::ContentBox {
-            let padding = style.padding.map(|p| p.resolve_or_zero(container_main, &calc));
-            let border = style.border.map(|b| b.resolve_or_zero(container_main, &calc));
-            (padding + border).sum_axes()
+            match plan {
+                // The item's own padding and border, resolved against nothing.
+                Some(_) => (child.padding + child.border).sum_axes(),
+                None => {
+                    let padding = style.padding.map(|p| p.resolve_or_zero(container_main, &calc));
+                    let border = style.border.map(|b| b.resolve_or_zero(container_main, &calc));
+                    (padding + border).sum_axes()
+                }
+            }
         } else {
             Size::ZERO
         }
         .main(dir);
         let percent_resolution_main_size = if c.known_main_size_is_definite { c.node_inner_size.main(dir) } else { None };
         let flex_basis_style = style.flex_basis;
-        let flex_basis = flex_basis_style.resolve(percent_resolution_main_size, &calc).maybe_add(Some(box_sizing_adjustment));
+        let flex_basis = match plan {
+            Some(p) if !p.flex_basis_is_relative => p.flex_basis,
+            _ => flex_basis_style.resolve(percent_resolution_main_size, &calc),
+        }
+        .maybe_add(Some(box_sizing_adjustment));
 
         let mut basis_request = None;
         child.flex_basis = 'flex_basis: {

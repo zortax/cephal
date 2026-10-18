@@ -283,15 +283,19 @@ pub(super) fn determine_used_cross_size<T: LayoutTree + ?Sized>(
     for line in lines {
         let line_cross_size = line.cross_size;
         for child in line.items_mut(items) {
-            let style = tree.style(child.node);
             let target_cross = if is_stretched(child, dir) {
-                let padding = style.padding.map(|p| p.resolve_or_zero(c.node_inner_size.width, &calc));
-                let border = style.border.map(|b| b.resolve_or_zero(c.node_inner_size.width, &calc));
-                let pb_sum = (padding + border).sum_axes();
-                let box_sizing_adjustment = if style.box_sizing == BoxSizing::ContentBox { pb_sum } else { Size::ZERO };
-                let max_size_ignoring_aspect_ratio =
+                // Without percentages these are the item's own padding, border and maximum size.
+                let max_size_ignoring_aspect_ratio = if tree.style_plan(child.node).is_some() {
+                    child.max_size
+                } else {
+                    let style = tree.style(child.node);
+                    let padding = style.padding.map(|p| p.resolve_or_zero(c.node_inner_size.width, &calc));
+                    let border = style.border.map(|b| b.resolve_or_zero(c.node_inner_size.width, &calc));
+                    let pb_sum = (padding + border).sum_axes();
+                    let box_sizing_adjustment = if style.box_sizing == BoxSizing::ContentBox { pb_sum } else { Size::ZERO };
                     crate::compute::block::resolve_size(style.max_size.map(|v| v.raw()), c.node_inner_size, &calc)
-                        .maybe_add(box_sizing_adjustment);
+                        .maybe_add(box_sizing_adjustment)
+                };
                 (line_cross_size - child.margin.cross_axis_sum(dir))
                     .max(0.0)
                     .maybe_clamp(child.min_size.cross(dir), max_size_ignoring_aspect_ratio.cross(dir))

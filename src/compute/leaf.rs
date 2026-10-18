@@ -76,8 +76,8 @@ fn resolve_box(style: &crate::style::Style, parent_size: Size<Option<f32>>, calc
 pub fn compute_leaf_layout<T: LayoutTree + ?Sized>(tree: &mut T, node: NodeId, inputs: LayoutInput) -> LayoutOutput {
     let LayoutInput { known_dimensions, parent_size, available_space, sizing_mode, run_mode, .. } = inputs;
     let style = tree.style(node);
-    let resolved = match tree.leaf_box(node) {
-        Some(b) => b,
+    let resolved = match tree.style_plan(node) {
+        Some(p) => p.leaf,
         None => {
             let calc = |id, basis| tree.resolve_calc(id, basis);
             resolve_box(style, parent_size, &calc)

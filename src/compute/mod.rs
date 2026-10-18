@@ -9,6 +9,7 @@ pub mod flex;
 #[cfg(feature = "grid")]
 pub mod grid;
 pub mod leaf;
+pub mod plan;
 pub mod scratch;
 
 use crate::geometry::{AvailableSpace, Line, Point, Size};

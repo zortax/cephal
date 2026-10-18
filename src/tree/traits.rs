@@ -102,9 +102,10 @@ pub trait LayoutTree {
         crate::compute::leaf::compute_leaf_layout(self, node, inputs)
     }
 
-    /// The node's style resolved once, when it has no percentages; implementations may cache it.
+    /// The node's style lengths resolved once, when none resolves against a parent size;
+    /// implementations may keep one per interned style. See [`crate::compute::plan::StylePlan`].
     #[inline]
-    fn leaf_box(&self, _node: NodeId) -> Option<crate::compute::leaf::LeafBox> {
+    fn style_plan(&self, _node: NodeId) -> Option<&crate::compute::plan::StylePlan> {
         None
     }
 

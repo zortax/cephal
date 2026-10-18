@@ -414,21 +414,34 @@ fn generate_anonymous_flex_items<T: LayoutTree + ?Sized>(tree: &T, node: NodeId,
             continue;
         }
         let aspect_ratio = style.aspect_ratio;
-        let padding = style.padding.map(|p| p.resolve_or_zero(constants.node_inner_size.width, &calc));
-        let border = style.border.map(|b| b.resolve_or_zero(constants.node_inner_size.width, &calc));
+        // Lengths that resolve against nothing are the same against any basis.
+        let (size, min_size, max_size, inset, margin, padding, border) = match tree.style_plan(child) {
+            Some(p) => (p.size, p.min_size, p.max_size, p.inset, p.margin, p.padding, p.border),
+            None => {
+                let resolve = |s: Size<crate::style::Length>| crate::compute::block::resolve_size(s, percent_resolution_size, &calc);
+                (
+                    resolve(style.size.map(|v| v.raw())),
+                    resolve(style.min_size.map(|v| v.raw())),
+                    resolve(style.max_size.map(|v| v.raw())),
+                    style.inset.zip_size(constants.node_inner_size, |i, basis| i.resolve(basis, &calc)),
+                    style.margin.map(|m| m.resolve_or_zero(constants.node_inner_size.width, &calc)),
+                    style.padding.map(|p| p.resolve_or_zero(constants.node_inner_size.width, &calc)),
+                    style.border.map(|b| b.resolve_or_zero(constants.node_inner_size.width, &calc)),
+                )
+            }
+        };
         let pb_sum = (padding + border).sum_axes();
         let box_sizing_adjustment = if style.box_sizing == BoxSizing::ContentBox { pb_sum } else { Size::ZERO };
-        let resolve = |s: Size<crate::style::Length>| crate::compute::block::resolve_size(s, percent_resolution_size, &calc);
         items.push(FlexItem {
             node: child,
             order: index as u32,
-            size: resolve(style.size.map(|v| v.raw())).maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment),
+            size: size.maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment),
             size_style: style.size,
-            min_size: resolve(style.min_size.map(|v| v.raw())).maybe_add(box_sizing_adjustment),
-            max_size: resolve(style.max_size.map(|v| v.raw())).maybe_add(box_sizing_adjustment),
+            min_size: min_size.maybe_add(box_sizing_adjustment),
+            max_size: max_size.maybe_add(box_sizing_adjustment),
             aspect_ratio,
-            inset: style.inset.zip_size(constants.node_inner_size, |i, basis| i.resolve(basis, &calc)),
-            margin: style.margin.map(|m| m.resolve_or_zero(constants.node_inner_size.width, &calc)),
+            inset,
+            margin,
             margin_is_auto: style.margin.map(|m| m.is_auto()),
             padding,
             border,
