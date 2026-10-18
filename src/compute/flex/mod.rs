@@ -225,7 +225,7 @@ fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized>(
     let LayoutInput { known_dimensions, parent_size, available_space, run_mode, .. } = inputs;
     let mut constants =
         compute_constants(tree, node, known_dimensions, inputs.known_dimensions_are_definite, parent_size, available_space);
-    let mut items = generate_anonymous_flex_items(tree, node, &constants);
+    let (mut items, has_other_children) = generate_anonymous_flex_items(tree, node, &constants);
     let available_space = determine_available_space(known_dimensions, available_space, &constants);
     constants.indefinite_stretch_cross = base_size::indefinite_stretch_cross(tree, &constants, available_space, &items);
     base_size::determine_flex_base_size(tree, &constants, available_space, &mut items);
@@ -280,12 +280,16 @@ fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized>(
 
     align::align_flex_lines_per_align_content(&mut lines, &constants, total_line_cross_size);
     let inflow_overflow_rect = final_pass::final_layout_pass(tree, &lines, &mut items, &constants);
-    let absolute_overflow_rect = absolute::perform_absolute_layout_on_absolute_children(tree, node, &constants);
-
-    let hidden: Scratch<(usize, NodeId)> = Scratch::collect(tree.children(node).enumerate().filter(|(_, c)| tree.style(*c).generates_no_box()));
-    for &(order, child) in &hidden {
-        tree.set_unrounded_layout(child, &Layout::with_order(order as u32));
-        tree.perform_child_layout(child, Size::NONE, Size::NONE, Size::MAX_CONTENT, SizingMode::ContentSize, Line::FALSE);
+    // Absolutely positioned and hidden children were found while generating the items.
+    let mut absolute_overflow_rect = Rect::ZERO;
+    if has_other_children {
+        absolute_overflow_rect = absolute::perform_absolute_layout_on_absolute_children(tree, node, &constants);
+        let hidden: Scratch<(usize, NodeId)> =
+            Scratch::collect(tree.children(node).enumerate().filter(|(_, c)| tree.style(*c).generates_no_box()));
+        for &(order, child) in &hidden {
+            tree.set_unrounded_layout(child, &Layout::with_order(order as u32));
+            tree.perform_child_layout(child, Size::NONE, Size::NONE, Size::MAX_CONTENT, SizingMode::ContentSize, Line::FALSE);
+        }
     }
 
     // The container's baseline comes from its first line's first baseline-participating item.
@@ -399,7 +403,8 @@ fn compute_constants<T: LayoutTree + ?Sized>(
     }
 }
 
-fn generate_anonymous_flex_items<T: LayoutTree + ?Sized>(tree: &T, node: NodeId, constants: &AlgoConstants) -> Scratch<FlexItem> {
+/// The in-flow items, and whether any child was left out (hidden or out of flow).
+fn generate_anonymous_flex_items<T: LayoutTree + ?Sized>(tree: &T, node: NodeId, constants: &AlgoConstants) -> (Scratch<FlexItem>, bool) {
     let calc = |id, basis| tree.resolve_calc(id, basis);
     // Percentages against an indefinite main size resolve to `None`.
     let percent_resolution_size = if constants.known_main_size_is_definite {
@@ -408,9 +413,11 @@ fn generate_anonymous_flex_items<T: LayoutTree + ?Sized>(tree: &T, node: NodeId,
         constants.node_inner_size.with_main(constants.dir, None)
     };
     let mut items = Scratch::with_capacity(tree.child_count(node));
+    let mut skipped = false;
     for (index, child) in tree.children(node).enumerate() {
         let style = tree.style(child);
         if style.position.is_out_of_flow() || style.generates_no_box() {
+            skipped = true;
             continue;
         }
         let aspect_ratio = style.aspect_ratio;
@@ -472,7 +479,7 @@ fn generate_anonymous_flex_items<T: LayoutTree + ?Sized>(tree: &T, node: NodeId,
             offset_cross: 0.0,
         });
     }
-    items
+    (items, skipped)
 }
 
 /// Content-box available space.

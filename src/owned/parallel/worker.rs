@@ -86,6 +86,13 @@ impl<Ctx: Send + Sync + 'static, F: SyncMeasureFn<Ctx>> LayoutTree for Worker<'_
         self.tree.context_slot[self.tree.index(node)] == NONE
     }
 
+    fn compute_leaf(&mut self, node: NodeId, inputs: LayoutInput, _: Option<&mut BlockContext<'_>>) -> LayoutOutput {
+        if self.tree.context_slot[self.tree.index(node)] == NONE {
+            return crate::compute::leaf::compute_empty_leaf_layout(self, node, inputs);
+        }
+        crate::compute::leaf::compute_leaf_layout(self, node, inputs)
+    }
+
     fn measure(&mut self, node: NodeId, input: MeasureInput) -> MeasureOutput {
         let i = self.index(node);
         let slot = self.tree.context_slot[i];

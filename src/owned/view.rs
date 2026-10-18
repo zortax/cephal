@@ -61,6 +61,14 @@ impl<Ctx, F: MeasureFn<Ctx>, E: Executor<Ctx>, A: TreeSlot<Ctx>> LayoutTree for 
         self.tree.get().context_slot[self.tree.get().index(node)] == NONE
     }
 
+    fn compute_leaf(&mut self, node: NodeId, inputs: LayoutInput, _: Option<&mut BlockContext<'_>>) -> LayoutOutput {
+        // Without a context there is nothing to measure.
+        if self.tree.get().context_slot[self.tree.get().index(node)] == NONE {
+            return crate::compute::leaf::compute_empty_leaf_layout(self, node, inputs);
+        }
+        crate::compute::leaf::compute_leaf_layout(self, node, inputs)
+    }
+
     fn measure(&mut self, node: NodeId, input: MeasureInput) -> MeasureOutput {
         let tree = self.tree.get_mut();
         let i = tree.index(node);
