@@ -71,3 +71,7 @@ harness = false
 # Line tables let `perf` attribute samples to source lines.
 [profile.release]
 debug = "line-tables-only"
+
+[[bench]]
+name = "pangui"
+harness = false
