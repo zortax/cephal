@@ -396,6 +396,66 @@ pub fn layout_request(
     }
 }
 
+/// Independent child questions, answered in the order asked.
+///
+/// A tree whose executor distributes batches gets them as one batch at [`Questions::finish`];
+/// any other tree is asked each question as it is formed, so no request or full answer is kept.
+/// Forming a question never reads a cache, so both orders store the same answers.
+pub(crate) struct Questions<A: scratch::Pooled + Copy> {
+    requests: scratch::Scratch<ChildRequest>,
+    answers: scratch::Scratch<A>,
+    eager: bool,
+    asked: usize,
+}
+
+impl<A: scratch::Pooled + Copy> Questions<A> {
+    #[inline]
+    pub fn new<T: LayoutTree + ?Sized>(tree: &T, capacity: usize) -> Self {
+        let eager = !tree.batches_help();
+        Self {
+            requests: if eager { scratch::Scratch::take() } else { scratch::Scratch::with_capacity(capacity) },
+            answers: scratch::Scratch::with_capacity(capacity),
+            eager,
+            asked: 0,
+        }
+    }
+
+    /// Asks `request`; `read` keeps the part of the answer the caller needs. Returns its index.
+    #[inline]
+    pub fn ask<T: LayoutTree + ?Sized>(&mut self, tree: &mut T, request: ChildRequest, read: impl FnOnce(&LayoutOutput) -> A) -> usize {
+        if self.eager {
+            let output = tree.compute_child_layout(request.node, request.input, None);
+            self.answers.push(read(&output));
+        } else {
+            self.requests.push(request);
+        }
+        self.asked += 1;
+        self.asked - 1
+    }
+
+    /// Answers whatever is still unasked.
+    #[inline]
+    pub fn finish<T: LayoutTree + ?Sized>(&mut self, tree: &mut T, read: impl Fn(&LayoutOutput) -> A) {
+        if self.eager || self.requests.is_empty() {
+            return;
+        }
+        let mut outputs: scratch::Scratch<LayoutOutput> = scratch::Scratch::with_capacity(self.requests.len());
+        tree.compute_child_layouts(&self.requests, &mut outputs);
+        self.answers.extend(outputs.iter().map(read));
+    }
+
+    #[inline]
+    pub fn get(&self, index: usize) -> A {
+        self.answers[index]
+    }
+
+    /// Every answer, in the order asked; complete after [`Self::finish`].
+    #[inline]
+    pub fn answers(&self) -> &[A] {
+        &self.answers
+    }
+}
+
 /// Convenience queries every container algorithm issues.
 pub trait LayoutTreeExt: LayoutTree + CacheAccess {
     /// Measures one axis of a child; the other axis of the answer is unspecified.

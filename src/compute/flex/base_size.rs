@@ -6,8 +6,8 @@ use crate::compute::common::sizing_keyword::{SizingKeywordResolution, resolve_si
 use crate::geometry::{AvailableSpace, MaybeMath, Size};
 use crate::style::{AlignSelf, BoxSizing, Overflow};
 use crate::compute::scratch::Scratch;
-use crate::compute::size_request;
-use crate::tree::{CacheAccess, ChildRequest, LayoutOutput, LayoutTree, SizingMode};
+use crate::compute::{Questions, size_request};
+use crate::tree::{CacheAccess, LayoutOutput, LayoutTree, SizingMode};
 
 /// Per-item state carried from the basis phase to the minimum-size phase.
 struct Pending {
@@ -26,7 +26,8 @@ pub(super) fn determine_flex_base_size<T: LayoutTree + CacheAccess + ?Sized>(
     items: &mut [FlexItem],
 ) {
     let dir = c.dir;
-    let mut requests: Scratch<ChildRequest> = Scratch::with_capacity(items.len() * 2);
+    let read_main = |out: &LayoutOutput| out.size.get(abs_main(dir));
+    let mut questions: Questions<f32> = Questions::new(tree, items.len() * 2);
     let mut pending: Scratch<Pending> = Scratch::with_capacity(items.len());
     for child in items.iter_mut() {
         let style = tree.style(child.node);
@@ -146,15 +147,15 @@ pub(super) fn determine_flex_base_size<T: LayoutTree + CacheAccess + ?Sized>(
             });
             let child_available_space =
                 Size::MAX_CONTENT.with_main(dir, main_available).with_cross(dir, cross_axis_available_space);
-            basis_request = Some(requests.len());
-            requests.push(size_request(
+            let request = size_request(
                 child.node,
                 child_known_dimensions,
                 child_parent_size,
                 child_available_space,
                 SizingMode::ContentSize,
                 abs_main(dir).into(),
-            ));
+            );
+            basis_request = Some(questions.ask(tree, request, read_main));
             f32::NAN
         };
 
@@ -164,15 +165,15 @@ pub(super) fn determine_flex_base_size<T: LayoutTree + CacheAccess + ?Sized>(
         };
         let min_request = child.min_size.or(automatic_min).main(dir).is_none().then(|| {
             let child_available_space = Size::MIN_CONTENT.with_cross(dir, cross_axis_available_space);
-            requests.push(size_request(
+            let request = size_request(
                 child.node,
                 child_known_dimensions,
                 child_parent_size,
                 child_available_space,
                 SizingMode::ContentSize,
                 abs_main(dir).into(),
-            ));
-            requests.len() - 1
+            );
+            questions.ask(tree, request, read_main)
         });
         pending.push(Pending {
             transferred_min_size,
@@ -183,13 +184,12 @@ pub(super) fn determine_flex_base_size<T: LayoutTree + CacheAccess + ?Sized>(
     }
 
     // Basis and min-content measurements of different items are independent.
-    let mut outputs: Scratch<LayoutOutput> = Scratch::with_capacity(requests.len());
-    tree.compute_child_layouts(&requests, &mut outputs);
+    questions.finish(tree, read_main);
 
     for (child, p) in items.iter_mut().zip(pending.drain(..)) {
         let Pending { transferred_min_size, transferred_max_size, .. } = p;
         if let Some(i) = p.basis_request {
-            child.flex_basis = outputs[i].size.get(abs_main(dir));
+            child.flex_basis = questions.get(i);
         }
         let padding_border_sum = child.padding.main_axis_sum(dir) + child.border.main_axis_sum(dir);
         child.flex_basis = child.flex_basis.max(padding_border_sum);
@@ -203,7 +203,7 @@ pub(super) fn determine_flex_base_size<T: LayoutTree + CacheAccess + ?Sized>(
         child.resolved_minimum_main_size = match (child.min_size.or(automatic_min).main(dir), p.min_request) {
             (Some(v), _) => v,
             (None, Some(i)) => {
-                let min_content_main_size = outputs[i].size.get(abs_main(dir));
+                let min_content_main_size = questions.get(i);
                 let clamped = min_content_main_size.maybe_min(child.size.main(dir)).maybe_min(transferred_max_size.main(dir));
                 clamped.maybe_max(padding_border_axes_sums.main(dir))
             }
@@ -263,24 +263,25 @@ pub(super) fn indefinite_stretch_cross<T: LayoutTree + CacheAccess + ?Sized>(
         return None;
     }
     let available_cross = available_space.cross(dir);
-    let mut requests: Scratch<ChildRequest> = Scratch::with_capacity(items.len());
+    let read_cross = |out: &LayoutOutput| out.size.get(dir.cross_axis());
+    let mut questions: Questions<f32> = Questions::new(tree, items.len());
     for item in items.iter().filter(|item| item.size.cross(dir).is_none()) {
         let space = match resolve_sizing_keyword(item.size_style.cross(dir).raw(), None, None) {
             Some(SizingKeywordResolution::Measure(space)) => space,
             _ => available_cross,
         };
-        requests.push(size_request(
+        let request = size_request(
             item.node,
             item.size.with_cross(dir, None),
             c.node_inner_size,
             Size::MAX_CONTENT.with_cross(dir, space),
             SizingMode::ContentSize,
             dir.cross_axis().into(),
-        ));
+        );
+        questions.ask(tree, request, read_cross);
     }
-    let mut outputs: Scratch<LayoutOutput> = Scratch::with_capacity(requests.len());
-    tree.compute_child_layouts(&requests, &mut outputs);
-    let mut measured = outputs.iter();
+    questions.finish(tree, read_cross);
+    let mut measured = 0;
     let mut outer = 0.0f32;
     for item in items {
         let min = item.min_size.maybe_apply_aspect_ratio(item.aspect_ratio).cross(dir);
@@ -288,7 +289,10 @@ pub(super) fn indefinite_stretch_cross<T: LayoutTree + CacheAccess + ?Sized>(
         let padding_border = (item.padding + item.border).cross_axis_sum(dir);
         let inner = match item.size.cross(dir) {
             Some(size) => size,
-            None => measured.next().map_or(0.0, |output| output.size.get(dir.cross_axis())),
+            None => {
+                measured += 1;
+                questions.get(measured - 1)
+            }
         };
         let size = inner.maybe_clamp(min, max).max(padding_border);
         outer = outer.max(size + item.margin.cross_axis_sum(dir));

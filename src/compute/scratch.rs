@@ -98,4 +98,4 @@ impl<T: Pooled> DerefMut for Scratch<T> {
     }
 }
 
-pooled!(crate::tree::ChildRequest, crate::tree::LayoutOutput, crate::tree::NodeId, (usize, crate::tree::NodeId));
+pooled!(crate::tree::ChildRequest, crate::tree::LayoutOutput, crate::tree::NodeId, (usize, crate::tree::NodeId), f32, (f32, Option<f32>));

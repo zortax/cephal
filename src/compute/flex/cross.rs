@@ -3,6 +3,7 @@
 use super::axis::{FlexAxisRect, FlexAxisSize, FlexAxisSum, sum_axis_gaps};
 use super::{AlgoConstants, FlexItem, FlexLine, item_known_dimension_definiteness};
 use crate::compute::common::sizing_keyword::{SizingKeywordResolution, resolve_sizing_keyword};
+use crate::compute::Questions;
 use crate::compute::scratch::Scratch;
 use crate::geometry::{AvailableSpace, Line, MaybeMath, Size};
 use crate::style::{AlignContent, AlignSelf, BoxSizing};
@@ -36,7 +37,8 @@ pub(super) fn determine_hypothetical_cross_size<T: LayoutTree + CacheAccess + ?S
     fixed_line_cross: Option<f32>,
 ) {
     let dir = c.dir;
-    let mut requests: Scratch<ChildRequest> = Scratch::with_capacity(items.len());
+    let read_cross = |out: &LayoutOutput| out.size.get(dir.cross_axis());
+    let mut questions: Questions<f32> = Questions::new(tree, items.len());
     let mut pending: Scratch<CrossPending> = Scratch::with_capacity(items.len());
     for child in items.iter() {
         let padding_border_sum = (child.padding + child.border).cross_axis_sum(dir);
@@ -79,7 +81,7 @@ pub(super) fn determine_hypothetical_cross_size<T: LayoutTree + CacheAccess + ?S
         let known = match child_cross.or(stretched_cross).or(unread.then_some(f32::NAN)) {
             Some(v) => Ok(v),
             None => {
-                requests.push(ChildRequest {
+                let request = ChildRequest {
                     node: child.node,
                     input: LayoutInput {
                         run_mode: RunMode::ComputeSize,
@@ -98,19 +100,18 @@ pub(super) fn determine_hypothetical_cross_size<T: LayoutTree + CacheAccess + ?S
                         vertical_margins_are_collapsible: Line::FALSE,
                         context_key: 0,
                     },
-                });
-                Err(requests.len() - 1)
+                };
+                Err(questions.ask(tree, request, read_cross))
             }
         };
         pending.push(CrossPending { min: transferred_min_cross, max: transferred_max_cross, padding_border_sum, known });
     }
     // Each item's cross size depends only on its own target main size.
-    let mut outputs: Scratch<LayoutOutput> = Scratch::with_capacity(requests.len());
-    tree.compute_child_layouts(&requests, &mut outputs);
+    questions.finish(tree, read_cross);
     for (child, p) in items.iter_mut().zip(pending.iter()) {
         let child_inner_cross = match p.known {
             Ok(v) => v,
-            Err(i) => outputs[i].size.get(dir.cross_axis()).maybe_clamp(p.min, p.max).max(p.padding_border_sum),
+            Err(i) => questions.get(i).maybe_clamp(p.min, p.max).max(p.padding_border_sum),
         };
         child.hypothetical_inner_size.set_cross(dir, child_inner_cross);
         child.hypothetical_outer_size.set_cross(dir, child_inner_cross + child.margin.cross_axis_sum(dir));
@@ -145,7 +146,8 @@ fn baselines_inner<T: LayoutTree + CacheAccess + ?Sized>(
     c: &AlgoConstants,
 ) {
     let dir = c.dir;
-    let mut requests: Scratch<ChildRequest> = Scratch::with_capacity(items.len());
+    let read_baseline = |out: &LayoutOutput| (out.size.height, out.baselines.first);
+    let mut questions: Questions<(f32, Option<f32>)> = Questions::new(tree, items.len());
     let mut indexes: Scratch<usize> = Scratch::with_capacity(items.len());
     for line in lines {
         let line_items = line.items(items);
@@ -157,7 +159,7 @@ fn baselines_inner<T: LayoutTree + CacheAccess + ?Sized>(
                 continue;
             }
             indexes.push(line.start + offset);
-            requests.push(ChildRequest {
+            let request = ChildRequest {
                 node: child.node,
                 input: LayoutInput {
                     run_mode: RunMode::PerformLayout,
@@ -184,18 +186,18 @@ fn baselines_inner<T: LayoutTree + CacheAccess + ?Sized>(
                     vertical_margins_are_collapsible: Line::FALSE,
                     context_key: 0,
                 },
-            });
+            };
+            questions.ask(tree, request, read_baseline);
         }
     }
-    let mut outputs: Scratch<LayoutOutput> = Scratch::with_capacity(requests.len());
-    tree.compute_child_layouts(&requests, &mut outputs);
-    for (&i, out) in indexes.iter().zip(outputs.iter()) {
+    questions.finish(tree, read_baseline);
+    for (k, &i) in indexes.iter().enumerate() {
         let child = &mut items[i];
-        let height = out.size.height;
+        let (height, first) = questions.get(k);
         let baseline = if child.overflow.y.is_scroll_container() {
-            out.baselines.first.unwrap_or(height).min(height).max(0.0)
+            first.unwrap_or(height).min(height).max(0.0)
         } else {
-            out.baselines.first.unwrap_or(height)
+            first.unwrap_or(height)
         };
         child.baseline = baseline + child.margin.top;
     }

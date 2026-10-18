@@ -3,7 +3,7 @@
 use super::axis::{FlexAxisRect, FlexAxisSize, FlexAxisSum};
 use super::{AlgoConstants, FlexItem, FlexLine, item_known_dimension_definiteness};
 use crate::compute::common::overflow::{scrollable_overflow_contribution, union};
-use crate::compute::scratch::Scratch;
+use crate::compute::Questions;
 use crate::tree::{ChildRequest, LayoutOutput};
 use crate::geometry::{AvailableSpace, Line, Point, Rect, Size};
 use crate::style::{Direction, Overflow};
@@ -172,9 +172,12 @@ pub(super) fn final_layout_pass<T: LayoutTree + CacheAccess + ?Sized>(
     };
     let mut overflow_rect = Rect::ZERO;
     // Every item's final layout is independent of the others; ask for them as one batch.
-    let requests: Scratch<ChildRequest> = Scratch::collect(items.iter().map(|item| item_request(item, c)));
-    let mut outputs: Scratch<LayoutOutput> = Scratch::with_capacity(requests.len());
-    tree.compute_child_layouts(&requests, &mut outputs);
+    let mut questions: Questions<LayoutOutput> = Questions::new(tree, items.len());
+    for item in items.iter() {
+        questions.ask(tree, item_request(item, c), |out| *out);
+    }
+    questions.finish(tree, |out| *out);
+    let outputs = questions.answers();
     if c.is_wrap_reverse {
         for line in lines.iter().rev() {
             calculate_layout_line(tree, line, items, &outputs, &mut total_offset_cross, &mut overflow_rect, c);
