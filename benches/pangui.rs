@@ -316,6 +316,15 @@ fn main() {
             tree.compute_layout_with_measure(root, viewport, measure);
             start.elapsed().as_nanos() as f64
         };
+        #[cfg(feature = "stats")]
+        {
+            tree.clear_layout();
+            let _ = cephal::compute::stats::report();
+            tree.compute_layout_with_measure(root, viewport, measure);
+            println!("{name:34} {}", cephal::compute::stats::report());
+            continue;
+        }
+        #[allow(unreachable_code)]
         if let Some(iters) = iters {
             for _ in 0..iters {
                 run(&mut tree);
