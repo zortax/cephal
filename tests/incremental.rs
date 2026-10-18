@@ -31,9 +31,11 @@ fn assert_same(step: &str, incremental: &Tree<Text>, cold: &Tree<Text>, root: No
     let a = layouts(incremental, root);
     let b = layouts(cold, root);
     assert_eq!(a.len(), b.len(), "{step}: node count");
+    // Bit for bit: `{:?}` tells `-0.0` from `0.0`, which `==` does not.
+    let bits = |l: &Layout| format!("{l:?}");
     for ((n, ua, ra), (_, ub, rb)) in a.iter().zip(b.iter()) {
-        assert!(ua == ub, "{step}: unrounded layout of {n:?} differs\n incremental: {ua:?}\n cold:        {ub:?}");
-        assert!(ra == rb, "{step}: rounded layout of {n:?} differs\n incremental: {ra:?}\n cold:        {rb:?}");
+        assert!(bits(ua) == bits(ub), "{step}: unrounded layout of {n:?} differs\n incremental: {ua:?}\n cold:        {ub:?}");
+        assert!(bits(ra) == bits(rb), "{step}: rounded layout of {n:?} differs\n incremental: {ra:?}\n cold:        {rb:?}");
     }
 }
 
