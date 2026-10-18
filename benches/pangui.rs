@@ -296,6 +296,8 @@ const WORKLOADS: &[&str] = &[
 fn main() {
     let filter: Vec<String> = std::env::args().skip(1).filter(|a| !a.starts_with('-')).collect();
     let secs: f64 = std::env::var("CEPHAL_BENCH_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(1.0);
+    // A fixed number of layouts instead, for instruction counting (`scripts/instructions.sh`).
+    let iters: Option<usize> = std::env::var("CEPHAL_BENCH_ITERS").ok().and_then(|v| v.parse().ok());
     let rounding = std::env::var_os("CEPHAL_NO_ROUNDING").is_none();
     let viewport = Size { width: AvailableSpace::MaxContent, height: AvailableSpace::MaxContent };
     for &name in WORKLOADS {
@@ -314,6 +316,13 @@ fn main() {
             tree.compute_layout_with_measure(root, viewport, measure);
             start.elapsed().as_nanos() as f64
         };
+        if let Some(iters) = iters {
+            for _ in 0..iters {
+                run(&mut tree);
+            }
+            println!("{name:34} {nodes:>7} nodes");
+            continue;
+        }
         for _ in 0..5 {
             run(&mut tree);
         }
