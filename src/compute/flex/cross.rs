@@ -17,11 +17,23 @@ struct CrossPending {
     known: Result<f32, usize>,
 }
 
+/// Whether the line stretches `child` to its own cross size, as `determine_used_cross_size` decides.
+#[inline]
+fn is_stretched(child: &FlexItem, dir: crate::style::FlexDirection) -> bool {
+    let cross_size = child.size_style.cross(dir);
+    !child.margin_is_auto.cross_start(dir)
+        && !child.margin_is_auto.cross_end(dir)
+        && (cross_size.is_stretch() || (child.align_self == AlignSelf::STRETCH && cross_size.is_auto()))
+}
+
+/// `fixed_line_cross` is the container's known cross size when it has a single line: the line is
+/// then that size, so a stretched item's measured cross size is never read and is not asked for.
 pub(super) fn determine_hypothetical_cross_size<T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     items: &mut [FlexItem],
     c: &AlgoConstants,
     available_space: Size<AvailableSpace>,
+    fixed_line_cross: Option<f32>,
 ) {
     let dir = c.dir;
     let mut requests: Scratch<ChildRequest> = Scratch::with_capacity(items.len());
@@ -60,7 +72,11 @@ pub(super) fn determine_hypothetical_cross_size<T: LayoutTree + CacheAccess + ?S
                     .maybe_clamp(transferred_min_cross, transferred_max_cross)
                     .max(padding_border_sum)
             });
-        let known = match child_cross.or(stretched_cross) {
+        let unread = fixed_line_cross.is_some()
+            && child_cross.is_none()
+            && is_stretched(child, dir)
+            && !child.participates_in_baseline_alignment(dir);
+        let known = match child_cross.or(stretched_cross).or(unread.then_some(f32::NAN)) {
             Some(v) => Ok(v),
             None => {
                 requests.push(ChildRequest {
@@ -268,11 +284,7 @@ pub(super) fn determine_used_cross_size<T: LayoutTree + ?Sized>(
         let line_cross_size = line.cross_size;
         for child in line.items_mut(items) {
             let style = tree.style(child.node);
-            let cross_is_stretch = child.size_style.cross(dir).is_stretch();
-            let stretched = !child.margin_is_auto.cross_start(dir)
-                && !child.margin_is_auto.cross_end(dir)
-                && (cross_is_stretch || (child.align_self == AlignSelf::STRETCH && style.size.cross(dir).is_auto()));
-            let target_cross = if stretched {
+            let target_cross = if is_stretched(child, dir) {
                 let padding = style.padding.map(|p| p.resolve_or_zero(c.node_inner_size.width, &calc));
                 let border = style.border.map(|b| b.resolve_or_zero(c.node_inner_size.width, &calc));
                 let pb_sum = (padding + border).sum_axes();

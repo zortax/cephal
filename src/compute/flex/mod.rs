@@ -252,11 +252,19 @@ fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized>(
         constants.gap.set_main(dir, new_gap);
     }
 
+    // The main size is all a main-axis size question needs; the other axis of a single-axis
+    // answer is unspecified.
+    if run_mode == RunMode::ComputeSize && inputs.axis == RequestedAxis::from(dir.main_axis()) {
+        return LayoutOutput::from_outer_size(constants.container_size);
+    }
+
     for line in &lines {
         flexible::resolve_flexible_lengths(line.items_mut(&mut items), &constants);
     }
+    // A single line of known cross size has that size whatever its items measure.
+    let fixed_line_cross = if constants.is_wrap { None } else { known_dimensions.cross(dir) };
     for line in &lines {
-        cross::determine_hypothetical_cross_size(tree, line.items_mut(&mut items), &constants, available_space);
+        cross::determine_hypothetical_cross_size(tree, line.items_mut(&mut items), &constants, available_space, fixed_line_cross);
     }
     cross::calculate_children_base_lines(tree, run_mode, known_dimensions, available_space, &lines, &mut items, &constants);
     cross::calculate_cross_size(&mut lines, &items, known_dimensions, &constants);
