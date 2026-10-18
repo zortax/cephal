@@ -1,10 +1,11 @@
 //! §9.7 resolving flexible lengths.
 
+use super::axis::FlexDir;
 use super::axis::{FlexAxisSize, FlexAxisSum, sum_axis_gaps};
 use super::{AlgoConstants, FlexItem};
 use crate::geometry::MaybeMath;
 
-pub(super) fn resolve_flexible_lengths(items: &mut [FlexItem], c: &AlgoConstants) {
+pub(super) fn resolve_flexible_lengths<D: FlexDir>(items: &mut [FlexItem], c: &AlgoConstants<D>) {
     let dir = c.dir;
     let total_main_axis_gap = sum_axis_gaps(c.gap.main(dir), items.len());
     let total_hypothetical_outer_main_size: f32 = items.iter().map(|ch| ch.hypothetical_outer_size.main(dir)).sum();

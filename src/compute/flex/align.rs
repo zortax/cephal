@@ -1,11 +1,12 @@
 //! §9.5–9.6 main-axis justification, cross-axis alignment and line alignment.
 
+use super::axis::FlexDir;
 use super::axis::{FlexAxisRect, FlexAxisSize, sum_axis_gaps};
 use super::{AlgoConstants, FlexItem, FlexLine};
 use crate::compute::common::alignment::{apply_alignment_fallback, compute_alignment_offset};
 use crate::style::{AlignItemsKeyword, Direction, JustifyContent};
 
-pub(super) fn distribute_remaining_free_space(lines: &[FlexLine], items: &mut [FlexItem], c: &AlgoConstants) {
+pub(super) fn distribute_remaining_free_space<D: FlexDir>(lines: &[FlexLine], items: &mut [FlexItem], c: &AlgoConstants<D>) {
     let dir = c.dir;
     for line in lines {
         let line_items = line.items_mut(items);
@@ -44,7 +45,7 @@ pub(super) fn distribute_remaining_free_space(lines: &[FlexLine], items: &mut [F
     }
 }
 
-pub(super) fn resolve_cross_axis_auto_margins(lines: &[FlexLine], items: &mut [FlexItem], c: &AlgoConstants) {
+pub(super) fn resolve_cross_axis_auto_margins<D: FlexDir>(lines: &[FlexLine], items: &mut [FlexItem], c: &AlgoConstants<D>) {
     let dir = c.dir;
     for line in lines {
         let line_cross_size = line.cross_size;
@@ -76,12 +77,12 @@ pub(super) fn resolve_cross_axis_auto_margins(lines: &[FlexLine], items: &mut [F
     }
 }
 
-fn align_flex_items_along_cross_axis(
+fn align_flex_items_along_cross_axis<D: FlexDir>(
     ch: &FlexItem,
     free_space: f32,
     max_baseline: f32,
     max_baseline_to_bottom_distance: f32,
-    c: &AlgoConstants,
+    c: &AlgoConstants<D>,
 ) -> f32 {
     let dir = c.dir;
     let cross_axis_should_reverse = c.is_column && c.layout_direction == Direction::Rtl;
@@ -117,7 +118,7 @@ fn align_flex_items_along_cross_axis(
     }
 }
 
-pub(super) fn align_flex_lines_per_align_content(lines: &mut [FlexLine], c: &AlgoConstants, total_cross_size: f32) {
+pub(super) fn align_flex_lines_per_align_content<D: FlexDir>(lines: &mut [FlexLine], c: &AlgoConstants<D>, total_cross_size: f32) {
     let dir = c.dir;
     let num_lines = lines.len();
     let gap = c.gap.cross(dir);

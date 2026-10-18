@@ -1,5 +1,6 @@
 //! §9.4 cross sizes and baselines.
 
+use super::axis::FlexDir;
 use super::axis::{FlexAxisRect, FlexAxisSize, FlexAxisSum, sum_axis_gaps};
 use super::{AlgoConstants, FlexItem, FlexLine, item_known_dimension_definiteness};
 use crate::compute::common::sizing_keyword::{SizingKeywordResolution, resolve_sizing_keyword};
@@ -20,7 +21,7 @@ struct CrossPending {
 
 /// Whether the line stretches `child` to its own cross size, as `determine_used_cross_size` decides.
 #[inline]
-fn is_stretched(child: &FlexItem, dir: crate::style::FlexDirection) -> bool {
+fn is_stretched(child: &FlexItem, dir: impl FlexDir) -> bool {
     let cross_size = child.size_style.cross(dir);
     !child.margin_is_auto.cross_start(dir)
         && !child.margin_is_auto.cross_end(dir)
@@ -29,10 +30,10 @@ fn is_stretched(child: &FlexItem, dir: crate::style::FlexDirection) -> bool {
 
 /// `fixed_line_cross` is the container's known cross size when it has a single line: the line is
 /// then that size, so a stretched item's measured cross size is never read and is not asked for.
-pub(super) fn determine_hypothetical_cross_size<T: LayoutTree + CacheAccess + ?Sized>(
+pub(super) fn determine_hypothetical_cross_size<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     items: &mut [FlexItem],
-    c: &AlgoConstants,
+    c: &AlgoConstants<D>,
     available_space: Size<AvailableSpace>,
     fixed_line_cross: Option<f32>,
 ) {
@@ -118,14 +119,14 @@ pub(super) fn determine_hypothetical_cross_size<T: LayoutTree + CacheAccess + ?S
     }
 }
 
-pub(super) fn calculate_children_base_lines<T: LayoutTree + CacheAccess + ?Sized>(
+pub(super) fn calculate_children_base_lines<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     run_mode: RunMode,
     node_size: Size<Option<f32>>,
     available_space: Size<AvailableSpace>,
     lines: &[FlexLine],
     items: &mut [FlexItem],
-    c: &AlgoConstants,
+    c: &AlgoConstants<D>,
 ) {
     if !c.is_row || !lines.iter().any(|l| l.items(items).iter().filter(|ch| ch.participates_in_baseline_alignment(c.dir)).count() > 1) {
         return;
@@ -137,13 +138,13 @@ pub(super) fn calculate_children_base_lines<T: LayoutTree + CacheAccess + ?Sized
     }
 }
 
-fn baselines_inner<T: LayoutTree + CacheAccess + ?Sized>(
+fn baselines_inner<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     node_size: Size<Option<f32>>,
     available_space: Size<AvailableSpace>,
     lines: &[FlexLine],
     items: &mut [FlexItem],
-    c: &AlgoConstants,
+    c: &AlgoConstants<D>,
 ) {
     let dir = c.dir;
     let read_baseline = |out: &LayoutOutput| (out.size.height, out.baselines.first);
@@ -213,7 +214,7 @@ impl AvailMaybeSet for AvailableSpace {
     }
 }
 
-pub(super) fn calculate_cross_size(lines: &mut [FlexLine], items: &[FlexItem], node_size: Size<Option<f32>>, c: &AlgoConstants) {
+pub(super) fn calculate_cross_size<D: FlexDir>(lines: &mut [FlexLine], items: &[FlexItem], node_size: Size<Option<f32>>, c: &AlgoConstants<D>) {
     let dir = c.dir;
     let cross_axis_padding_border = c.content_box_inset.cross_axis_sum(dir);
     let cross_min_size = c.min_size.cross(dir);
@@ -249,7 +250,7 @@ pub(super) fn calculate_cross_size(lines: &mut [FlexLine], items: &[FlexItem], n
     }
 }
 
-pub(super) fn handle_align_content_stretch(lines: &mut [FlexLine], node_size: Size<Option<f32>>, c: &AlgoConstants) {
+pub(super) fn handle_align_content_stretch<D: FlexDir>(lines: &mut [FlexLine], node_size: Size<Option<f32>>, c: &AlgoConstants<D>) {
     if c.align_content != AlignContent::STRETCH {
         return;
     }
@@ -274,11 +275,11 @@ pub(super) fn handle_align_content_stretch(lines: &mut [FlexLine], node_size: Si
     }
 }
 
-pub(super) fn determine_used_cross_size<T: LayoutTree + ?Sized>(
+pub(super) fn determine_used_cross_size<D: FlexDir, T: LayoutTree + ?Sized>(
     tree: &T,
     lines: &[FlexLine],
     items: &mut [FlexItem],
-    c: &AlgoConstants,
+    c: &AlgoConstants<D>,
 ) {
     let dir = c.dir;
     let calc = |id, basis| tree.resolve_calc(id, basis);
@@ -311,7 +312,7 @@ pub(super) fn determine_used_cross_size<T: LayoutTree + ?Sized>(
 }
 
 /// Returns the total cross size of all lines.
-pub(super) fn determine_container_cross_size(lines: &[FlexLine], node_size: Size<Option<f32>>, c: &mut AlgoConstants) -> f32 {
+pub(super) fn determine_container_cross_size<D: FlexDir>(lines: &[FlexLine], node_size: Size<Option<f32>>, c: &mut AlgoConstants<D>) -> f32 {
     let dir = c.dir;
     let total_cross_axis_gap = sum_axis_gaps(c.gap.cross(dir), lines.len());
     let total_line_cross_size: f32 = lines.iter().map(|l| l.cross_size).sum();

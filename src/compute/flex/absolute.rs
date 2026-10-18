@@ -1,5 +1,6 @@
 //! Absolutely positioned children of a flex container.
 
+use super::axis::FlexDir;
 use super::AlgoConstants;
 use super::axis::{FlexAxisRect, FlexAxisSize, FlexAxisSum};
 use crate::style::{AlignItems, FlexDirection};
@@ -30,9 +31,9 @@ pub struct AbsoluteFlexContext {
 }
 
 impl AbsoluteFlexContext {
-    pub(super) fn from_constants(c: &AlgoConstants) -> Self {
+    pub(super) fn from_constants<D: FlexDir>(c: &AlgoConstants<D>) -> Self {
         Self {
-            dir: c.dir,
+            dir: c.dir.direction(),
             layout_direction: c.layout_direction,
             is_row: c.is_row,
             is_column: c.is_column,
@@ -50,10 +51,10 @@ impl AbsoluteFlexContext {
 
 }
 
-pub(super) fn perform_absolute_layout_on_absolute_children<T: LayoutTree + CacheAccess + ?Sized>(
+pub(super) fn perform_absolute_layout_on_absolute_children<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     node: NodeId,
-    constants: &AlgoConstants,
+    constants: &AlgoConstants<D>,
 ) -> Rect<f32> {
     let c = AbsoluteFlexContext::from_constants(constants);
     let mut overflow_rect = Rect::ZERO;

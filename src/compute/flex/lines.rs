@@ -1,5 +1,6 @@
 //! §9.3 collecting items into lines.
 
+use super::axis::FlexDir;
 use crate::compute::scratch::Scratch;
 use super::axis::FlexAxisSize;
 use super::{AlgoConstants, FlexItem, FlexLine};
@@ -14,7 +15,7 @@ fn one_item_per_line(items: &[FlexItem]) -> Scratch<FlexLine> {
 }
 
 /// Available main space for line breaking, honouring the container's min/max size.
-fn main_axis_available_space(c: &AlgoConstants, available_space: Size<AvailableSpace>) -> AvailableSpace {
+fn main_axis_available_space<D: FlexDir>(c: &AlgoConstants<D>, available_space: Size<AvailableSpace>) -> AvailableSpace {
     match c.max_size.main(c.dir) {
         Some(max_size) => AvailableSpace::Definite({
             let available = available_space.main(c.dir).into_option().unwrap_or(max_size);
@@ -29,7 +30,7 @@ fn main_axis_available_space(c: &AlgoConstants, available_space: Size<AvailableS
     }
 }
 
-pub(super) fn collect_flex_lines(c: &AlgoConstants, available_space: Size<AvailableSpace>, items: &[FlexItem]) -> Scratch<FlexLine> {
+pub(super) fn collect_flex_lines<D: FlexDir>(c: &AlgoConstants<D>, available_space: Size<AvailableSpace>, items: &[FlexItem]) -> Scratch<FlexLine> {
     if !c.is_wrap || !c.known_main_size_is_definite {
         return single_line(items);
     }
@@ -58,8 +59,8 @@ pub(super) fn collect_flex_lines(c: &AlgoConstants, available_space: Size<Availa
     }
 }
 
-pub(super) fn collect_balanced_flex_lines(
-    c: &AlgoConstants,
+pub(super) fn collect_balanced_flex_lines<D: FlexDir>(
+    c: &AlgoConstants<D>,
     available_space: Size<AvailableSpace>,
     items: &[FlexItem],
 ) -> Scratch<FlexLine> {

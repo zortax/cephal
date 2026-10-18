@@ -1,5 +1,6 @@
 //! §9.2 flex base size, hypothetical main size and the automatic minimum size.
 
+use super::axis::FlexDir;
 use super::axis::{FlexAxisRect, FlexAxisSize, FlexAxisSum, abs_main, from_cross};
 use super::{AlgoConstants, FlexItem};
 use crate::compute::common::sizing_keyword::{SizingKeywordResolution, resolve_sizing_keyword};
@@ -19,9 +20,9 @@ struct Pending {
     min_request: Option<usize>,
 }
 
-pub(super) fn determine_flex_base_size<T: LayoutTree + CacheAccess + ?Sized>(
+pub(super) fn determine_flex_base_size<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
-    c: &AlgoConstants,
+    c: &AlgoConstants<D>,
     available_space: Size<AvailableSpace>,
     items: &mut [FlexItem],
 ) {
@@ -227,7 +228,7 @@ pub(super) fn determine_flex_base_size<T: LayoutTree + CacheAccess + ?Sized>(
 ///
 /// The same resolution the cross-size step makes, so the main size is measured at the cross size
 /// the item later gets.
-pub(super) fn cross_sizing_keyword(c: &AlgoConstants, child: &FlexItem) -> Option<SizingKeywordResolution> {
+pub(super) fn cross_sizing_keyword<D: FlexDir>(c: &AlgoConstants<D>, child: &FlexItem) -> Option<SizingKeywordResolution> {
     let dir = c.dir;
     let parent = c.node_inner_size.cross(dir);
     let stretch_size = parent
@@ -245,9 +246,9 @@ pub(super) fn cross_sizing_keyword(c: &AlgoConstants, child: &FlexItem) -> Optio
 /// items under the available cross space. That is the size a stretched item gets in the final
 /// layout, so its main size is measured at it too. Without it, an item whose main size follows
 /// from its cross size is measured at the whole available space.
-pub(super) fn indefinite_stretch_cross<T: LayoutTree + CacheAccess + ?Sized>(
+pub(super) fn indefinite_stretch_cross<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
-    c: &AlgoConstants,
+    c: &AlgoConstants<D>,
     available_space: Size<AvailableSpace>,
     items: &[FlexItem],
 ) -> Option<f32> {

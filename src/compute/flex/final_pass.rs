@@ -1,5 +1,6 @@
 //! Final placement of in-flow items.
 
+use super::axis::FlexDir;
 use super::axis::{FlexAxisRect, FlexAxisSize, FlexAxisSum};
 use super::{AlgoConstants, FlexItem, FlexLine, item_known_dimension_definiteness};
 use crate::compute::common::overflow::{scrollable_overflow_contribution, union};
@@ -10,7 +11,7 @@ use crate::style::{Direction, Overflow};
 use crate::tree::{CacheAccess, Layout, LayoutInput, LayoutTree, RequestedAxis, RunMode, SizingMode};
 
 /// The final-layout question asked of an item.
-fn item_request(item: &FlexItem, c: &AlgoConstants) -> ChildRequest {
+fn item_request<D: FlexDir>(item: &FlexItem, c: &AlgoConstants<D>) -> ChildRequest {
     ChildRequest {
         node: item.node,
         input: LayoutInput {
@@ -27,7 +28,7 @@ fn item_request(item: &FlexItem, c: &AlgoConstants) -> ChildRequest {
     }
 }
 
-fn calculate_flex_item<T: LayoutTree + CacheAccess + ?Sized>(
+fn calculate_flex_item<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     item: &mut FlexItem,
     out: LayoutOutput,
@@ -35,7 +36,7 @@ fn calculate_flex_item<T: LayoutTree + CacheAccess + ?Sized>(
     total_offset_cross: f32,
     line_offset_cross: f32,
     total_overflow_rect: &mut Rect<f32>,
-    c: &AlgoConstants,
+    c: &AlgoConstants<D>,
 ) {
     let dir = c.dir;
     let container_size = c.container_size;
@@ -120,14 +121,14 @@ fn calculate_flex_item<T: LayoutTree + CacheAccess + ?Sized>(
     );
 }
 
-fn calculate_layout_line<T: LayoutTree + CacheAccess + ?Sized>(
+fn calculate_layout_line<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     line: &FlexLine,
     items: &mut [FlexItem],
     outputs: &[LayoutOutput],
     total_offset_cross: &mut f32,
     overflow_rect: &mut Rect<f32>,
-    c: &AlgoConstants,
+    c: &AlgoConstants<D>,
 ) {
     let dir = c.dir;
     let padding_border = c.content_box_inset;
@@ -158,11 +159,11 @@ fn calculate_layout_line<T: LayoutTree + CacheAccess + ?Sized>(
     }
 }
 
-pub(super) fn final_layout_pass<T: LayoutTree + CacheAccess + ?Sized>(
+pub(super) fn final_layout_pass<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     lines: &[FlexLine],
     items: &mut [FlexItem],
-    c: &AlgoConstants,
+    c: &AlgoConstants<D>,
 ) -> Rect<f32> {
     let dir = c.dir;
     let mut total_offset_cross = if c.is_column && c.layout_direction == Direction::Rtl {

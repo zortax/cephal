@@ -1,5 +1,6 @@
 //! §9.2 step 4: the container's main size when it is not known.
 
+use super::axis::FlexDir;
 use super::axis::{FlexAxisSize, FlexAxisSum, abs_main, sum_axis_gaps};
 use super::{AlgoConstants, FlexItem, FlexLine};
 use crate::compute::LayoutTreeExt;
@@ -9,17 +10,17 @@ use crate::style::AlignSelf;
 use crate::tree::{CacheAccess, LayoutTree, SizingMode};
 
 #[inline]
-fn item_main_length(child: &FlexItem, dir: crate::style::FlexDirection) -> f32 {
+fn item_main_length(child: &FlexItem, dir: impl FlexDir) -> f32 {
     let padding_border_sum = (child.padding + child.border).main_axis_sum(dir);
     (child.flex_basis.maybe_max(child.min_size.main(dir)) + child.margin.main_axis_sum(dir)).max(padding_border_sum)
 }
 
-pub(super) fn determine_container_main_size<T: LayoutTree + CacheAccess + ?Sized>(
+pub(super) fn determine_container_main_size<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     available_space: Size<AvailableSpace>,
     lines: &mut [FlexLine],
     items: &mut [FlexItem],
-    c: &mut AlgoConstants,
+    c: &mut AlgoConstants<D>,
 ) {
     let dir = c.dir;
     let main_content_box_inset = c.content_box_inset.main_axis_sum(dir);

@@ -13,13 +13,13 @@ mod main_size;
 
 pub use absolute::AbsoluteFlexContext;
 pub(crate) use absolute::layout_absolute_flex_child;
-use axis::{FlexAxisRect, FlexAxisSize, FlexAxisSum};
+use axis::{Column, FlexAxisRect, FlexAxisSize, FlexAxisSum, FlexDir, Row};
 
 use crate::compute::LayoutTreeExt;
 use crate::compute::scratch::Scratch;
 use crate::geometry::{AvailableSpace, Line, MaybeMath, Point, Rect, Size};
 use crate::style::{
-    AlignContent, AlignItems, AlignSelf, BoxSizing, Contain, Dimension, Direction, FlexDirection, JustifyContent,
+    AlignContent, AlignItems, AlignSelf, BoxSizing, Contain, Dimension, Direction, JustifyContent,
     Overflow,
 };
 use crate::tree::{
@@ -69,7 +69,7 @@ impl FlexItem {
         self.overflow.x.is_scroll_container() || self.overflow.y.is_scroll_container()
     }
     #[inline]
-    fn participates_in_baseline_alignment(&self, dir: FlexDirection) -> bool {
+    fn participates_in_baseline_alignment(&self, dir: impl FlexDir) -> bool {
         self.align_self == AlignSelf::BASELINE && !self.margin_is_auto.cross_start(dir) && !self.margin_is_auto.cross_end(dir)
     }
 }
@@ -97,8 +97,8 @@ impl FlexLine {
     }
 }
 
-pub(super) struct AlgoConstants {
-    dir: FlexDirection,
+pub(super) struct AlgoConstants<D> {
+    dir: D,
     layout_direction: Direction,
     is_row: bool,
     is_column: bool,
@@ -130,7 +130,7 @@ pub(super) struct AlgoConstants {
     indefinite_stretch_cross: Option<f32>,
 }
 
-impl AlgoConstants {
+impl<D: FlexDir> AlgoConstants<D> {
     /// Cross space per line when `flex-line-count` splits it.
     #[inline]
     fn divided_cross_space(&self, cross_available_space: f32) -> f32 {
@@ -206,25 +206,28 @@ pub fn compute_flexbox_layout<T: LayoutTree + CacheAccess + ?Sized>(
         }
     }
 
-    let mut output = compute_preliminary(
-        tree,
-        node,
-        LayoutInput { known_dimensions: styled_known, known_dimensions_are_definite, ..inputs },
-    );
+    let inputs = LayoutInput { known_dimensions: styled_known, known_dimensions_are_definite, ..inputs };
+    let dir = tree.style(node).flex_direction;
+    let mut output = if dir.is_row() {
+        compute_preliminary(tree, node, inputs, Row(dir.is_reverse()))
+    } else {
+        compute_preliminary(tree, node, inputs, Column(dir.is_reverse()))
+    };
     if contain.suppresses_baseline() {
         output.baselines = Baselines::NONE;
     }
     output
 }
 
-fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized>(
+fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized, D: FlexDir>(
     tree: &mut T,
     node: NodeId,
     inputs: LayoutInput,
+    dir: D,
 ) -> LayoutOutput {
     let LayoutInput { known_dimensions, parent_size, available_space, run_mode, .. } = inputs;
     let mut constants =
-        compute_constants(tree, node, known_dimensions, inputs.known_dimensions_are_definite, parent_size, available_space);
+        compute_constants(tree, node, dir, known_dimensions, inputs.known_dimensions_are_definite, parent_size, available_space);
     let (mut items, has_other_children) = generate_anonymous_flex_items(tree, node, &constants);
     let available_space = determine_available_space(known_dimensions, available_space, &constants);
     constants.indefinite_stretch_cross = base_size::indefinite_stretch_cross(tree, &constants, available_space, &items);
@@ -322,17 +325,17 @@ fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized>(
         .with_overflow(inflow_overflow_rect, absolute_overflow_rect)
 }
 
-fn compute_constants<T: LayoutTree + ?Sized>(
+fn compute_constants<T: LayoutTree + ?Sized, D: FlexDir>(
     tree: &T,
     node: NodeId,
+    dir: D,
     known_dimensions: Size<Option<f32>>,
     known_dimensions_are_definite: Size<bool>,
     parent_size: Size<Option<f32>>,
     available_space: Size<AvailableSpace>,
-) -> AlgoConstants {
+) -> AlgoConstants<D> {
     let style = tree.style(node);
     let calc = |id, basis| tree.resolve_calc(id, basis);
-    let dir = style.flex_direction;
     let is_row = dir.is_row();
     let is_column = dir.is_column();
     let flex_wrap = style.flex_wrap;
@@ -404,7 +407,7 @@ fn compute_constants<T: LayoutTree + ?Sized>(
 }
 
 /// The in-flow items, and whether any child was left out (hidden or out of flow).
-fn generate_anonymous_flex_items<T: LayoutTree + ?Sized>(tree: &T, node: NodeId, constants: &AlgoConstants) -> (Scratch<FlexItem>, bool) {
+fn generate_anonymous_flex_items<D: FlexDir, T: LayoutTree + ?Sized>(tree: &T, node: NodeId, constants: &AlgoConstants<D>) -> (Scratch<FlexItem>, bool) {
     let calc = |id, basis| tree.resolve_calc(id, basis);
     // Percentages against an indefinite main size resolve to `None`.
     let percent_resolution_size = if constants.known_main_size_is_definite {
@@ -484,10 +487,10 @@ fn generate_anonymous_flex_items<T: LayoutTree + ?Sized>(tree: &T, node: NodeId,
 
 /// Content-box available space.
 #[inline]
-fn determine_available_space(
+fn determine_available_space<D: FlexDir>(
     known_dimensions: Size<Option<f32>>,
     outer: Size<AvailableSpace>,
-    c: &AlgoConstants,
+    c: &AlgoConstants<D>,
 ) -> Size<AvailableSpace> {
     Size {
         width: match known_dimensions.width {
@@ -511,7 +514,7 @@ fn determine_available_space(
 
 /// Which of an item's known dimensions count as definite for its own percentage resolution.
 #[inline]
-fn item_known_dimension_definiteness(c: &AlgoConstants, item: &FlexItem) -> Size<bool> {
+fn item_known_dimension_definiteness<D: FlexDir>(c: &AlgoConstants<D>, item: &FlexItem) -> Size<bool> {
     let dir = c.dir;
     let main_is_definite = c.has_definite_main_size || item.flex_basis_is_definite;
     let has_cross_auto_margins = item.margin_is_auto.cross_start(dir) || item.margin_is_auto.cross_end(dir);
