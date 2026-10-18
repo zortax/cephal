@@ -19,8 +19,9 @@ use std::sync::Arc;
 use crate::hash::FxHashMap;
 use node::{Links, NONE};
 
-/// Origin of a node no rounding pass has placed; differs from every origin, so it re-rounds.
-const UNPLACED: Point<f32> = Point { x: f32::NAN, y: f32::NAN };
+/// Origin of a node no rounding pass has placed: a NaN no sum produces, unequal to every origin so
+/// it is placed again, and read back as "not snapped".
+const UNPLACED: Point<f32> = Point { x: f32::from_bits(0x7FC0_0BAD), y: f32::from_bits(0x7FC0_0BAD) };
 
 /// Measures leaf content: `(context, input, style)`.
 pub trait MeasureFn<Ctx>: FnMut(&mut Ctx, MeasureInput, &Style) -> MeasureOutput {}
@@ -32,11 +33,11 @@ pub struct Tree<Ctx = ()> {
     style_ids: Vec<u32>,
     flags: Vec<u8>,
     unrounded: column::Column<Layout>,
-    rounded: Vec<Layout>,
-    /// Absolute unrounded origin used by the last rounding pass.
+    /// Absolute unrounded origin of every node the last rounding pass placed; [`Tree::layout`]
+    /// snaps a layout from it when read.
     abs_origin: Vec<Point<f32>>,
-    /// Whether `rounded` and `abs_origin` hold the last rounding pass for every node; when not,
-    /// they keep their allocation for the next full pass.
+    /// Whether `abs_origin` holds the last rounding pass for every node; when not, it keeps its
+    /// allocation for the next full pass.
     rounded_valid: bool,
     /// Traversal stacks of the rounding passes, kept between frames.
     round_stack: Vec<(usize, f32, f32, bool)>,
@@ -89,7 +90,6 @@ impl<Ctx> Tree<Ctx> {
             style_ids: Vec::with_capacity(n),
             flags: Vec::with_capacity(n),
             unrounded: column::Column::with_capacity(n),
-            rounded: Vec::new(),
             abs_origin: Vec::new(),
             rounded_valid: false,
             round_stack: Vec::new(),
@@ -212,7 +212,6 @@ impl<Ctx> Tree<Ctx> {
                 self.touched_gen[i] = 0;
                 self.unrounded[i] = Layout::ZERO;
                 if self.rounded_valid {
-                    self.rounded[i] = Layout::ZERO;
                     self.abs_origin[i] = UNPLACED;
                 }
                 self.caches[i].clear();
@@ -226,7 +225,6 @@ impl<Ctx> Tree<Ctx> {
                 self.touched_gen.push(0);
                 self.unrounded.push(Layout::ZERO);
                 if self.rounded_valid {
-                    self.rounded.push(Layout::ZERO);
                     self.abs_origin.push(UNPLACED);
                 }
                 self.caches.push(NodeCache::new());
@@ -368,7 +366,6 @@ impl<Ctx> Tree<Ctx> {
         self.touched_gen.clear();
         self.touched.clear();
         self.unrounded.clear();
-        self.rounded.clear();
         self.abs_origin.clear();
         self.rounded_valid = false;
         self.caches.clear();
@@ -416,7 +413,6 @@ impl<Ctx> Tree<Ctx> {
             style_ids: self.style_ids.clone(),
             flags: self.flags.iter().map(|f| f & META_MASK).collect(),
             unrounded: vec![Layout::ZERO; self.unrounded.len()].into(),
-            rounded: Vec::new(),
             abs_origin: Vec::new(),
             rounded_valid: false,
             round_stack: Vec::new(),
@@ -581,9 +577,19 @@ impl<Ctx> Tree<Ctx> {
     // --- results ------------------------------------------------------------------------------
 
     /// Rounded layout when rounding is enabled, otherwise the unrounded one.
-    pub fn layout(&self, node: NodeId) -> &Layout {
+    ///
+    /// Snapping happens here, from the node's absolute origin: a layout pass only places origins,
+    /// so nodes nobody reads cost nothing to round.
+    pub fn layout(&self, node: NodeId) -> Layout {
         let i = self.index(node);
-        if self.use_rounding && self.rounded_valid { &self.rounded[i] } else { &self.unrounded[i] }
+        let u = &self.unrounded[i];
+        if self.use_rounding && self.rounded_valid {
+            let origin = self.abs_origin[i];
+            if origin.x.to_bits() != UNPLACED.x.to_bits() {
+                return crate::round::round_one(u, origin.x, origin.y);
+            }
+        }
+        *u
     }
 
     pub fn unrounded_layout(&self, node: NodeId) -> &Layout {
@@ -695,10 +701,9 @@ impl<Ctx> Tree<Ctx> {
         let _ = root_query_changed;
     }
 
-    /// Rounds every node under `root`; every other node takes its unrounded layout, unplaced.
+    /// Places every node under `root`; every other node is unplaced and reads unrounded.
     fn round_all(&mut self, root: NodeId) {
         let n = self.unrounded.len();
-        self.rounded.resize(n, Layout::ZERO);
         self.abs_origin.resize(n, UNPLACED);
         self.rounded_valid = true;
         if self.round_subtree(root, 0.0, 0.0, true) == self.node_count() {
@@ -717,7 +722,6 @@ impl<Ctx> Tree<Ctx> {
                 if i == r {
                     continue;
                 }
-                self.rounded[i] = self.unrounded[i];
                 self.abs_origin[i] = UNPLACED;
                 let mut c = self.links[i].first_child;
                 while c != NONE {
@@ -764,12 +768,11 @@ impl<Ctx> Tree<Ctx> {
             self.flags[i] &= !ROUND_PENDING;
             let p = self.links[i].parent;
             let origin = if p == NONE { Point { x: 0.0, y: 0.0 } } else { self.abs_origin[p as usize] };
-            let u = self.unrounded[i];
-            let x = origin.x + u.location.x;
-            let y = origin.y + u.location.y;
+            let location = self.unrounded[i].location;
+            let x = origin.x + location.x;
+            let y = origin.y + location.y;
             let moved = self.abs_origin[i].x != x || self.abs_origin[i].y != y;
             self.abs_origin[i] = Point { x, y };
-            self.rounded[i] = crate::round::round_one(&u, x, y);
             if moved {
                 let mut c = self.links[i].first_child;
                 while c != NONE {
@@ -789,9 +792,9 @@ impl<Ctx> Tree<Ctx> {
         stack.push((self.index(root), parent_x, parent_y, force));
         let mut rounded = 0;
         while let Some((i, px, py, force)) = stack.pop() {
-            let u = &self.unrounded[i];
-            let x = px + u.location.x;
-            let y = py + u.location.y;
+            let location = self.unrounded[i].location;
+            let x = px + location.x;
+            let y = py + location.y;
             let flags = self.flags[i];
             let pending = flags & ROUND_PENDING != 0;
             if pending {
@@ -803,7 +806,6 @@ impl<Ctx> Tree<Ctx> {
                 continue;
             }
             self.abs_origin[i] = Point { x, y };
-            self.rounded[i] = crate::round::round_one(u, x, y);
             rounded += 1;
             let mut c = self.links[i].first_child;
             while c != NONE {

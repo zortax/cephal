@@ -24,7 +24,7 @@ fn executor(threads: usize) -> Parallel<fn(&Text, cephal::tree::MeasureInput, &c
 fn layouts(tree: &Tree<Text>, root: NodeId) -> Vec<(NodeId, Layout, Layout)> {
     let mut nodes = Vec::new();
     all_nodes(tree, root, &mut nodes);
-    nodes.into_iter().map(|n| (n, *tree.unrounded_layout(n), *tree.layout(n))).collect()
+    nodes.into_iter().map(|n| (n, *tree.unrounded_layout(n), tree.layout(n))).collect()
 }
 
 fn assert_same(step: &str, incremental: &Tree<Text>, cold: &Tree<Text>, root: NodeId) {

@@ -258,18 +258,3 @@ impl<Ctx> crate::schedule::Incremental for Marker<'_, Ctx> {
         self.tree.flags[i] = flags;
     }
 }
-
-impl<Ctx> crate::round::RoundTree for Tree<Ctx> {
-    fn child_ids(&self, node: NodeId, out: &mut Vec<NodeId>) {
-        out.extend(self.children(node));
-    }
-    #[inline]
-    fn unrounded(&self, node: NodeId) -> Layout {
-        self.unrounded[self.index(node)]
-    }
-    #[inline]
-    fn set_rounded(&mut self, node: NodeId, layout: Layout) {
-        let i = self.index(node);
-        self.rounded[i] = layout;
-    }
-}

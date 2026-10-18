@@ -11,6 +11,9 @@
 //! PanGui's published numbers. Engines are `cephal` and `taffy`, with a `_no_rounding` suffix
 //! under `CEPHAL_NO_ROUNDING`. `CEPHAL_BENCH_ITERS` and the `stats` feature time cephal only.
 //!
+//! cephal snaps a layout to pixels when it is read. `CEPHAL_BENCH_READ=1` also reads every node's
+//! layout inside the timed region, as a renderer drawing the whole tree would.
+//!
 //! PanGui's `Expand(w)` maps to `flex: w 1 0`; its `Fit` to an auto size. CSS gives such items an
 //! automatic minimum size, which PanGui does not have; the `*_min0` variants add `min-width: 0` and
 //! `min-height: 0` to match PanGui's semantics. PanGui's `pixels_with_min_expand_constraint`
@@ -322,6 +325,7 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let filter: Vec<&String> = args.iter().filter(|a| !a.starts_with('-')).collect();
     let secs: f64 = std::env::var("CEPHAL_BENCH_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(1.0);
+    let read_all = std::env::var_os("CEPHAL_BENCH_READ").is_some();
     // A fixed number of layouts instead, for instruction counting (`scripts/instructions.sh`).
     let iters: Option<usize> = std::env::var("CEPHAL_BENCH_ITERS").ok().and_then(|v| v.parse().ok());
     let rounding = std::env::var_os("CEPHAL_NO_ROUNDING").is_none();
@@ -356,10 +360,21 @@ fn main() {
         tree.set_measure_ignores_available_height(true);
         let root = build(name, &mut tree);
         let nodes = tree.node_count();
+        let mut all = Vec::new();
+        if read_all {
+            common::all_nodes(&tree, root, &mut all);
+        }
         let run = |tree: &mut Tree<Text>| {
             tree.clear_layout();
             let start = Instant::now();
             tree.compute_layout_with_measure(root, viewport, measure);
+            if read_all {
+                let mut sum = 0.0;
+                for &n in &all {
+                    sum += tree.layout(n).location.x;
+                }
+                std::hint::black_box(sum);
+            }
             start.elapsed().as_nanos() as f64
         };
         #[cfg(feature = "stats")]
