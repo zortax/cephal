@@ -131,21 +131,46 @@ pub(super) fn prepare_item<T: LayoutTree + CacheAccess + ?Sized>(
     let container_h = container_alignment.horizontal.map(|a| a.resolve_self_relative(item_direction, direction, true));
     let container_v = container_alignment.vertical.map(|a| a.resolve_self_relative(item_direction, direction, false));
     let position = style.position;
-    let inset_h = Line { start: style.inset.left.resolve(Some(grid_area_size.width), &calc), end: style.inset.right.resolve(Some(grid_area_size.width), &calc) };
-    let inset_v = Line { start: style.inset.top.resolve(Some(grid_area_size.height), &calc), end: style.inset.bottom.resolve(Some(grid_area_size.height), &calc) };
-    let padding = style.padding.map(|p| p.resolve_or_zero(Some(grid_area_size.width), &calc));
-    let border = style.border.map(|b| b.resolve_or_zero(Some(grid_area_size.width), &calc));
+    // Lengths that resolve against nothing are the same against the grid area.
+    let plan = tree.style_plan(node);
+    let resolve = |s: Size<crate::style::Length>| crate::compute::block::resolve_size(s, grid_area_size.map(Some), &calc);
+    let (inset, padding, border, raw_size, raw_min_size, raw_max_size, margin) = match plan {
+        Some(p) => (
+            p.inset,
+            p.padding,
+            p.border,
+            p.size,
+            p.min_size,
+            p.max_size,
+            Rect {
+                left: (!style.margin.left.is_auto()).then_some(p.margin.left),
+                right: (!style.margin.right.is_auto()).then_some(p.margin.right),
+                top: (!style.margin.top.is_auto()).then_some(p.margin.top),
+                bottom: (!style.margin.bottom.is_auto()).then_some(p.margin.bottom),
+            },
+        ),
+        None => (
+            style.inset.zip_size(grid_area_size.map(Some), |i, basis| i.resolve(basis, &calc)),
+            style.padding.map(|p| p.resolve_or_zero(Some(grid_area_size.width), &calc)),
+            style.border.map(|b| b.resolve_or_zero(Some(grid_area_size.width), &calc)),
+            resolve(style.size.map(|v| v.raw())),
+            resolve(style.min_size.map(|v| v.raw())),
+            resolve(style.max_size.map(|v| v.raw())),
+            style.margin.map(|m| m.resolve(Some(grid_area_size.width), &calc)),
+        ),
+    };
+    let inset_h = Line { start: inset.left, end: inset.right };
+    let inset_v = Line { start: inset.top, end: inset.bottom };
     let padding_border_size = (padding + border).sum_axes();
     let box_sizing_adjustment = if style.box_sizing == BoxSizing::ContentBox { padding_border_size } else { Size::ZERO };
     let size_style = style.size;
-    let resolve = |s: Size<crate::style::Length>| crate::compute::block::resolve_size(s, grid_area_size.map(Some), &calc);
-    let inherent_size = resolve(size_style.map(|v| v.raw())).maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment);
-    let min_size = resolve(style.min_size.map(|v| v.raw()))
+    let inherent_size = raw_size.maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment);
+    let min_size = raw_min_size
         .maybe_add(box_sizing_adjustment)
         .or(padding_border_size.map(Some))
         .maybe_max(padding_border_size.map(Some))
         .maybe_apply_aspect_ratio(aspect_ratio);
-    let max_size = resolve(style.max_size.map(|v| v.raw())).maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment);
+    let max_size = raw_max_size.maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment);
     let alignment_h = justify_self.or(container_h).unwrap_or(if inherent_size.width.is_some() || size_style.width.is_sizing_keyword() {
         AlignSelf::START
     } else {
@@ -158,7 +183,6 @@ pub(super) fn prepare_item<T: LayoutTree + CacheAccess + ?Sized>(
             AlignSelf::STRETCH
         },
     );
-    let margin = style.margin.map(|m| m.resolve(Some(grid_area_size.width), &calc));
     let area_minus_margins = Size {
         width: grid_area_size.width.maybe_sub(margin.left).maybe_sub(margin.right).max(0.0),
         height: (grid_area_size.height.maybe_sub(margin.top).maybe_sub(margin.bottom) - baseline_shim).max(0.0),
