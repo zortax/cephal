@@ -87,6 +87,27 @@ These results use an Intel Core i9-13900K and 24 threads. Measurements come from
 Run `cargo run --release --example scaling` to measure trees from 1,000 to 100,000 nodes.
 Use `scripts/plot_bench.py` to plot the results.
 
+`benches/pangui.rs` ports the cold-layout benchmarks from
+[PanGui's layout post](https://www.pangui.io/blog/05-layout-rework-and-benchmarks/) to CSS and
+adds grid, block, text, and random workloads. It prints the median time per node:
+
+```sh
+taskset -c 2 cargo bench --bench pangui [-- <filter>]
+CEPHAL_BENCH_TAFFY=1 CEPHAL_BENCH_CSV=target/bench/pangui.csv taskset -c 2 cargo bench --bench pangui
+python3 scripts/plot_bench.py pangui target/bench/pangui.csv --out target/bench/plots
+```
+
+`CEPHAL_BENCH_TAFFY=1` also times taffy on the same tree. `CEPHAL_BENCH_CSV` writes one row per
+workload and engine. The `pangui` plot mode compares these with the numbers PanGui published for
+PanGui, Clay, Taffy, and Yoga on a Ryzen 7 7800X3D. It also plots each engine's speed-up over
+taffy on the same machine. `--baseline other.csv` adds a before-and-after chart.
+`CEPHAL_NO_ROUNDING=1` disables pixel snapping in both engines, and `CEPHAL_BENCH_SECS` sets the
+sampling time.
+
+PanGui's `Expand` has no automatic minimum size, but CSS flex items do. The `*_min0` variants add
+`min-width: 0` and `min-height: 0` to match PanGui. PanGui's
+`pixels_with_min_expand_constraint` has no CSS equivalent and is not ported.
+
 ## Tests
 
 - `tests/fixtures.rs` runs 6,084 Chrome-generated fixtures from taffy.

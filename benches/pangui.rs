@@ -5,9 +5,18 @@
 //! snapping; `CEPHAL_BENCH_SECS` sets the sampling time per workload (default 1). Pin the process
 //! to one performance core (`taskset -c 2`) on hybrid CPUs, or results vary by ±20 %.
 //!
+//! `CEPHAL_BENCH_TAFFY=1` (or `-- --taffy`) also times taffy on the same tree, with every node
+//! marked dirty (not timed) before each layout. `CEPHAL_BENCH_CSV=path` writes
+//! `workload,nodes,engine,ns_per_node,ms` rows, which `scripts/plot_bench.py pangui` plots against
+//! PanGui's published numbers. Engines are `cephal` and `taffy`, with a `_no_rounding` suffix
+//! under `CEPHAL_NO_ROUNDING`. `CEPHAL_BENCH_ITERS` and the `stats` feature time cephal only.
+//!
 //! PanGui's `Expand(w)` maps to `flex: w 1 0`; its `Fit` to an auto size. CSS gives such items an
 //! automatic minimum size, which PanGui does not have; the `*_min0` variants add `min-width: 0` and
-//! `min-height: 0` to match PanGui's semantics.
+//! `min-height: 0` to match PanGui's semantics. PanGui's `pixels_with_min_expand_constraint`
+//! (a fixed width with an `Expand` minimum) has no CSS equivalent and is left out.
+// With `stats`, everything after the counters is unreachable.
+#![cfg_attr(feature = "stats", allow(unused))]
 
 #[path = "../tests/common/mod.rs"]
 mod common;
@@ -16,7 +25,8 @@ use cephal::Tree;
 use cephal::geometry::{AvailableSpace, Rect, Size};
 use cephal::style::{Dimension, Display, FlexDirection, FlexWrap, LengthPercentage, LengthPercentageAuto, Style};
 use cephal::tree::NodeId;
-use common::{Text, build_subtree, measure, Rng};
+use common::{Rng, Text, build_subtree, measure, mirror_in_taffy, taffy_measure, to_taffy_space};
+use std::io::Write;
 use std::time::Instant;
 
 fn px(v: f32) -> Dimension {
@@ -293,12 +303,46 @@ const WORKLOADS: &[&str] = &[
     "random_10k",
 ];
 
+/// Median nanoseconds of `run` (one layout, returning its own timed nanoseconds) over at least
+/// `secs` seconds and 10 samples, after 5 warm-up runs.
+fn median_ns(secs: f64, mut run: impl FnMut() -> f64) -> f64 {
+    for _ in 0..5 {
+        run();
+    }
+    let mut samples = Vec::new();
+    let begin = Instant::now();
+    while begin.elapsed().as_secs_f64() < secs || samples.len() < 10 {
+        samples.push(run());
+    }
+    samples.sort_by(f64::total_cmp);
+    samples[samples.len() / 2]
+}
+
 fn main() {
-    let filter: Vec<String> = std::env::args().skip(1).filter(|a| !a.starts_with('-')).collect();
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    let filter: Vec<&String> = args.iter().filter(|a| !a.starts_with('-')).collect();
     let secs: f64 = std::env::var("CEPHAL_BENCH_SECS").ok().and_then(|v| v.parse().ok()).unwrap_or(1.0);
     // A fixed number of layouts instead, for instruction counting (`scripts/instructions.sh`).
     let iters: Option<usize> = std::env::var("CEPHAL_BENCH_ITERS").ok().and_then(|v| v.parse().ok());
     let rounding = std::env::var_os("CEPHAL_NO_ROUNDING").is_none();
+    // Also time taffy on the same tree (timed mode only).
+    let taffy = std::env::var_os("CEPHAL_BENCH_TAFFY").is_some() || args.iter().any(|a| a == "--taffy");
+    // `workload,nodes,engine,ns_per_node,ms` rows for `scripts/plot_bench.py pangui`.
+    let mut csv = std::env::var_os("CEPHAL_BENCH_CSV").map(|path| {
+        let path = std::path::PathBuf::from(path);
+        if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty()) {
+            std::fs::create_dir_all(dir).unwrap();
+        }
+        let mut f = std::fs::File::create(&path).unwrap();
+        writeln!(f, "workload,nodes,engine,ns_per_node,ms").unwrap();
+        f
+    });
+    let suffix = if rounding { "" } else { "_no_rounding" };
+    let mut row = |name: &str, nodes: usize, engine: &str, median: f64| {
+        if let Some(f) = &mut csv {
+            writeln!(f, "{name},{nodes},{engine}{suffix},{:.3},{:.6}", median / nodes as f64, median / 1e6).unwrap();
+        }
+    };
     let viewport = Size { width: AvailableSpace::MaxContent, height: AvailableSpace::MaxContent };
     for &name in WORKLOADS {
         if !filter.is_empty() && !filter.iter().any(|f| name.contains(f.as_str())) {
@@ -334,20 +378,42 @@ fn main() {
             println!("{name:34} {nodes:>7} nodes");
             continue;
         }
-        for _ in 0..5 {
-            run(&mut tree);
-        }
-        let mut samples = Vec::new();
-        let begin = Instant::now();
-        while begin.elapsed().as_secs_f64() < secs || samples.len() < 10 {
-            samples.push(run(&mut tree));
-        }
-        samples.sort_by(f64::total_cmp);
-        let median = samples[samples.len() / 2];
+        let median = median_ns(secs, || run(&mut tree));
         println!(
             "{name:34} {nodes:>7} nodes {:>10.3} ms {:>8.1} ns/node",
             median / 1e6,
             median / nodes as f64
         );
+        row(name, nodes, "cephal", median);
+        if taffy {
+            // taffy has no `clear_layout`: marking every node dirty (untimed) empties every cache.
+            let (mut t, troot, map) = mirror_in_taffy(&tree, root);
+            if !rounding {
+                t.disable_rounding();
+            }
+            let space = to_taffy_space(viewport);
+            let taffy_median = median_ns(secs, || {
+                for &(_, tn) in &map {
+                    t.mark_dirty(tn).unwrap();
+                }
+                let start = Instant::now();
+                t.compute_layout_with_measure(troot, space, taffy_measure).unwrap();
+                start.elapsed().as_nanos() as f64
+            });
+            let (ours, theirs) = (tree.layout(root).size, t.layout(troot).unwrap().size);
+            let differs = if (ours.width - theirs.width).abs() > 0.5 || (ours.height - theirs.height).abs() > 0.5 {
+                format!("  (root {}x{}, cephal's {}x{})", theirs.width, theirs.height, ours.width, ours.height)
+            } else {
+                String::new()
+            };
+            println!(
+                "{:34} {nodes:>7} nodes {:>10.3} ms {:>8.1} ns/node  cephal {:.2}x faster{differs}",
+                "  taffy",
+                taffy_median / 1e6,
+                taffy_median / nodes as f64,
+                taffy_median / median
+            );
+            row(name, nodes, "taffy", taffy_median);
+        }
     }
 }
