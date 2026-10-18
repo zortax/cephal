@@ -122,34 +122,21 @@ fn resolve_box(style: &crate::style::Style, parent_size: Size<Option<f32>>, calc
 }
 
 pub fn compute_leaf_layout<T: LayoutTree + ?Sized>(tree: &mut T, node: NodeId, inputs: LayoutInput) -> LayoutOutput {
-    compute_leaf_layout_with(tree, node, inputs, |tree, input| {
-        // The measure function may tell min-content from max-content space on an axis it is not
-        // given a size for.
-        let mut observed = 0;
-        if input.known_dimensions.width.is_none() && !input.available_space.width.is_definite() {
-            observed |= crate::compute::OBSERVED_WIDTH;
-        }
-        if input.known_dimensions.height.is_none()
-            && !input.available_space.height.is_definite()
-            && !tree.measure_ignores_available_height()
-        {
-            observed |= crate::compute::OBSERVED_HEIGHT;
-        }
-        tree.note_observed(observed);
-        tree.measure(node, input)
-    })
+    compute_leaf_layout_with(tree, node, inputs, true, |tree, input| tree.measure(node, input))
 }
 
 /// [`compute_leaf_layout`] with an empty leaf's measurement: the known size, else nothing.
 pub fn compute_empty_leaf_layout<T: LayoutTree + ?Sized>(tree: &mut T, node: NodeId, inputs: LayoutInput) -> LayoutOutput {
-    compute_leaf_layout_with(tree, node, inputs, |_, input| MeasureOutput::from_size(input.known_dimensions.unwrap_or(Size::ZERO)))
+    compute_leaf_layout_with(tree, node, inputs, false, |_, input| MeasureOutput::from_size(input.known_dimensions.unwrap_or(Size::ZERO)))
 }
 
+/// `measured`: whether `measure` may read the available space, which it then observes.
 #[inline(always)]
 fn compute_leaf_layout_with<T: LayoutTree + ?Sized>(
     tree: &mut T,
     node: NodeId,
     inputs: LayoutInput,
+    measured: bool,
     measure: impl FnOnce(&mut T, MeasureInput) -> MeasureOutput,
 ) -> LayoutOutput {
     let LayoutInput { known_dimensions, parent_size, available_space, sizing_mode, run_mode, .. } = inputs;
@@ -212,6 +199,16 @@ fn compute_leaf_layout_with<T: LayoutTree + ?Sized>(
     };
     #[cfg(feature = "stats")]
     crate::compute::stats::bump(&crate::compute::stats::MEASURE);
+    if measured {
+        // The measure function may tell min-content from max-content space on an axis it is not
+        // given a size for.
+        let width = measure_known.width.is_none() && !available_for_measure.width.is_definite();
+        let height = measure_known.height.is_none() && !available_for_measure.height.is_definite();
+        if width | height {
+            let height = height && !tree.measure_ignores_available_height();
+            tree.note_observed(crate::compute::OBSERVED_WIDTH * width as u8 | crate::compute::OBSERVED_HEIGHT * height as u8);
+        }
+    }
     let measured = measure(tree, MeasureInput { known_dimensions: measure_known, available_space: available_for_measure });
     let measured_size = measured.size;
 

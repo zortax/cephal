@@ -96,12 +96,11 @@ pub fn compute_child_layout<T: LayoutTree + CacheAccess + ?Sized>(
     normalize(&mut inputs, meta);
     let generation = tree.generation();
     let key = crate::tree::cache::CacheKey::from_input(&inputs);
-    if let Some((hit, observed, stored)) = tree.cache(node).lookup(&key, inputs.run_mode, generation) {
+    if let Some((hit, observed)) = tree.cache(node).lookup(&key, inputs.run_mode, generation) {
         #[cfg(feature = "stats")]
         stats::bump(if inputs.run_mode == RunMode::PerformLayout { &stats::HIT_FINAL } else { &stats::HIT_SIZE });
         #[cfg(feature = "verify-cache")]
-        verify::hit(tree, node, raw_inputs, stored, &hit);
-        let _ = stored;
+        verify::hit(tree, node, raw_inputs, key, &hit);
         tree.note_observed(observed);
         tree.observe_answer(node, &inputs, &hit, AnswerSource::Cached);
         return verify::poison(&inputs, hit);
@@ -174,11 +173,11 @@ pub mod verify {
         tree: &mut T,
         node: NodeId,
         raw: LayoutInput,
-        stored: crate::tree::cache::CacheKey,
+        key: crate::tree::cache::CacheKey,
         answer: &LayoutOutput,
     ) {
         // Hits for the very question that was stored need no check; the scheduler covers those.
-        if crate::tree::cache::CacheKey::from_input(&raw) == stored {
+        if tree.cache(node).stored_key(&key, raw.run_mode) == Some(crate::tree::cache::CacheKey::from_input(&raw)) {
             return;
         }
         // Answers inside a shared block formatting context depend on it; it is not at hand here.
@@ -235,38 +234,36 @@ pub fn normalize(inputs: &mut LayoutInput, meta: crate::tree::QueryMeta) {
     if !meta.dependency.height {
         inputs.parent_size.height = None;
     }
+    let kind = meta.kind;
     let known = inputs.known_dimensions;
-    let definite = inputs.known_dimensions_are_definite;
-    let avail = &mut inputs.available_space;
-    for (known, definite, avail) in
-        [(known.width, definite.width, &mut avail.width), (known.height, definite.height, &mut avail.height)]
-    {
-        if let Some(k) = known {
-            *avail = match meta.kind {
-                NodeKind::Leaf { .. } | NodeKind::Block | NodeKind::Grid => AvailableSpace::Definite(k),
-                NodeKind::Flex { .. } if !definite && !avail.is_definite() => AvailableSpace::MaxContent,
-                NodeKind::Flex { .. } => AvailableSpace::Definite(k),
-                NodeKind::Opaque if definite => AvailableSpace::Definite(k),
-                NodeKind::Opaque => *avail,
-            };
+    #[inline(always)]
+    fn known_axis(kind: NodeKind, known: f32, definite: bool, avail: AvailableSpace) -> AvailableSpace {
+        if definite || (kind != NodeKind::Opaque && !(kind.is_flex() && !avail.is_definite())) {
+            AvailableSpace::Definite(known)
+        } else if kind.is_flex() {
+            AvailableSpace::MaxContent
+        } else {
+            avail
         }
     }
-    match meta.kind {
-        NodeKind::Leaf { ignores_available_height: true } | NodeKind::Block if known.height.is_none() => {
-            inputs.available_space.height = AvailableSpace::MaxContent;
+    if let Some(w) = known.width {
+        inputs.available_space.width = known_axis(kind, w, inputs.known_dimensions_are_definite.width, inputs.available_space.width);
+    }
+    if let Some(h) = known.height {
+        inputs.available_space.height = known_axis(kind, h, inputs.known_dimensions_are_definite.height, inputs.available_space.height);
+    }
+    if kind == NodeKind::Opaque || kind == NodeKind::Leaf {
+        return;
+    }
+    let avail = &mut inputs.available_space;
+    match kind {
+        NodeKind::LeafIgnoringHeight | NodeKind::Block if known.height.is_none() => avail.height = AvailableSpace::MaxContent,
+        NodeKind::Grid if avail.height == AvailableSpace::MinContent => avail.height = AvailableSpace::MaxContent,
+        NodeKind::FlexRowSingleLine if known.width.is_none() && avail.width.is_definite() => {
+            avail.width = AvailableSpace::Definite(0.0);
         }
-        NodeKind::Grid if inputs.available_space.height == AvailableSpace::MinContent => {
-            inputs.available_space.height = AvailableSpace::MaxContent;
-        }
-        NodeKind::Flex { row, single_line: true } => {
-            let (main_known, main_avail) = if row {
-                (known.width, &mut inputs.available_space.width)
-            } else {
-                (known.height, &mut inputs.available_space.height)
-            };
-            if main_known.is_none() && main_avail.is_definite() {
-                *main_avail = AvailableSpace::Definite(0.0);
-            }
+        NodeKind::FlexColumnSingleLine if known.height.is_none() && avail.height.is_definite() => {
+            avail.height = AvailableSpace::Definite(0.0);
         }
         _ => {}
     }

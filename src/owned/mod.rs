@@ -472,7 +472,11 @@ impl<Ctx> Tree<Ctx> {
             cheap_leaf: f & 0x80 == 0 && leaf,
             dependency: Size { width: f & 0x20 != 0, height: f & 0x40 != 0 },
             kind: if leaf {
-                crate::tree::NodeKind::Leaf { ignores_available_height: self.measure_ignores_available_height }
+                if self.measure_ignores_available_height {
+                    crate::tree::NodeKind::LeafIgnoringHeight
+                } else {
+                    crate::tree::NodeKind::Leaf
+                }
             } else {
                 self.styles.kind(self.style_ids[i])
             },

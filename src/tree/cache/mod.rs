@@ -62,22 +62,22 @@ impl NodeCache {
     /// [`Self::get`] with the key already built.
     #[inline]
     pub fn get_keyed(&self, key: &CacheKey, run_mode: RunMode, generation: u32) -> Option<LayoutOutput> {
-        self.lookup(key, run_mode, generation).map(|(output, _, _)| output)
+        self.lookup(key, run_mode, generation).map(|(output, _)| output)
     }
 
-    /// [`Self::get_keyed`], also returning the entry's observed axes and its key.
+    /// [`Self::get_keyed`], also returning the entry's observed axes.
     ///
     /// A size entry answers a question that differs only between min-content and max-content
     /// available space on axes the answer never told apart.
     #[inline]
-    pub fn lookup(&self, key: &CacheKey, run_mode: RunMode, generation: u32) -> Option<(LayoutOutput, u8, CacheKey)> {
+    pub fn lookup(&self, key: &CacheKey, run_mode: RunMode, generation: u32) -> Option<(LayoutOutput, u8)> {
         let c = self.0.as_deref()?;
         match run_mode {
             RunMode::PerformLayout => {
                 let e = c.final_entry.as_ref()?;
                 if e.key == *key {
                     e.touch(generation);
-                    Some((e.output, e.observed, e.key))
+                    Some((e.output, e.observed))
                 } else {
                     None
                 }
@@ -89,7 +89,7 @@ impl NodeCache {
                         && e.key.answers_unobserved(key, e.observed)
                     {
                         e.touch(generation);
-                        return Some((e.output, e.observed, e.key));
+                        return Some((e.output, e.observed));
                     }
                 }
                 #[cfg(feature = "stats")]
@@ -110,6 +110,16 @@ impl NodeCache {
             RunMode::PerformLayout => c.final_entry.as_ref().is_some_and(|e| e.key == key),
             RunMode::ComputeSize => c.size_entries().any(|e| e.as_ref().is_some_and(|e| e.key.answers_unobserved(&key, e.observed))),
             RunMode::PerformHiddenLayout => false,
+        }
+    }
+
+    /// The key of the entry that answers `key`, without marking it live.
+    pub fn stored_key(&self, key: &CacheKey, run_mode: RunMode) -> Option<CacheKey> {
+        let c = self.0.as_deref()?;
+        match run_mode {
+            RunMode::PerformLayout => c.final_entry.as_ref().filter(|e| e.key == *key).map(|e| e.key),
+            RunMode::ComputeSize => c.size_entries().flatten().find(|e| e.key.answers_unobserved(key, e.observed)).map(|e| e.key),
+            RunMode::PerformHiddenLayout => None,
         }
     }
 

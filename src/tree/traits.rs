@@ -72,17 +72,22 @@ pub struct QueryMeta {
 /// Which algorithm answers a node's questions, so [`crate::compute::normalize`] can drop inputs it
 /// never reads.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[repr(u8)]
 pub enum NodeKind {
     /// Unknown; questions are cached as asked.
     #[default]
     Opaque,
-    /// The default leaf algorithm around [`LayoutTree::measure`]; `ignores_available_height` when
-    /// the measurement never depends on the available height.
-    Leaf { ignores_available_height: bool },
+    /// The default leaf algorithm around [`LayoutTree::measure`].
+    Leaf,
+    /// [`Self::Leaf`] whose measurement never depends on the available height.
+    LeafIgnoringHeight,
     /// Block flow with children.
     Block,
-    /// A flex container with children; `single_line` for `nowrap`.
-    Flex { row: bool, single_line: bool },
+    /// A flex container with children; `SingleLine` for `nowrap`.
+    FlexRow,
+    FlexColumn,
+    FlexRowSingleLine,
+    FlexColumnSingleLine,
     /// A grid container with children.
     Grid,
 }
@@ -93,11 +98,21 @@ impl NodeKind {
     pub fn of_container(style: &Style) -> Self {
         use crate::style::Display;
         match style.display {
-            Display::Flex => Self::Flex { row: style.flex_direction.is_row(), single_line: !style.flex_wrap.is_multi_line() },
+            Display::Flex => match (style.flex_direction.is_row(), style.flex_wrap.is_multi_line()) {
+                (true, true) => Self::FlexRow,
+                (false, true) => Self::FlexColumn,
+                (true, false) => Self::FlexRowSingleLine,
+                (false, false) => Self::FlexColumnSingleLine,
+            },
             Display::Grid => Self::Grid,
             Display::None => Self::Opaque,
             _ => Self::Block,
         }
+    }
+
+    #[inline]
+    pub fn is_flex(self) -> bool {
+        matches!(self, Self::FlexRow | Self::FlexColumn | Self::FlexRowSingleLine | Self::FlexColumnSingleLine)
     }
 }
 
