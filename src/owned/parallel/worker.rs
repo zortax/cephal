@@ -25,7 +25,8 @@ pub(super) struct Worker<'a, Ctx, F> {
 impl<'a, Ctx: Send + Sync, F> Worker<'a, Ctx, F> {
     pub fn new(tree: &'a Arc<Tree<Ctx>>, measure: &'a Arc<F>, config: Config, pool: &'a Pool, nodes: usize) -> Self {
         let mut log = Log::default();
-        log.touched.reserve(nodes);
+        // Workers lay out cold subtrees, whose nodes have no layout yet.
+        log.fresh.reserve(nodes);
         Self { tree, measure, config, pool, log, speculation: 0, observed: 0 }
     }
 
@@ -124,13 +125,16 @@ impl<Ctx: Send + Sync + 'static, F: SyncMeasureFn<Ctx>> LayoutTree for Worker<'_
         let i = self.index(node);
         // SAFETY: `node` lies in this worker's subtree (see `column`).
         let (slot, touched_gen) = unsafe { (self.tree.unrounded.slot(i), self.tree.touched_gen.slot(i)) };
-        if *slot != *layout {
-            if *touched_gen != self.tree.generation {
-                *touched_gen = self.tree.generation;
-                self.log.touched.push((node, *slot));
-            }
-            *slot = *layout;
+        // As `Tree::write_unrounded`.
+        if *touched_gen == self.tree.generation {
+        } else if *touched_gen == 0 {
+            *touched_gen = self.tree.generation;
+            self.log.fresh.push(i as u32);
+        } else if *slot != *layout {
+            *touched_gen = self.tree.generation;
+            self.log.touched.push((node, *slot));
         }
+        *slot = *layout;
     }
     fn unrounded_layout(&self, node: NodeId) -> Option<Layout> {
         Some(*self.tree.unrounded.get(self.index(node)))

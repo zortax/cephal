@@ -61,6 +61,8 @@ pub struct Tree<Ctx = ()> {
     detailed_grid_wanted: bool,
     /// Nodes written during the current layout call, with their layout before it.
     touched: Vec<(NodeId, Layout)>,
+    /// Nodes written during the current layout call that had no layout before it (a zero one).
+    fresh: Vec<u32>,
     /// Generation in which each node was last written.
     touched_gen: column::Column<u32>,
     /// Nodes whose unrounded layout changed in the last layout call.
@@ -110,6 +112,7 @@ impl<Ctx> Tree<Ctx> {
             measure_ignores_available_height: false,
             detailed_grid_wanted: false,
             touched: Vec::new(),
+            fresh: Vec::new(),
             touched_gen: column::Column::with_capacity(n),
             changed: Vec::new(),
             detailed_grid: FxHashMap::default(),
@@ -367,6 +370,7 @@ impl<Ctx> Tree<Ctx> {
         self.flags.clear();
         self.touched_gen.clear();
         self.touched.clear();
+        self.fresh.clear();
         self.unrounded.clear();
         self.rounded.clear();
         self.abs_origin.clear();
@@ -396,8 +400,12 @@ impl<Ctx> Tree<Ctx> {
         for l in self.unrounded.iter_mut() {
             *l = Layout::ZERO;
         }
+        for g in self.touched_gen.iter_mut() {
+            *g = 0;
+        }
         self.rounded_valid = false;
         self.touched.clear();
+        self.fresh.clear();
         self.changed.clear();
         self.detailed_grid.clear();
         self.absolute_contexts.clear();
@@ -437,6 +445,7 @@ impl<Ctx> Tree<Ctx> {
             measure_ignores_available_height: self.measure_ignores_available_height,
             detailed_grid_wanted: self.detailed_grid_wanted,
             touched: Vec::new(),
+            fresh: Vec::new(),
             touched_gen: vec![0; self.touched_gen.len()].into(),
             changed: Vec::new(),
             detailed_grid: FxHashMap::default(),
@@ -681,6 +690,11 @@ impl<Ctx> Tree<Ctx> {
                 self.changed.push(node);
             }
         }
+        for i in self.fresh.drain(..) {
+            if self.unrounded[i as usize] != Layout::ZERO {
+                self.changed.push(id::make(i, self.generations[i as usize]));
+            }
+        }
         if self.use_rounding {
             if !self.rounded_valid {
                 self.round_all(root);
@@ -820,13 +834,19 @@ impl<Ctx> Tree<Ctx> {
     #[inline]
     /// Stores a layout, remembering the previous value for `changed()`.
     fn write_unrounded(&mut self, i: usize, layout: &Layout) {
-        if self.unrounded[i] != *layout {
-            if self.touched_gen[i] != self.generation {
-                self.touched_gen[i] = self.generation;
-                self.touched.push((id::make(i as u32, self.generations[i]), self.unrounded[i]));
-            }
-            self.unrounded[i] = *layout;
+        let generation = self.touched_gen[i];
+        if generation == self.generation {
+            // Recorded by an earlier write this call; `finish_frame` compares.
+        } else if generation == 0 {
+            // No layout yet: the one before this call is zero, nothing to copy.
+            self.touched_gen[i] = self.generation;
+            self.fresh.push(i as u32);
+        } else if self.unrounded[i] != *layout {
+            self.touched_gen[i] = self.generation;
+            self.touched.push((id::make(i as u32, self.generations[i]), self.unrounded[i]));
         }
+        // Written even when equal: equal layouts may differ in the sign of a zero.
+        self.unrounded[i] = *layout;
     }
 
     fn index(&self, node: NodeId) -> usize {

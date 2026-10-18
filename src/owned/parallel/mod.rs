@@ -268,6 +268,8 @@ fn cold_groups<Ctx>(tree: &Tree<Ctx>, requests: &[ChildRequest]) -> Vec<Group> {
 pub struct Log {
     /// Nodes whose layout the worker rewrote, with the layout before the frame.
     pub(super) touched: Vec<(NodeId, Layout)>,
+    /// Indices of nodes written that had no layout before the frame.
+    pub(super) fresh: Vec<u32>,
     pub(super) detailed: Vec<(u32, DetailedGridInfo)>,
     pub(super) absolute: Vec<(u32, AbsoluteContext)>,
     /// Outputs of the batch's requests, by request index; the caller must use these rather than
@@ -287,6 +289,7 @@ impl Log {
     /// Folds a nested batch's results in, as if this worker had computed them.
     fn absorb(&mut self, other: Log) {
         self.touched.extend(other.touched);
+        self.fresh.extend(other.fresh);
         self.detailed.extend(other.detailed);
         self.absolute.extend(other.absolute);
     }
@@ -325,6 +328,7 @@ impl<Ctx> Tree<Ctx> {
     /// Applies what a worker could not write directly.
     pub(super) fn commit(&mut self, log: Log) {
         self.touched.extend(log.touched);
+        self.fresh.extend(log.fresh);
         for (i, info) in log.detailed {
             self.detailed_grid.insert(i, info);
         }
