@@ -47,6 +47,7 @@ fn avail_from_bits(b: u32) -> AvailableSpace {
 }
 
 impl CacheKey {
+    #[inline]
     pub fn from_input(i: &LayoutInput) -> Self {
         let mut flags = 0u16;
         let known = [
