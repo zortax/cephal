@@ -189,11 +189,11 @@ pub(super) fn final_layout_pass<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized
     let outputs = questions.answers();
     if c.is_wrap_reverse {
         for line in lines.iter().rev() {
-            calculate_layout_line(tree, line, items, &outputs, &mut total_offset_cross, &mut overflow_rect, c);
+            calculate_layout_line(tree, line, items, outputs, &mut total_offset_cross, &mut overflow_rect, c);
         }
     } else {
         for line in lines.iter() {
-            calculate_layout_line(tree, line, items, &outputs, &mut total_offset_cross, &mut overflow_rect, c);
+            calculate_layout_line(tree, line, items, outputs, &mut total_offset_cross, &mut overflow_rect, c);
         }
     }
     if c.is_scroll_container {

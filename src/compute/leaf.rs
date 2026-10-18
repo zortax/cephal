@@ -206,7 +206,7 @@ fn compute_leaf_layout_with<T: LayoutTree + ?Sized>(
         let height = measure_known.height.is_none() && !available_for_measure.height.is_definite();
         if width | height {
             let height = height && !tree.measure_ignores_available_height();
-            tree.note_observed(crate::compute::OBSERVED_WIDTH * width as u8 | crate::compute::OBSERVED_HEIGHT * height as u8);
+            tree.note_observed((crate::compute::OBSERVED_WIDTH * width as u8) | (crate::compute::OBSERVED_HEIGHT * height as u8));
         }
     }
     let measured = measure(tree, MeasureInput { known_dimensions: measure_known, available_space: available_for_measure });

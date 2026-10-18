@@ -226,7 +226,7 @@ fn build(name: &str, t: &mut Tree<Text>) -> NodeId {
             s.display = Display::Grid;
             let g = s.grid_mut();
             let column = |i: usize| match base {
-                "grid_mixed" if i % 3 == 0 => TrackSizingFunction::fr(1.0),
+                "grid_mixed" if i.is_multiple_of(3) => TrackSizingFunction::fr(1.0),
                 "grid_fixed" => TrackSizingFunction::length(10.0),
                 _ => TrackSizingFunction::AUTO,
             };
