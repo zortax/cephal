@@ -12,11 +12,12 @@ use crate::tree::{CacheAccess, ChildRequest, LayoutInput, LayoutOutput, LayoutTr
 
 /// Per-item state carried across the batch of cross-size questions.
 struct CrossPending {
+    item: usize,
     min: Option<f32>,
     max: Option<f32>,
     padding_border_sum: f32,
-    /// The cross size when the style fixes it, else the batch index of its measurement.
-    known: Result<f32, usize>,
+    /// Index of the measurement among the batch's questions.
+    question: usize,
 }
 
 /// Whether the line stretches `child` to its own cross size, as `determine_used_cross_size` decides.
@@ -40,14 +41,39 @@ pub(super) fn determine_hypothetical_cross_size<D: FlexDir, T: LayoutTree + Cach
     let dir = c.dir;
     let read_cross = |out: &LayoutOutput| out.size.get(dir.cross_axis());
     let mut questions: Questions<f32> = Questions::new(tree, items.len());
-    let mut pending: Scratch<CrossPending> = Scratch::with_capacity(items.len());
-    for child in items.iter() {
+    // Items whose cross size is measured; the rest are set as they are found.
+    let mut pending: Scratch<CrossPending> = Scratch::take();
+    for (index, child) in items.iter_mut().enumerate() {
         let padding_border_sum = (child.padding + child.border).cross_axis_sum(dir);
-        let child_known_main = AvailableSpace::Definite(c.container_size.main(dir));
         let transferred_min_cross = child.min_size.maybe_apply_aspect_ratio(child.aspect_ratio).cross(dir);
         let transferred_max_cross = child.max_size.maybe_apply_aspect_ratio(child.aspect_ratio).cross(dir);
         let child_cross =
             child.size.cross(dir).maybe_clamp(transferred_min_cross, transferred_max_cross).maybe_max(padding_border_sum);
+        let known = child_cross.or_else(|| {
+            // A stretched item in a column whose width was found first takes that width, as it
+            // does in the final layout, and needs no measurement.
+            let stretched_cross = c
+                .indefinite_stretch_cross
+                .filter(|_| {
+                    child.align_self == AlignSelf::STRETCH
+                        && !child.margin_is_auto.cross_start(dir)
+                        && !child.margin_is_auto.cross_end(dir)
+                        && child.size_style.cross(dir).is_auto()
+                })
+                .map(|cross| {
+                    (cross - child.margin.cross_axis_sum(dir))
+                        .maybe_clamp(transferred_min_cross, transferred_max_cross)
+                        .max(padding_border_sum)
+                });
+            let unread = fixed_line_cross.is_some() && is_stretched(child, dir) && !child.participates_in_baseline_alignment(dir);
+            stretched_cross.or(unread.then_some(f32::NAN))
+        });
+        if let Some(child_inner_cross) = known {
+            child.hypothetical_inner_size.set_cross(dir, child_inner_cross);
+            child.hypothetical_outer_size.set_cross(dir, child_inner_cross + child.margin.cross_axis_sum(dir));
+            continue;
+        }
+        let child_known_main = AvailableSpace::Definite(c.container_size.main(dir));
         let child_available_cross = available_space
             .cross(dir)
             .map_definite(|val| c.divided_cross_space(val))
@@ -60,60 +86,34 @@ pub(super) fn determine_hypothetical_cross_size<D: FlexDir, T: LayoutTree + Cach
                 Some(SizingKeywordResolution::Measure(a)) => a,
                 _ => child_available_cross,
             };
-        // A stretched item in a column whose width was found first takes that width, as it does in
-        // the final layout, and needs no measurement.
-        let stretched_cross = c
-            .indefinite_stretch_cross
-            .filter(|_| {
-                child.align_self == AlignSelf::STRETCH
-                    && !child.margin_is_auto.cross_start(dir)
-                    && !child.margin_is_auto.cross_end(dir)
-                    && child.size_style.cross(dir).is_auto()
-            })
-            .map(|cross| {
-                (cross - child.margin.cross_axis_sum(dir))
-                    .maybe_clamp(transferred_min_cross, transferred_max_cross)
-                    .max(padding_border_sum)
-            });
-        let unread = fixed_line_cross.is_some()
-            && child_cross.is_none()
-            && is_stretched(child, dir)
-            && !child.participates_in_baseline_alignment(dir);
-        let known = match child_cross.or(stretched_cross).or(unread.then_some(f32::NAN)) {
-            Some(v) => Ok(v),
-            None => {
-                let request = ChildRequest {
-                    node: child.node,
-                    input: LayoutInput {
-                        run_mode: RunMode::ComputeSize,
-                        sizing_mode: SizingMode::ContentSize,
-                        axis: dir.cross_axis().into(),
-                        known_dimensions: Size {
-                            width: if c.is_row { Some(child.target_size.width) } else { child_cross },
-                            height: if c.is_row { child_cross } else { Some(child.target_size.height) },
-                        },
-                        known_dimensions_are_definite: item_known_dimension_definiteness(c, child),
-                        parent_size: c.node_inner_size,
-                        available_space: Size {
-                            width: if c.is_row { child_known_main } else { child_available_cross },
-                            height: if c.is_row { child_available_cross } else { child_known_main },
-                        },
-                        vertical_margins_are_collapsible: Line::FALSE,
-                        context_key: 0,
-                    },
-                };
-                Err(questions.ask(tree, request, read_cross))
-            }
+        let request = ChildRequest {
+            node: child.node,
+            input: LayoutInput {
+                run_mode: RunMode::ComputeSize,
+                sizing_mode: SizingMode::ContentSize,
+                axis: dir.cross_axis().into(),
+                known_dimensions: Size {
+                    width: if c.is_row { Some(child.target_size.width) } else { None },
+                    height: if c.is_row { None } else { Some(child.target_size.height) },
+                },
+                known_dimensions_are_definite: item_known_dimension_definiteness(c, child),
+                parent_size: c.node_inner_size,
+                available_space: Size {
+                    width: if c.is_row { child_known_main } else { child_available_cross },
+                    height: if c.is_row { child_available_cross } else { child_known_main },
+                },
+                vertical_margins_are_collapsible: Line::FALSE,
+                context_key: 0,
+            },
         };
-        pending.push(CrossPending { min: transferred_min_cross, max: transferred_max_cross, padding_border_sum, known });
+        let question = questions.ask(tree, request, read_cross);
+        pending.push(CrossPending { item: index, min: transferred_min_cross, max: transferred_max_cross, padding_border_sum, question });
     }
     // Each item's cross size depends only on its own target main size.
     questions.finish(tree, read_cross);
-    for (child, p) in items.iter_mut().zip(pending.iter()) {
-        let child_inner_cross = match p.known {
-            Ok(v) => v,
-            Err(i) => questions.get(i).maybe_clamp(p.min, p.max).max(p.padding_border_sum),
-        };
+    for p in pending.iter() {
+        let child = &mut items[p.item];
+        let child_inner_cross = questions.get(p.question).maybe_clamp(p.min, p.max).max(p.padding_border_sum);
         child.hypothetical_inner_size.set_cross(dir, child_inner_cross);
         child.hypothetical_outer_size.set_cross(dir, child_inner_cross + child.margin.cross_axis_sum(dir));
     }
