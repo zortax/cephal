@@ -41,6 +41,9 @@ pub struct Tree<Ctx = ()> {
     /// Traversal stacks of the rounding passes, kept between frames.
     round_stack: Vec<(usize, f32, f32, bool)>,
     round_pending: Vec<u32>,
+    /// Nodes attached since the last rounding pass; their absolute origin may have moved even
+    /// when their own layout did not.
+    attached: Vec<NodeId>,
     caches: column::Column<NodeCache>,
     context_slot: Vec<u32>,
     generations: Vec<u16>,
@@ -91,6 +94,7 @@ impl<Ctx> Tree<Ctx> {
             rounded_valid: false,
             round_stack: Vec::new(),
             round_pending: Vec::new(),
+            attached: Vec::new(),
             caches: column::Column::with_capacity(n),
             context_slot: Vec::with_capacity(n),
             generations: Vec::with_capacity(n),
@@ -275,6 +279,9 @@ impl<Ctx> Tree<Ctx> {
         self.links[p].child_count += 1;
         let depth = self.links[p].depth + 1;
         self.set_depth(c, depth);
+        if self.rounded_valid {
+            self.attached.push(child);
+        }
         self.mark_dirty_index(p);
     }
 
@@ -414,6 +421,7 @@ impl<Ctx> Tree<Ctx> {
             rounded_valid: false,
             round_stack: Vec::new(),
             round_pending: Vec::new(),
+            attached: Vec::new(),
             caches: (0..self.caches.len()).map(|_| NodeCache::new()).collect::<Vec<_>>().into(),
             context_slot: self.context_slot.clone(),
             generations: self.generations.clone(),
@@ -676,10 +684,14 @@ impl<Ctx> Tree<Ctx> {
         if self.use_rounding {
             if !self.rounded_valid {
                 self.round_all(root);
-            } else if !self.changed.is_empty() {
+            } else if !self.changed.is_empty() || !self.attached.is_empty() {
                 self.round_changed();
             }
+        } else {
+            // Nothing tracks what moved meanwhile; rounding again starts over.
+            self.rounded_valid = false;
         }
+        self.attached.clear();
         let _ = root_query_changed;
     }
 
@@ -721,7 +733,11 @@ impl<Ctx> Tree<Ctx> {
     /// nothing else is visited, so a contained edit costs its own ancestor chain only.
     fn round_changed(&mut self) {
         let mut pending = core::mem::take(&mut self.round_pending);
-        for &node in &self.changed {
+        let attached = self.attached.iter().filter(|&&n| {
+            let (index, generation) = id::split(n);
+            self.generations[index as usize] == generation
+        });
+        for &node in self.changed.iter().chain(attached) {
             let (index, _) = id::split(node);
             let mut i = index;
             loop {
