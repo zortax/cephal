@@ -55,8 +55,15 @@ pub(super) fn generate_item_list<T: LayoutTree + ?Sized>(
             continue;
         }
         let aspect_ratio = style.aspect_ratio;
-        let padding = style.padding.map(|p| p.resolve_or_zero(node_inner_size.width, &calc));
-        let border = style.border.map(|b| b.resolve_or_zero(node_inner_size.width, &calc));
+        // Lengths that resolve against nothing are the same against any basis.
+        let plan = tree.style_plan(child);
+        let (padding, border) = match plan {
+            Some(p) => (p.padding, p.border),
+            None => (
+                style.padding.map(|p| p.resolve_or_zero(node_inner_size.width, &calc)),
+                style.border.map(|b| b.resolve_or_zero(node_inner_size.width, &calc)),
+            ),
+        };
         let pb_sum = (padding + border).sum_axes();
         let box_sizing_adjustment = if style.box_sizing == BoxSizing::ContentBox { pb_sum } else { Size::ZERO };
         let position = style.position;
@@ -71,6 +78,10 @@ pub(super) fn generate_item_list<T: LayoutTree + ?Sized>(
             && !style.is_scroll_container()
             && !contain.establishes_independent_formatting_context();
         let resolve = |s: Size<crate::style::Length>| super::resolve_size(s, node_inner_size, &calc);
+        let (size, min_size, max_size) = match plan {
+            Some(p) => (p.size, p.min_size, p.max_size),
+            None => (resolve(style.size.map(|v| v.raw())), resolve(style.min_size.map(|v| v.raw())), resolve(style.max_size.map(|v| v.raw()))),
+        };
         items.push(BlockItem {
             node: child,
             order,
@@ -80,13 +91,9 @@ pub(super) fn generate_item_list<T: LayoutTree + ?Sized>(
             float,
             clear: style.clear,
             size_style: style.size,
-            size: resolve(style.size.map(|v| v.raw())).maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment),
-            min_size: resolve(style.min_size.map(|v| v.raw()))
-                .maybe_apply_aspect_ratio(aspect_ratio)
-                .maybe_add(box_sizing_adjustment),
-            max_size: resolve(style.max_size.map(|v| v.raw()))
-                .maybe_apply_aspect_ratio(aspect_ratio)
-                .maybe_add(box_sizing_adjustment),
+            size: size.maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment),
+            min_size: min_size.maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment),
+            max_size: max_size.maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment),
             overflow,
             contain,
             scrollbar_width: style.scrollbar_width,

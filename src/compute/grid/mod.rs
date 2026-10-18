@@ -410,13 +410,17 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
     let mut absolute_ctx: Option<AbsoluteGridContext> = None;
     let mut contributions: Vec<(NodeId, Rect<f32>)> = Vec::new();
     let mut order = items.len() as u32;
-    let others: Vec<NodeId> = tree
-        .children(node)
-        .filter(|c| {
-            let s = tree.style(*c);
-            s.generates_no_box() || s.position.is_out_of_flow()
-        })
-        .collect();
+    // Every child not placed as an item is hidden or out of flow; usually there is none.
+    let others: Vec<NodeId> = if items.len() < tree.child_count(node) {
+        tree.children(node)
+            .filter(|c| {
+                let s = tree.style(*c);
+                s.generates_no_box() || s.position.is_out_of_flow()
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
     for child in others {
         let child_style = tree.style(child);
         if child_style.generates_no_box() {
