@@ -52,6 +52,23 @@ pub mod stats {
     }
 }
 
+/// Width bit of [`LayoutTree::take_observed`]: the answer told min-content from max-content
+/// available width.
+pub const OBSERVED_WIDTH: u8 = 0b01;
+/// Height bit of [`LayoutTree::take_observed`].
+pub const OBSERVED_HEIGHT: u8 = 0b10;
+/// Both axes; what trees that do not track observation report.
+pub const OBSERVED_ALL: u8 = OBSERVED_WIDTH | OBSERVED_HEIGHT;
+
+/// The observation bit of `axis`.
+#[inline]
+pub fn observed_bit(axis: crate::geometry::AbsoluteAxis) -> u8 {
+    match axis {
+        crate::geometry::AbsoluteAxis::Horizontal => OBSERVED_WIDTH,
+        crate::geometry::AbsoluteAxis::Vertical => OBSERVED_HEIGHT,
+    }
+}
+
 /// Lays out `node` for `inputs`, serving from the cache when the same question was answered before.
 pub fn compute_child_layout<T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
@@ -79,11 +96,13 @@ pub fn compute_child_layout<T: LayoutTree + CacheAccess + ?Sized>(
     normalize(&mut inputs, meta);
     let generation = tree.generation();
     let key = crate::tree::cache::CacheKey::from_input(&inputs);
-    if let Some(hit) = tree.cache(node).get_keyed(&key, inputs.run_mode, generation) {
+    if let Some((hit, observed, stored)) = tree.cache(node).lookup(&key, inputs.run_mode, generation) {
         #[cfg(feature = "stats")]
         stats::bump(if inputs.run_mode == RunMode::PerformLayout { &stats::HIT_FINAL } else { &stats::HIT_SIZE });
         #[cfg(feature = "verify-cache")]
-        verify::hit(tree, node, raw_inputs, inputs, &hit);
+        verify::hit(tree, node, raw_inputs, stored, &hit);
+        let _ = stored;
+        tree.note_observed(observed);
         tree.observe_answer(node, &inputs, &hit, AnswerSource::Cached);
         return verify::poison(&inputs, hit);
     }
@@ -97,7 +116,11 @@ pub fn compute_child_layout<T: LayoutTree + CacheAccess + ?Sized>(
             stats::bump(if inputs.axis == RequestedAxis::Both { &stats::RUN_SIZE_BOTH } else { &stats::RUN_SIZE_AXIS });
         }
     }
+    // What this answer observed, apart from what the caller's other answers did.
+    let outer = tree.take_observed();
     let output = compute_uncached(tree, node, inputs, block_ctx);
+    let observed = tree.take_observed();
+    tree.note_observed(outer | observed);
     #[cfg(feature = "stats")]
     if inputs.run_mode == RunMode::ComputeSize
         && tree.cache(node).entries().iter().any(|(i, o)| i.run_mode == RunMode::ComputeSize && i.axis == inputs.axis && *o == output)
@@ -105,7 +128,7 @@ pub fn compute_child_layout<T: LayoutTree + CacheAccess + ?Sized>(
         stats::bump(&stats::COLLISION);
     }
     if tree.speculation() == 0 {
-        tree.cache_mut(node).store_keyed(key, inputs.run_mode, output, generation);
+        tree.cache_mut(node).store_observed(key, inputs.run_mode, output, generation, observed);
     }
     tree.observe_answer(node, &inputs, &output, AnswerSource::Computed);
     verify::poison(&inputs, output)
@@ -136,7 +159,10 @@ pub mod verify {
     /// Recomputes `raw` speculatively and asserts it matches `answer` bit for bit.
     #[cfg(feature = "verify-cache")]
     pub fn shortcut<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, node: NodeId, raw: LayoutInput, answer: &LayoutOutput, what: &str) {
+        let outer = tree.take_observed();
         let full = speculate(tree, |tree| compute_uncached(tree, node, raw, None));
+        tree.take_observed();
+        tree.note_observed(outer);
         assert!(
             same_bits(&full, answer, raw.axis, raw.run_mode),
             "{what}: shortcut answer differs for {node:?}\n question: {raw:?}\n shortcut: {answer:?}\n full:     {full:?}"
@@ -144,9 +170,15 @@ pub mod verify {
     }
 
     #[cfg(feature = "verify-cache")]
-    pub(super) fn hit<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, node: NodeId, raw: LayoutInput, normalized: LayoutInput, answer: &LayoutOutput) {
+    pub(super) fn hit<T: LayoutTree + CacheAccess + ?Sized>(
+        tree: &mut T,
+        node: NodeId,
+        raw: LayoutInput,
+        stored: crate::tree::cache::CacheKey,
+        answer: &LayoutOutput,
+    ) {
         // Hits for the very question that was stored need no check; the scheduler covers those.
-        if crate::tree::cache::CacheKey::from_input(&raw) == crate::tree::cache::CacheKey::from_input(&normalized) {
+        if crate::tree::cache::CacheKey::from_input(&raw) == stored {
             return;
         }
         // Answers inside a shared block formatting context depend on it; it is not at hand here.
@@ -184,24 +216,59 @@ pub mod verify {
 /// Canonicalises a question so equivalent questions share a cache entry.
 ///
 /// A parent size the node never resolves against cannot change the answer, and every algorithm
-/// sizes against a definite known dimension in place of the available space on that axis.
+/// sizes against a definite known dimension in place of the available space on that axis. Beyond
+/// that, [`NodeKind`](crate::tree::NodeKind) says which available space the node's algorithm never
+/// reads:
+///
+/// - the default leaf reads none on an axis it knows, and none vertically when the measure
+///   function ignores the available height;
+/// - block flow never reads the available height, and the width only when it does not know it;
+/// - grid reads none on an axis it knows, and treats a min-content height as max-content;
+/// - flex, on an axis it knows, only asks whether the space is definite; a single-line container
+///   whose main size is unknown never reads the definite main space's value.
 #[inline]
 pub fn normalize(inputs: &mut LayoutInput, meta: crate::tree::QueryMeta) {
+    use crate::tree::NodeKind;
     if !meta.dependency.width {
         inputs.parent_size.width = None;
     }
     if !meta.dependency.height {
         inputs.parent_size.height = None;
     }
-    if let Some(w) = inputs.known_dimensions.width
-        && inputs.known_dimensions_are_definite.width
+    let known = inputs.known_dimensions;
+    let definite = inputs.known_dimensions_are_definite;
+    let avail = &mut inputs.available_space;
+    for (known, definite, avail) in
+        [(known.width, definite.width, &mut avail.width), (known.height, definite.height, &mut avail.height)]
     {
-        inputs.available_space.width = AvailableSpace::Definite(w);
+        if let Some(k) = known {
+            *avail = match meta.kind {
+                NodeKind::Leaf { .. } | NodeKind::Block | NodeKind::Grid => AvailableSpace::Definite(k),
+                NodeKind::Flex { .. } if !definite && !avail.is_definite() => AvailableSpace::MaxContent,
+                NodeKind::Flex { .. } => AvailableSpace::Definite(k),
+                NodeKind::Opaque if definite => AvailableSpace::Definite(k),
+                NodeKind::Opaque => *avail,
+            };
+        }
     }
-    if let Some(h) = inputs.known_dimensions.height
-        && inputs.known_dimensions_are_definite.height
-    {
-        inputs.available_space.height = AvailableSpace::Definite(h);
+    match meta.kind {
+        NodeKind::Leaf { ignores_available_height: true } | NodeKind::Block if known.height.is_none() => {
+            inputs.available_space.height = AvailableSpace::MaxContent;
+        }
+        NodeKind::Grid if inputs.available_space.height == AvailableSpace::MinContent => {
+            inputs.available_space.height = AvailableSpace::MaxContent;
+        }
+        NodeKind::Flex { row, single_line: true } => {
+            let (main_known, main_avail) = if row {
+                (known.width, &mut inputs.available_space.width)
+            } else {
+                (known.height, &mut inputs.available_space.height)
+            };
+            if main_known.is_none() && main_avail.is_definite() {
+                *main_avail = AvailableSpace::Definite(0.0);
+            }
+        }
+        _ => {}
     }
 }
 
@@ -238,15 +305,32 @@ pub fn compute_uncached<T: LayoutTree + CacheAccess + ?Sized>(
     match (display, has_children) {
         (Display::None, _) => compute_hidden_layout(tree, node),
         (_, false) => tree.compute_leaf(node, inputs, block_ctx),
-        (Display::Block, true) => block::compute_block_layout(tree, node, inputs, block_ctx),
-        (Display::FlowRoot, true) => block::compute_block_layout(tree, node, inputs, None),
+        (Display::Block, true) => block_observing(tree, |tree| block::compute_block_layout(tree, node, inputs, block_ctx)),
+        (Display::FlowRoot, true) => block_observing(tree, |tree| block::compute_block_layout(tree, node, inputs, None)),
         #[cfg(feature = "flex")]
         (Display::Flex, true) => crate::compute::flex::compute_flexbox_layout(tree, node, inputs),
         #[cfg(feature = "grid")]
-        (Display::Grid, true) => crate::compute::grid::compute_grid_layout(tree, node, inputs),
+        (Display::Grid, true) => {
+            let output = crate::compute::grid::compute_grid_layout(tree, node, inputs);
+            // Grid treats a min-content height as max-content before reading anything; its width
+            // is taken as observed.
+            tree.take_observed();
+            tree.note_observed(OBSERVED_WIDTH);
+            output
+        }
         #[allow(unreachable_patterns)]
-        _ => block::compute_block_layout(tree, node, inputs, None),
+        _ => block_observing(tree, |tree| block::compute_block_layout(tree, node, inputs, None)),
     }
+}
+
+/// Runs block layout, keeping only width observations: block flow never reads its available
+/// height, and every height its children are asked under is its own choice.
+#[inline]
+fn block_observing<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, f: impl FnOnce(&mut T) -> LayoutOutput) -> LayoutOutput {
+    let output = f(tree);
+    let observed = tree.take_observed();
+    tree.note_observed(observed & OBSERVED_WIDTH);
+    output
 }
 
 /// Zeroes the subtree's layout; never cached.

@@ -62,13 +62,22 @@ impl NodeCache {
     /// [`Self::get`] with the key already built.
     #[inline]
     pub fn get_keyed(&self, key: &CacheKey, run_mode: RunMode, generation: u32) -> Option<LayoutOutput> {
+        self.lookup(key, run_mode, generation).map(|(output, _, _)| output)
+    }
+
+    /// [`Self::get_keyed`], also returning the entry's observed axes and its key.
+    ///
+    /// A size entry answers a question that differs only between min-content and max-content
+    /// available space on axes the answer never told apart.
+    #[inline]
+    pub fn lookup(&self, key: &CacheKey, run_mode: RunMode, generation: u32) -> Option<(LayoutOutput, u8, CacheKey)> {
         let c = self.0.as_deref()?;
         match run_mode {
             RunMode::PerformLayout => {
                 let e = c.final_entry.as_ref()?;
                 if e.key == *key {
                     e.touch(generation);
-                    Some(e.output)
+                    Some((e.output, e.observed, e.key))
                 } else {
                     None
                 }
@@ -77,10 +86,10 @@ impl NodeCache {
                 c.inline[0].as_ref()?;
                 for e in c.size_entries() {
                     if let Some(e) = e
-                        && e.key.answers(key)
+                        && e.key.answers_unobserved(key, e.observed)
                     {
                         e.touch(generation);
-                        return Some(e.output);
+                        return Some((e.output, e.observed, e.key));
                     }
                 }
                 #[cfg(feature = "stats")]
@@ -99,8 +108,19 @@ impl NodeCache {
         let key = CacheKey::from_input(input);
         match input.run_mode {
             RunMode::PerformLayout => c.final_entry.as_ref().is_some_and(|e| e.key == key),
-            RunMode::ComputeSize => c.size_entries().any(|e| e.as_ref().is_some_and(|e| e.key.answers(&key))),
+            RunMode::ComputeSize => c.size_entries().any(|e| e.as_ref().is_some_and(|e| e.key.answers_unobserved(&key, e.observed))),
             RunMode::PerformHiddenLayout => false,
+        }
+    }
+
+    /// The observed axes of the entry stored under exactly `input`'s key.
+    pub fn observed(&self, input: &LayoutInput) -> Option<u8> {
+        let c = self.0.as_deref()?;
+        let key = CacheKey::from_input(input);
+        match input.run_mode {
+            RunMode::PerformLayout => c.final_entry.as_ref().filter(|e| e.key == key).map(|e| e.observed),
+            RunMode::ComputeSize => c.size_entries().flatten().find(|e| e.key == key).map(|e| e.observed),
+            RunMode::PerformHiddenLayout => None,
         }
     }
 
@@ -110,11 +130,17 @@ impl NodeCache {
 
     /// [`Self::store`] with the key already built.
     pub fn store_keyed(&mut self, key: CacheKey, run_mode: RunMode, output: LayoutOutput, generation: u32) {
+        self.store_observed(key, run_mode, output, generation, crate::compute::OBSERVED_ALL);
+    }
+
+    /// [`Self::store_keyed`] for an answer that told min-content from max-content available space
+    /// only on the `observed` axes.
+    pub fn store_observed(&mut self, key: CacheKey, run_mode: RunMode, output: LayoutOutput, generation: u32, observed: u8) {
         if run_mode == RunMode::PerformHiddenLayout {
             return;
         }
         let c = self.0.get_or_insert_with(|| Box::new(Inner::EMPTY));
-        let entry = Entry { key, output, generation: core::sync::atomic::AtomicU32::new(generation) };
+        let entry = Entry { key, output, generation: core::sync::atomic::AtomicU32::new(generation), observed };
         match run_mode {
             RunMode::PerformLayout => {
                 // Two final-layout questions in one frame: the parent depends on both, only one survives.
@@ -196,20 +222,27 @@ impl NodeCache {
     /// Removes every answer, handing them back in recomputation order: sizes first, the final
     /// layout last, as a cold layout would ask them.
     pub fn drain_all(&mut self, out: &mut Vec<(LayoutInput, LayoutOutput)>) {
+        let mut all = Vec::new();
+        self.drain_observed(&mut all);
+        out.extend(all.into_iter().map(|(input, output, _)| (input, output)));
+    }
+
+    /// [`Self::drain_all`] with each answer's observed axes.
+    pub fn drain_observed(&mut self, out: &mut Vec<(LayoutInput, LayoutOutput, u8)>) {
         let Some(c) = self.0.as_deref_mut() else { return };
         let final_entry = c.final_entry.take();
         for slot in c.inline.iter_mut() {
             if let Some(e) = slot.take() {
-                out.push((e.key.into_input(RunMode::ComputeSize), e.output));
+                out.push((e.key.into_input(RunMode::ComputeSize), e.output, e.observed));
             }
         }
         if let Some(spill) = c.spill.take() {
             for e in spill.into_iter().flatten() {
-                out.push((e.key.into_input(RunMode::ComputeSize), e.output));
+                out.push((e.key.into_input(RunMode::ComputeSize), e.output, e.observed));
             }
         }
         if let Some(e) = final_entry {
-            out.push((e.key.into_input(RunMode::PerformLayout), e.output));
+            out.push((e.key.into_input(RunMode::PerformLayout), e.output, e.observed));
         }
         c.evicted = false;
     }

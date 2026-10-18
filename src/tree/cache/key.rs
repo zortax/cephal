@@ -105,6 +105,23 @@ impl CacheKey {
             && (self.flags & AXIS_MASK == AXIS_MASK || self.flags & AXIS_MASK == query.flags & AXIS_MASK)
     }
 
+    /// Like [`Self::answers`], also when the available spaces differ only between min-content and
+    /// max-content on axes outside `observed` (bit 0 width, bit 1 height).
+    #[inline]
+    pub fn answers_unobserved(&self, query: &Self, observed: u8) -> bool {
+        let intrinsic = |b: u32| b == f32::INFINITY.to_bits() || b == f32::NEG_INFINITY.to_bits();
+        let avail = |i: usize| {
+            self.avail[i] == query.avail[i] || (observed & (1 << i) == 0 && intrinsic(self.avail[i]) && intrinsic(query.avail[i]))
+        };
+        self.known == query.known
+            && avail(0)
+            && avail(1)
+            && self.parent == query.parent
+            && self.context == query.context
+            && (self.flags & !AXIS_MASK) == (query.flags & !AXIS_MASK)
+            && (self.flags & AXIS_MASK == AXIS_MASK || self.flags & AXIS_MASK == query.flags & AXIS_MASK)
+    }
+
     /// Like [`Self::answers`], ignoring available space on axes the query fixes.
     #[cfg(feature = "stats")]
     pub fn answers_relaxed(&self, query: &Self) -> bool {

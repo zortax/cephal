@@ -10,6 +10,8 @@ pub(super) struct Entry {
     pub output: LayoutOutput,
     /// Frame the entry was last hit in; atomic so a hit needs only shared access.
     pub generation: AtomicU32,
+    /// Axes on which the answer told min-content from max-content available space.
+    pub observed: u8,
 }
 
 impl Entry {
@@ -25,6 +27,6 @@ impl Entry {
 
 impl Clone for Entry {
     fn clone(&self) -> Self {
-        Self { key: self.key, output: self.output, generation: AtomicU32::new(self.generation()) }
+        Self { key: self.key, output: self.output, generation: AtomicU32::new(self.generation()), observed: self.observed }
     }
 }

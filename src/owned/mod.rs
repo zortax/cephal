@@ -53,6 +53,8 @@ pub struct Tree<Ctx = ()> {
     ident_names: Vec<String>,
     generation: u32,
     use_rounding: bool,
+    /// See [`Self::set_measure_ignores_available_height`].
+    measure_ignores_available_height: bool,
     detailed_grid_wanted: bool,
     /// Nodes written during the current layout call, with their layout before it.
     touched: Vec<(NodeId, Layout)>,
@@ -101,6 +103,7 @@ impl<Ctx> Tree<Ctx> {
             ident_names: Vec::new(),
             generation: 1,
             use_rounding: true,
+            measure_ignores_available_height: false,
             detailed_grid_wanted: false,
             touched: Vec::new(),
             touched_gen: column::Column::with_capacity(n),
@@ -117,6 +120,16 @@ impl<Ctx> Tree<Ctx> {
     }
     pub fn disable_rounding(&mut self) {
         self.use_rounding = false;
+    }
+
+    /// Promises that the measure function never depends on the available height (text that wraps
+    /// at the available width only does not), so leaves share answers across available heights.
+    /// Changing it forgets every cached answer.
+    pub fn set_measure_ignores_available_height(&mut self, ignores: bool) {
+        if self.measure_ignores_available_height != ignores {
+            self.measure_ignores_available_height = ignores;
+            self.clear_layout();
+        }
     }
 
     /// Records resolved tracks for every grid container, readable via `detailed_grid_info`.
@@ -413,6 +426,7 @@ impl<Ctx> Tree<Ctx> {
             ident_names: self.ident_names.clone(),
             generation: 1,
             use_rounding: self.use_rounding,
+            measure_ignores_available_height: self.measure_ignores_available_height,
             detailed_grid_wanted: self.detailed_grid_wanted,
             touched: Vec::new(),
             touched_gen: vec![0; self.touched_gen.len()].into(),
@@ -447,15 +461,21 @@ impl<Ctx> Tree<Ctx> {
         self.styles.plan(self.style_ids[self.index(node)])
     }
 
-    /// See [`crate::tree::LayoutTree::query_meta`]; two loads per query.
+    /// See [`crate::tree::LayoutTree::query_meta`]; two loads per query, four for containers.
     #[inline]
     fn query_meta(&self, node: NodeId) -> crate::tree::QueryMeta {
         let i = self.index(node);
         let f = self.flags[i];
+        let leaf = self.links[i].child_count == 0;
         crate::tree::QueryMeta {
             hidden: f & 0x10 != 0,
-            cheap_leaf: f & 0x80 == 0 && self.links[i].child_count == 0,
+            cheap_leaf: f & 0x80 == 0 && leaf,
             dependency: Size { width: f & 0x20 != 0, height: f & 0x40 != 0 },
+            kind: if leaf {
+                crate::tree::NodeKind::Leaf { ignores_available_height: self.measure_ignores_available_height }
+            } else {
+                self.styles.kind(self.style_ids[i])
+            },
         }
     }
 

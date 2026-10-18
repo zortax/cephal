@@ -65,6 +65,40 @@ pub struct QueryMeta {
     pub cheap_leaf: bool,
     /// See [`Style::parent_size_dependency`].
     pub dependency: Size<bool>,
+    /// The algorithm that answers the node's questions; lets equivalent questions share a key.
+    pub kind: NodeKind,
+}
+
+/// Which algorithm answers a node's questions, so [`crate::compute::normalize`] can drop inputs it
+/// never reads.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum NodeKind {
+    /// Unknown; questions are cached as asked.
+    #[default]
+    Opaque,
+    /// The default leaf algorithm around [`LayoutTree::measure`]; `ignores_available_height` when
+    /// the measurement never depends on the available height.
+    Leaf { ignores_available_height: bool },
+    /// Block flow with children.
+    Block,
+    /// A flex container with children; `single_line` for `nowrap`.
+    Flex { row: bool, single_line: bool },
+    /// A grid container with children.
+    Grid,
+}
+
+impl NodeKind {
+    /// The kind of a container from its style; leaves are opaque, since `compute_leaf` may be
+    /// overridden.
+    pub fn of_container(style: &Style) -> Self {
+        use crate::style::Display;
+        match style.display {
+            Display::Flex => Self::Flex { row: style.flex_direction.is_row(), single_line: !style.flex_wrap.is_multi_line() },
+            Display::Grid => Self::Grid,
+            Display::None => Self::Opaque,
+            _ => Self::Block,
+        }
+    }
 }
 
 /// A tree the layout algorithms can walk and write into.
@@ -122,11 +156,34 @@ pub trait LayoutTree {
     #[inline]
     fn query_meta(&self, node: NodeId) -> QueryMeta {
         let style = self.style(node);
+        let leaf = self.child_count(node) == 0;
         QueryMeta {
             hidden: style.generates_no_box(),
-            cheap_leaf: self.child_count(node) == 0 && self.leaf_is_cheap(node),
+            cheap_leaf: leaf && self.leaf_is_cheap(node),
             dependency: style.parent_size_dependency(),
+            kind: if leaf { NodeKind::Opaque } else { NodeKind::of_container(style) },
         }
+    }
+
+    /// Returns the axes (`compute::OBSERVED_WIDTH`/`OBSERVED_HEIGHT`) on which answers computed since
+    /// the last call told min-content from max-content available space, and starts afresh.
+    /// [`crate::compute::compute_child_layout`] stores them with each answer so a question
+    /// differing only there can share it. Without storage, every axis counts as observed and
+    /// questions are cached as asked.
+    #[inline]
+    fn take_observed(&mut self) -> u8 {
+        crate::compute::OBSERVED_ALL
+    }
+
+    /// Adds `axes` to what [`Self::take_observed`] will return.
+    #[inline]
+    fn note_observed(&mut self, _axes: u8) {}
+
+    /// Whether [`Self::measure`] never depends on the available height, as with text that wraps
+    /// at the available width only. Lets leaves share answers across available heights.
+    #[inline]
+    fn measure_ignores_available_height(&self) -> bool {
+        false
     }
 
     /// Whether grid containers should produce [`DetailedGridInfo`]; it costs allocations per layout.
