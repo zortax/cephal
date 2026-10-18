@@ -789,21 +789,25 @@ impl<Ctx> Tree<Ctx> {
         stack.push((self.index(root), parent_x, parent_y, force));
         let mut rounded = 0;
         while let Some((i, px, py, force)) = stack.pop() {
-            let u = self.unrounded[i];
+            let u = &self.unrounded[i];
             let x = px + u.location.x;
             let y = py + u.location.y;
-            let pending = self.flags[i] & ROUND_PENDING != 0;
-            self.flags[i] &= !ROUND_PENDING;
-            let moved = self.abs_origin[i].x != x || self.abs_origin[i].y != y;
-            if !(force || pending || moved) {
+            let flags = self.flags[i];
+            let pending = flags & ROUND_PENDING != 0;
+            if pending {
+                self.flags[i] = flags & !ROUND_PENDING;
+            }
+            // Under a forced walk every descendant is rounded anyway.
+            let moved = force || self.abs_origin[i].x != x || self.abs_origin[i].y != y;
+            if !(moved || pending) {
                 continue;
             }
             self.abs_origin[i] = Point { x, y };
-            self.rounded[i] = crate::round::round_one(&u, x, y);
+            self.rounded[i] = crate::round::round_one(u, x, y);
             rounded += 1;
             let mut c = self.links[i].first_child;
             while c != NONE {
-                stack.push((c as usize, x, y, force || moved));
+                stack.push((c as usize, x, y, moved));
                 c = self.links[c as usize].next;
             }
         }
