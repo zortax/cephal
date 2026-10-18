@@ -20,6 +20,9 @@ grid = []
 serde = ["dep:serde"]
 # Counters of queries, hits and measures, for profiling.
 stats = []
+# Recomputes every shortcut and cache hit whose key differs from the question and asserts the
+# answers are identical; poisons the unrequested axis of single-axis answers. Slow; for tests.
+verify-cache = []
 taffy-compat = ["dep:taffy"]
 
 [dependencies]

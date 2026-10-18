@@ -35,11 +35,17 @@ pub mod stats {
     pub static PLAN_LITTLE_WORK: AtomicUsize = AtomicUsize::new(0);
     pub static BATCH_NANOS: AtomicUsize = AtomicUsize::new(0);
     pub static BATCH_REQUESTS: AtomicUsize = AtomicUsize::new(0);
+    /// A size miss whose answer equals one already cached for the node under another key.
+    pub static COLLISION: AtomicUsize = AtomicUsize::new(0);
+    /// Container runs answering a single-axis size question.
+    pub static RUN_SIZE_AXIS: AtomicUsize = AtomicUsize::new(0);
+    /// Container runs answering a two-axis size question.
+    pub static RUN_SIZE_BOTH: AtomicUsize = AtomicUsize::new(0);
     pub fn bump(c: &AtomicUsize) {
         c.fetch_add(1, Relaxed);
     }
     pub fn report() -> String {
-        let all = [("hidden", &HIDDEN), ("cheap_leaf", &CHEAP_LEAF), ("hit_size", &HIT_SIZE), ("hit_final", &HIT_FINAL), ("miss_size", &MISS_SIZE), ("miss_final", &MISS_FINAL), ("measure", &MEASURE), ("speculative", &SPECULATIVE), ("relaxed_hit", &RELAXED_HIT), ("batches", &BATCHES), ("plan_few_requests", &PLAN_FEW_REQUESTS), ("plan_few_groups", &PLAN_FEW_GROUPS), ("plan_little_work", &PLAN_LITTLE_WORK), ("batch_us", &BATCH_NANOS), ("batch_requests", &BATCH_REQUESTS)];
+        let all = [("hidden", &HIDDEN), ("cheap_leaf", &CHEAP_LEAF), ("hit_size", &HIT_SIZE), ("hit_final", &HIT_FINAL), ("miss_size", &MISS_SIZE), ("miss_final", &MISS_FINAL), ("measure", &MEASURE), ("speculative", &SPECULATIVE), ("relaxed_hit", &RELAXED_HIT), ("batches", &BATCHES), ("plan_few_requests", &PLAN_FEW_REQUESTS), ("plan_few_groups", &PLAN_FEW_GROUPS), ("plan_little_work", &PLAN_LITTLE_WORK), ("batch_us", &BATCH_NANOS), ("batch_requests", &BATCH_REQUESTS), ("collision", &COLLISION), ("run_size_axis", &RUN_SIZE_AXIS), ("run_size_both", &RUN_SIZE_BOTH)];
         let s = all.iter().map(|(n, c)| format!("{n}={}", c.swap(0, Relaxed))).collect::<Vec<_>>().join(" ");
         s
     }
@@ -65,16 +71,20 @@ pub fn compute_child_layout<T: LayoutTree + CacheAccess + ?Sized>(
         stats::bump(&stats::CHEAP_LEAF);
         let output = tree.compute_leaf(node, inputs, block_ctx);
         tree.observe_answer(node, &inputs, &output, AnswerSource::CheapLeaf);
-        return output;
+        return verify::poison(&inputs, output);
     }
+    #[cfg(feature = "verify-cache")]
+    let raw_inputs = inputs;
     normalize(&mut inputs, meta);
     let generation = tree.generation();
     let key = crate::tree::cache::CacheKey::from_input(&inputs);
     if let Some(hit) = tree.cache(node).get_keyed(&key, inputs.run_mode, generation) {
         #[cfg(feature = "stats")]
         stats::bump(if inputs.run_mode == RunMode::PerformLayout { &stats::HIT_FINAL } else { &stats::HIT_SIZE });
+        #[cfg(feature = "verify-cache")]
+        verify::hit(tree, node, raw_inputs, inputs, &hit);
         tree.observe_answer(node, &inputs, &hit, AnswerSource::Cached);
-        return hit;
+        return verify::poison(&inputs, hit);
     }
     #[cfg(feature = "stats")]
     {
@@ -82,13 +92,92 @@ pub fn compute_child_layout<T: LayoutTree + CacheAccess + ?Sized>(
         if tree.speculation() > 0 {
             stats::bump(&stats::SPECULATIVE);
         }
+        if inputs.run_mode == RunMode::ComputeSize {
+            stats::bump(if inputs.axis == RequestedAxis::Both { &stats::RUN_SIZE_BOTH } else { &stats::RUN_SIZE_AXIS });
+        }
     }
     let output = compute_uncached(tree, node, inputs, block_ctx);
+    #[cfg(feature = "stats")]
+    if inputs.run_mode == RunMode::ComputeSize
+        && tree.cache(node).entries().iter().any(|(i, o)| i.run_mode == RunMode::ComputeSize && i.axis == inputs.axis && *o == output)
+    {
+        stats::bump(&stats::COLLISION);
+    }
     if tree.speculation() == 0 {
         tree.cache_mut(node).store_keyed(key, inputs.run_mode, output, generation);
     }
     tree.observe_answer(node, &inputs, &output, AnswerSource::Computed);
-    output
+    verify::poison(&inputs, output)
+}
+
+/// Checks that shortcuts and canonicalised cache hits give the answer a full computation gives.
+pub mod verify {
+    use super::*;
+
+    /// Without `verify-cache`, the answer unchanged; with it, the axis a single-axis question did
+    /// not ask for is NaN, so any caller reading it fails the tests.
+    #[inline(always)]
+    pub fn poison(inputs: &LayoutInput, output: LayoutOutput) -> LayoutOutput {
+        #[cfg(feature = "verify-cache")]
+        if inputs.run_mode == RunMode::ComputeSize {
+            let mut output = output;
+            match inputs.axis {
+                RequestedAxis::Horizontal => output.size.height = f32::NAN,
+                RequestedAxis::Vertical => output.size.width = f32::NAN,
+                RequestedAxis::Both => {}
+            }
+            return output;
+        }
+        let _ = inputs;
+        output
+    }
+
+    /// Recomputes `raw` speculatively and asserts it matches `answer` bit for bit.
+    #[cfg(feature = "verify-cache")]
+    pub fn shortcut<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, node: NodeId, raw: LayoutInput, answer: &LayoutOutput, what: &str) {
+        let full = speculate(tree, |tree| compute_uncached(tree, node, raw, None));
+        assert!(
+            same_bits(&full, answer, raw.axis, raw.run_mode),
+            "{what}: shortcut answer differs for {node:?}\n question: {raw:?}\n shortcut: {answer:?}\n full:     {full:?}"
+        );
+    }
+
+    #[cfg(feature = "verify-cache")]
+    pub(super) fn hit<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, node: NodeId, raw: LayoutInput, normalized: LayoutInput, answer: &LayoutOutput) {
+        // Hits for the very question that was stored need no check; the scheduler covers those.
+        if crate::tree::cache::CacheKey::from_input(&raw) == crate::tree::cache::CacheKey::from_input(&normalized) {
+            return;
+        }
+        // Answers inside a shared block formatting context depend on it; it is not at hand here.
+        if tree.query_meta(node).cheap_leaf || raw.context_key != 0 || raw.vertical_margins_are_collapsible != Line::FALSE {
+            return;
+        }
+        shortcut(tree, node, raw, answer, "cache hit");
+    }
+
+    /// Bitwise equality of the parts of an answer the question asked for.
+    #[cfg(feature = "verify-cache")]
+    pub fn same_bits(a: &LayoutOutput, b: &LayoutOutput, axis: RequestedAxis, run_mode: RunMode) -> bool {
+        let bits = |v: f32| v.to_bits();
+        let w = bits(a.size.width) == bits(b.size.width);
+        let h = bits(a.size.height) == bits(b.size.height);
+        match (run_mode, axis) {
+            (RunMode::ComputeSize, RequestedAxis::Horizontal) => w,
+            (RunMode::ComputeSize, RequestedAxis::Vertical) => h,
+            _ => {
+                let rect = |r: crate::geometry::Rect<f32>| [r.left, r.right, r.top, r.bottom].map(bits);
+                let opt = |v: Option<f32>| v.map(bits);
+                w && h
+                    && rect(a.scrollable_overflow_rect) == rect(b.scrollable_overflow_rect)
+                    && rect(a.inflow_overflow_rect) == rect(b.inflow_overflow_rect)
+                    && opt(a.baselines.first) == opt(b.baselines.first)
+                    && opt(a.baselines.last) == opt(b.baselines.last)
+                    && a.top_margin == b.top_margin
+                    && a.bottom_margin == b.bottom_margin
+                    && a.margins_can_collapse_through == b.margins_can_collapse_through
+            }
+        }
+    }
 }
 
 /// Canonicalises a question so equivalent questions share a cache entry.
