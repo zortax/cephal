@@ -75,14 +75,14 @@ These results use an Intel Core i9-13900K and 24 threads. Measurements come from
 
 | Scenario | Serial | Parallel | taffy |
 | --- | ---: | ---: | ---: |
-| Contained edit in a 100,000-node list | 2 µs | 2.5 µs | 5 ms |
-| Move an absolute box in a 100,000-node tree | 2.4 µs | | 21 ms |
-| Leaf-width edit in a 100,000-node random tree | 8.4 ms | 10.0 ms | 18 ms |
-| Cold layout of 100,000 nested flex nodes | 34 ms | 12 ms | 39 ms |
-| Cold layout of 10,000 leaves in one flex row | 1.7 ms | 1.9 ms | 2.0 ms |
-| Cold layout of a 100×100 grid | 8.4 ms | 8.6 ms | 9.2 ms |
-| Cold layout of 10,000 random nodes | 25 ms | 12 ms | 22 ms |
-| Resize a 10,000-node random tree | 2.0 ms | 2.1 ms | 2.0 ms |
+| Contained edit in a 100,000-node list | 1.2 µs | 1.9 µs | 5 ms |
+| Move an absolute box in a 100,000-node tree | 2.4 µs | | 20 ms |
+| Leaf-width edit in a 100,000-node random tree | 7.8 ms | 8.3 ms | 19 ms |
+| Cold layout of 100,000 nested flex nodes | 21 ms | 11 ms | 40 ms |
+| Cold layout of 10,000 leaves in one flex row | 1.05 ms | 1.2 ms | 2.0 ms |
+| Cold layout of a 100×100 grid | 4.0 ms | 4.1 ms | 9.1 ms |
+| Cold layout of 10,000 random nodes | 20 ms | 10 ms | 22 ms |
+| Resize a 10,000-node random tree | 1.8 ms | 1.9 ms | 2.0 ms |
 
 Run `cargo run --release --example scaling` to measure trees from 1,000 to 100,000 nodes.
 Use `scripts/plot_bench.py` to plot the results.
@@ -103,6 +103,17 @@ PanGui, Clay, Taffy, and Yoga on a Ryzen 7 7800X3D. It also plots each engine's 
 taffy on the same machine. `--baseline other.csv` adds a before-and-after chart.
 `CEPHAL_NO_ROUNDING=1` disables pixel snapping in both engines, and `CEPHAL_BENCH_SECS` sets the
 sampling time.
+
+A few rows, in nanoseconds per node on one pinned core, with PanGui's published numbers from a
+different machine (Ryzen 7 7800X3D) for orientation:
+
+| Workload | cephal | taffy | PanGui | Clay |
+| --- | ---: | ---: | ---: | ---: |
+| `wide_no_wrap_simple_few` (1,001 nodes) | 88 | 151 | 41 | 34 |
+| `nested_vertical_stack` (10,001) | 94 | 208 | 65 | 36 |
+| `flex_expand_equal_weights` (15,001) | 113 | 227 | 71 | 41 |
+| `fit_nesting` (101,111) | 248 | 949 | 66 | 40 |
+| `fit_nesting_min0` (101,111) | 118 | 546 | | |
 
 PanGui's `Expand` has no automatic minimum size, but CSS flex items do. The `*_min0` variants add
 `min-width: 0` and `min-height: 0` to match PanGui. PanGui's
