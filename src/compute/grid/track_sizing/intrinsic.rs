@@ -3,7 +3,7 @@
 use super::super::item::GridItem;
 use super::super::track::GridTrack;
 use super::distribute::{IntrinsicContributionType, distribute_item_space_to_base_size, distribute_item_space_to_growth_limit};
-use super::{TrackSizeEstimate, cmp_by_cross_flex_then_span_then_start};
+use super::{TrackSizeEstimate, cross_flex_then_span_then_start_key, sort_order_by_key};
 use crate::geometry::{AbstractAxis, AvailableSpace, MaybeMath, Size};
 use crate::style::LengthKind;
 use crate::compute::scratch::Scratch;
@@ -17,17 +17,23 @@ struct ItemBatcher {
 }
 
 impl ItemBatcher {
-    fn next(&mut self, items: &[GridItem]) -> Option<(core::ops::Range<usize>, bool)> {
-        if self.current_is_flex || self.index_offset >= items.len() {
+    /// The next batch, as a range of `order`.
+    fn next(&mut self, items: &[GridItem], order: &[u32]) -> Option<(core::ops::Range<usize>, bool)> {
+        if self.current_is_flex || self.index_offset >= order.len() {
             return None;
         }
-        let item = &items[self.index_offset];
+        let item = &items[order[self.index_offset] as usize];
         let span = item.span(self.axis);
         self.current_is_flex = item.crosses_flexible_track(self.axis);
         let next = if self.current_is_flex {
-            items.len()
+            order.len()
         } else {
-            items.iter().position(|i| i.crosses_flexible_track(self.axis) || i.span(self.axis) > span).unwrap_or(items.len())
+            // Earlier batches hold only smaller spans, so the search can start here.
+            order[self.index_offset..]
+                .iter()
+                .map(|&i| &items[i as usize])
+                .position(|i| i.crosses_flexible_track(self.axis) || i.span(self.axis) > span)
+                .map_or(order.len(), |p| self.index_offset + p)
         };
         let range = self.index_offset..next;
         self.index_offset = next;
@@ -179,17 +185,19 @@ pub(super) fn resolve_intrinsic_track_sizes<T: LayoutTree + CacheAccess + ?Sized
     axis_tracks: &mut [GridTrack],
     other_axis_tracks: &[GridTrack],
     items: &mut [GridItem],
+    order: &mut [u32],
     axis_available_grid_space: AvailableSpace,
     inner_node_size: Size<Option<f32>>,
     estimate: TrackSizeEstimate,
 ) {
-    items.sort_by(cmp_by_cross_flex_then_span_then_start(axis));
+    sort_order_by_key(order, items, |item| cross_flex_then_span_then_start_key(item, axis));
+    let order = &*order;
     let axis_inner_node_size = inner_node_size.get_abstract(axis);
     let mut m = Measurer { tree, other_axis_tracks, estimate, axis, inner_node_size, prefetch: None, warm: false };
     let mut batcher = ItemBatcher { axis, index_offset: 0, current_is_flex: false };
 
-    while let Some((range, is_flex)) = batcher.next(items) {
-        let batch = &mut items[range];
+    while let Some((range, is_flex)) = batcher.next(items, order) {
+        let batch = &order[range];
         // Every item's contributions are independent: collect the questions this batch will ask
         // against a scratch copy of the tracks, answer them together, then size for real.
         // Collecting costs a second pass, so only do it when the first real item is cold: a warm
@@ -198,17 +206,17 @@ pub(super) fn resolve_intrinsic_track_sizes<T: LayoutTree + CacheAccess + ?Sized
         let worth_collecting = batch.len() >= 2
             && m.tree.batches_help()
             && m.tree.speculation() == 0
-            && batch.iter().any(|i| {
-                let meta = m.tree.query_meta(i.node);
+            && batch.iter().any(|&i| {
+                let meta = m.tree.query_meta(items[i as usize].node);
                 !meta.cheap_leaf && !meta.hidden
             });
         if worth_collecting {
             m.prefetch = Some(Scratch::take());
             m.warm = false;
             let mut copy: Scratch<GridTrack> = Scratch::collect(axis_tracks.iter().cloned());
-            size_batch(&mut m, &mut copy, batch, is_flex, axis, axis_inner_node_size, axis_available_grid_space);
-            for item in batch.iter_mut() {
-                item.clear_requested_markers(axis);
+            size_batch(&mut m, &mut copy, items, batch, is_flex, axis, axis_inner_node_size, axis_available_grid_space);
+            for &i in batch {
+                items[i as usize].clear_requested_markers(axis);
             }
             let mut requests = m.prefetch.take().expect("collect pass set");
             // Leaves with nothing to measure are never cached, so asking early would only repeat them.
@@ -219,7 +227,7 @@ pub(super) fn resolve_intrinsic_track_sizes<T: LayoutTree + CacheAccess + ?Sized
             let mut outputs: Scratch<crate::tree::LayoutOutput> = Scratch::with_capacity(requests.len());
             m.tree.compute_child_layouts(&requests, &mut outputs);
         }
-        size_batch(&mut m, axis_tracks, batch, is_flex, axis, axis_inner_node_size, axis_available_grid_space);
+        size_batch(&mut m, axis_tracks, items, batch, is_flex, axis, axis_inner_node_size, axis_available_grid_space);
     }
 
     for t in axis_tracks.iter_mut().filter(|t| t.growth_limit == f32::INFINITY) {
@@ -227,22 +235,24 @@ pub(super) fn resolve_intrinsic_track_sizes<T: LayoutTree + CacheAccess + ?Sized
     }
 }
 
-/// Sizes the tracks for one batch of equal-span items.
+/// Sizes the tracks for one batch of equal-span items, given as indices into `items`.
 #[allow(clippy::too_many_arguments)]
 fn size_batch<T: LayoutTree + CacheAccess + ?Sized>(
     m: &mut Measurer<'_, T>,
     axis_tracks: &mut [GridTrack],
-    batch: &mut [GridItem],
+    items: &mut [GridItem],
+    batch: &[u32],
     is_flex: bool,
     axis: AbstractAxis,
     axis_inner_node_size: Option<f32>,
     axis_available_grid_space: AvailableSpace,
 ) {
-    let batch_span = batch[0].span(axis);
+    let batch_span = items[batch[0] as usize].span(axis);
 
     // Single-span items size their track directly.
     if !is_flex && batch_span == 1 {
-        for item in batch.iter_mut() {
+        for &i in batch {
+            let item = &mut items[i as usize];
             let track_index = item.placement_indexes(axis).start as usize + 1;
             let track = &axis_tracks[track_index];
             let new_base_size = match track.min.kind() {
@@ -305,7 +315,11 @@ fn size_batch<T: LayoutTree + CacheAccess + ?Sized>(
     }
 
     // Spanning items: minimums to intrinsic-min tracks.
-    for item in batch.iter_mut().filter(|i| i.crosses_intrinsic_track(axis)) {
+    for &i in batch {
+        let item = &mut items[i as usize];
+        if !item.crosses_intrinsic_track(axis) {
+            continue;
+        }
         let space = match axis_available_grid_space {
             AvailableSpace::MinContent | AvailableSpace::MaxContent if !item.overflow.get(axis.as_abs()).is_scroll_container() => {
                 let minimum = m.minimum(item, axis_tracks);
@@ -355,7 +369,8 @@ fn size_batch<T: LayoutTree + CacheAccess + ?Sized>(
 
     // Min-content contributions to min/max-content-min tracks.
     let affected = |t: &GridTrack| t.min.is_min_content() || t.min.is_max_content();
-    for item in batch.iter_mut() {
+    for &i in batch {
+        let item = &mut items[i as usize];
         if !item.spans_track_matching(axis, axis_tracks, affected) {
             continue;
         }
@@ -391,7 +406,8 @@ fn size_batch<T: LayoutTree + CacheAccess + ?Sized>(
     if axis_available_grid_space == AvailableSpace::MaxContent {
         let has_auto_min = |t: &GridTrack| t.min.is_auto() && !t.max.is_min_content();
         let has_max_content_min = |t: &GridTrack| t.min.is_max_content();
-        for item in batch.iter_mut() {
+        for &i in batch {
+            let item = &mut items[i as usize];
             if !item.spans_track_matching(axis, axis_tracks, |t| has_auto_min(t) || has_max_content_min(t)) {
                 continue;
             }
@@ -435,7 +451,8 @@ fn size_batch<T: LayoutTree + CacheAccess + ?Sized>(
 
     // Max-content contributions to max-content-min tracks.
     let has_max_content_min = |t: &GridTrack| t.min.is_max_content();
-    for item in batch.iter_mut() {
+    for &i in batch {
+        let item = &mut items[i as usize];
         if !item.spans_track_matching(axis, axis_tracks, has_max_content_min) {
             continue;
         }
@@ -462,7 +479,8 @@ fn size_batch<T: LayoutTree + CacheAccess + ?Sized>(
 
     // Growth limits from contributions, for non-flex batches.
     if !is_flex {
-        for item in batch.iter_mut() {
+        for &i in batch {
+            let item = &mut items[i as usize];
             {
                 let calc = |id, basis| m.tree.resolve_calc(id, basis);
                 if !item.spans_track_matching(axis, axis_tracks, |t| t.max.definite_value(axis_inner_node_size, &calc).is_none()) {
@@ -484,7 +502,8 @@ fn size_batch<T: LayoutTree + CacheAccess + ?Sized>(
         flush_planned_growth_limit_increases(axis_tracks, true);
         let has_max_content_max =
             |t: &GridTrack| t.max.is_max_content_alike() || (t.max.uses_percentage() && axis_inner_node_size.is_none());
-        for item in batch.iter_mut() {
+        for &i in batch {
+            let item = &mut items[i as usize];
             if !item.spans_track_matching(axis, axis_tracks, has_max_content_max) {
                 continue;
             }

@@ -12,6 +12,14 @@ use crate::style::{
 use crate::tree::{CacheAccess, LayoutTree, NodeId, SizingMode};
 use core::ops::Range;
 
+/// `size`, `min-size` and `max-size` against a grid area, with aspect ratio and box sizing applied.
+#[derive(Clone, Copy)]
+pub(super) struct ResolvedSizes {
+    pub size: Size<Option<f32>>,
+    pub min_size: Size<Option<f32>>,
+    pub max_size: Size<Option<f32>>,
+}
+
 pub(super) struct GridItem {
     pub node: NodeId,
     pub source_order: u16,
@@ -27,6 +35,12 @@ pub(super) struct GridItem {
     pub padding: Rect<LengthPercentage>,
     pub border: Rect<LengthPercentage>,
     pub margin: Rect<LengthPercentageAuto>,
+    /// Set by [`Self::resolve_fixed_lengths`].
+    fixed_lengths_resolved: bool,
+    /// The sizes, when no size, padding or border depends on the grid area.
+    fixed_sizes: Option<ResolvedSizes>,
+    /// The margins, when none depends on the percentage basis.
+    fixed_margin: Option<Rect<f32>>,
     pub align_self: AlignSelf,
     pub justify_self: AlignSelf,
     pub baseline: Option<f32>,
@@ -73,6 +87,9 @@ impl GridItem {
             padding: style.padding,
             border: style.border,
             margin: style.margin,
+            fixed_lengths_resolved: false,
+            fixed_sizes: None,
+            fixed_margin: None,
             align_self: style.align_self.unwrap_or(parent_align_items),
             justify_self: style.justify_self.unwrap_or(parent_justify_items),
             baseline: None,
@@ -90,6 +107,75 @@ impl GridItem {
             y_position: 0.0,
             last_baseline: 0.0,
             height: 0.0,
+        }
+    }
+
+    /// Resolves, once, the lengths free of percentages and `calc()`: those ignore the basis, so
+    /// the many measurements of track sizing can share them.
+    pub fn resolve_fixed_lengths(&mut self) {
+        if self.fixed_lengths_resolved {
+            return;
+        }
+        self.fixed_lengths_resolved = true;
+        let no_basis = |_: CalcId, _: f32| 0.0;
+        let (size, min, max, padding, border) = (self.size, self.min_size, self.max_size, self.padding, self.border);
+        let sizes = [
+            size.width.raw(),
+            size.height.raw(),
+            min.width.raw(),
+            min.height.raw(),
+            max.width.raw(),
+            max.height.raw(),
+            padding.left.raw(),
+            padding.right.raw(),
+            padding.top.raw(),
+            padding.bottom.raw(),
+            border.left.raw(),
+            border.right.raw(),
+            border.top.raw(),
+            border.bottom.raw(),
+        ];
+        if !sizes.iter().any(|l| l.uses_percentage()) {
+            self.fixed_sizes = Some(self.resolve_sizes(Size::NONE, &no_basis));
+        }
+        let margin = self.margin;
+        if ![margin.left, margin.right, margin.top, margin.bottom].iter().any(|m| m.uses_percentage()) {
+            self.fixed_margin = Some(self.resolve_margin(None, &no_basis));
+        }
+    }
+
+    fn resolve_sizes(&self, grid_area_size: Size<Option<f32>>, calc: &impl Fn(CalcId, f32) -> f32) -> ResolvedSizes {
+        let padding = self.padding.map(|p| p.resolve_or_zero(grid_area_size.width, calc));
+        let border = self.border.map(|b| b.resolve_or_zero(grid_area_size.width, calc));
+        let padding_border_size = (padding + border).sum_axes();
+        let box_sizing_adjustment = if self.box_sizing == BoxSizing::ContentBox { padding_border_size } else { Size::ZERO };
+        let resolve = |s: Size<crate::style::Length>| {
+            crate::compute::block::resolve_size(s, grid_area_size, calc)
+                .maybe_apply_aspect_ratio(self.aspect_ratio)
+                .maybe_add(box_sizing_adjustment)
+        };
+        ResolvedSizes {
+            size: resolve(self.size.map(|v| v.raw())),
+            min_size: resolve(self.min_size.map(|v| v.raw())),
+            max_size: resolve(self.max_size.map(|v| v.raw())),
+        }
+    }
+
+    #[inline]
+    fn sizes(&self, grid_area_size: Size<Option<f32>>, calc: &impl Fn(CalcId, f32) -> f32) -> ResolvedSizes {
+        match self.fixed_sizes {
+            Some(sizes) => sizes,
+            None => self.resolve_sizes(grid_area_size, calc),
+        }
+    }
+
+    /// Inline margins resolve against 0, block margins against the inner width.
+    fn resolve_margin(&self, inner_node_width: Option<f32>, calc: &impl Fn(CalcId, f32) -> f32) -> Rect<f32> {
+        Rect {
+            left: self.margin.left.resolve_or_zero(Some(0.0), calc),
+            right: self.margin.right.resolve_or_zero(Some(0.0), calc),
+            top: self.margin.top.resolve_or_zero(inner_node_width, calc),
+            bottom: self.margin.bottom.resolve_or_zero(inner_node_width, calc),
         }
     }
 
@@ -176,14 +262,7 @@ impl GridItem {
         let calc = |id, basis| tree.resolve_calc(id, basis);
         let margins = self.margins_axis_sums_with_baseline_shims(grid_area_size.width, tree);
         let aspect_ratio = self.aspect_ratio;
-        let padding = self.padding.map(|p| p.resolve_or_zero(grid_area_size.width, &calc));
-        let border = self.border.map(|b| b.resolve_or_zero(grid_area_size.width, &calc));
-        let padding_border_size = (padding + border).sum_axes();
-        let box_sizing_adjustment = if self.box_sizing == BoxSizing::ContentBox { padding_border_size } else { Size::ZERO };
-        let resolve = |s: Size<crate::style::Length>| crate::compute::block::resolve_size(s, grid_area_size, &calc);
-        let inherent_size = resolve(self.size.map(|v| v.raw())).maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment);
-        let min_size = resolve(self.min_size.map(|v| v.raw())).maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment);
-        let max_size = resolve(self.max_size.map(|v| v.raw())).maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment);
+        let ResolvedSizes { size: inherent_size, min_size, max_size } = self.sizes(grid_area_size, &calc);
         let grid_area_minus_margins = grid_area_size.maybe_sub(margins).maybe_max(Size::ZERO);
         let width = inherent_size.width.or_else(|| {
             if self.size.width.is_sizing_keyword() {
@@ -270,14 +349,11 @@ impl GridItem {
     /// Margin sums; inline margins resolve against 0, block margins against the inner width.
     #[inline]
     pub fn margins_axis_sums_with_baseline_shims<T: LayoutTree + ?Sized>(&self, inner_node_width: Option<f32>, tree: &T) -> Size<f32> {
-        let calc = |id, basis| tree.resolve_calc(id, basis);
-        Rect {
-            left: self.margin.left.resolve_or_zero(Some(0.0), &calc),
-            right: self.margin.right.resolve_or_zero(Some(0.0), &calc),
-            top: self.margin.top.resolve_or_zero(inner_node_width, &calc) + self.baseline_shim,
-            bottom: self.margin.bottom.resolve_or_zero(inner_node_width, &calc),
-        }
-        .sum_axes()
+        let margin = match self.fixed_margin {
+            Some(margin) => margin,
+            None => self.resolve_margin(inner_node_width, &|id, basis| tree.resolve_calc(id, basis)),
+        };
+        Rect { top: margin.top + self.baseline_shim, ..margin }.sum_axes()
     }
 
     fn keyword_adjusted_available_space<T: LayoutTree + ?Sized>(
@@ -324,6 +400,17 @@ impl GridItem {
         crate::compute::size_request(self.node, known_dimensions, grid_area_size, available, SizingMode::InherentSize, axis.as_abs().into())
     }
 
+    /// The minimum contribution the style fixes: the size, else the min size, else zero for a
+    /// scroll container.
+    fn explicit_minimum(&self, axis: AbstractAxis, grid_area_size: Size<Option<f32>>, calc: &impl Fn(CalcId, f32) -> f32) -> Option<f32> {
+        let sizes = self.sizes(grid_area_size, calc);
+        sizes
+            .size
+            .get_abstract(axis)
+            .or(sizes.min_size.get_abstract(axis))
+            .or_else(|| self.overflow.get(axis.as_abs()).maybe_into_automatic_min_size())
+    }
+
     /// Whether [`Self::minimum_contribution`] would measure min-content rather than read the style.
     pub fn minimum_needs_content(
         &self,
@@ -332,22 +419,7 @@ impl GridItem {
         grid_area_size: Size<Option<f32>>,
         calc: &impl Fn(crate::style::CalcId, f32) -> f32,
     ) -> bool {
-        let padding = self.padding.map(|p| p.resolve_or_zero(grid_area_size.width, calc));
-        let border = self.border.map(|b| b.resolve_or_zero(grid_area_size.width, calc));
-        let box_sizing_adjustment = if self.box_sizing == BoxSizing::ContentBox { (padding + border).sum_axes() } else { Size::ZERO };
-        let resolve = |s: Size<crate::style::Length>| crate::compute::block::resolve_size(s, grid_area_size, calc);
-        let explicit = resolve(self.size.map(|v| v.raw()))
-            .maybe_apply_aspect_ratio(self.aspect_ratio)
-            .maybe_add(box_sizing_adjustment)
-            .get_abstract(axis)
-            .or_else(|| {
-                resolve(self.min_size.map(|v| v.raw()))
-                    .maybe_apply_aspect_ratio(self.aspect_ratio)
-                    .maybe_add(box_sizing_adjustment)
-                    .get_abstract(axis)
-            })
-            .or_else(|| self.overflow.get(axis.as_abs()).maybe_into_automatic_min_size());
-        if explicit.is_some() {
+        if self.explicit_minimum(axis, grid_area_size, calc).is_some() {
             return false;
         }
         let item_axis_tracks = &axis_tracks[self.track_range_excluding_lines(axis)];
@@ -456,22 +528,7 @@ impl GridItem {
         inner_node_size: Size<Option<f32>>,
     ) -> f32 {
         let calc = |id, basis| tree.resolve_calc(id, basis);
-        let padding = self.padding.map(|p| p.resolve_or_zero(grid_area_size.width, &calc));
-        let border = self.border.map(|b| b.resolve_or_zero(grid_area_size.width, &calc));
-        let box_sizing_adjustment = if self.box_sizing == BoxSizing::ContentBox { (padding + border).sum_axes() } else { Size::ZERO };
-        let resolve = |s: Size<crate::style::Length>| crate::compute::block::resolve_size(s, grid_area_size, &calc);
-        let explicit = resolve(self.size.map(|v| v.raw()))
-            .maybe_apply_aspect_ratio(self.aspect_ratio)
-            .maybe_add(box_sizing_adjustment)
-            .get_abstract(axis)
-            .or_else(|| {
-                resolve(self.min_size.map(|v| v.raw()))
-                    .maybe_apply_aspect_ratio(self.aspect_ratio)
-                    .maybe_add(box_sizing_adjustment)
-                    .get_abstract(axis)
-            })
-            .or_else(|| self.overflow.get(axis.as_abs()).maybe_into_automatic_min_size());
-        if let Some(v) = explicit {
+        if let Some(v) = self.explicit_minimum(axis, grid_area_size, &calc) {
             return v;
         }
         let item_axis_tracks = &axis_tracks[self.track_range_excluding_lines(axis)];

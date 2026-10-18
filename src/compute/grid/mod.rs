@@ -20,7 +20,7 @@ use occupancy::CellOccupancyMatrix;
 use track::{GridTrack, GridTrackKind};
 use track_sizing::{
     TrackSizingParams, determine_if_item_crosses_flexible_or_intrinsic_tracks, estimate_from_base_size,
-    estimate_from_max_sizing_function, resolve_item_track_indexes, track_sizing_algorithm,
+    estimate_from_max_sizing_function, resolve_item_track_indexes, sort_order_by_key, track_sizing_algorithm,
 };
 
 use crate::compute::LayoutTreeExt;
@@ -171,6 +171,8 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
     resolve_item_track_indexes(&mut items, final_col_counts, final_row_counts);
     determine_if_item_crosses_flexible_or_intrinsic_tracks(&mut items, &columns, &rows);
     let has_baseline_aligned_item = items.iter().any(|i| i.participates_in_baseline_alignment());
+    // The items stay in placement order; the passes sort this permutation of them instead.
+    let mut item_order: Scratch<u32> = Scratch::collect(0..items.len() as u32);
 
     // 6. Track sizing, inline then block.
     track_sizing_algorithm(
@@ -186,6 +188,7 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
             axis_tracks: &mut columns,
             other_axis_tracks: &mut rows,
             items: &mut items,
+            order: &mut item_order,
             get_track_size_estimate: estimate_from_max_sizing_function,
             has_baseline_aligned_item,
             run_mode,
@@ -209,6 +212,7 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
             axis_tracks: &mut rows,
             other_axis_tracks: &mut columns,
             items: &mut items,
+            order: &mut item_order,
             get_track_size_estimate: estimate_from_base_size,
             has_baseline_aligned_item: false,
             run_mode,
@@ -261,7 +265,7 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
     let mut intrinsic_column_contribution_changed = false;
     let mut rerun_column_sizing = !constrained_available_space.width.is_definite() && has_percentage_column;
     if !rerun_column_sizing {
-        intrinsic_column_contribution_changed = recheck_contributions(tree, &mut items, AbstractAxis::Inline, &columns, &rows, inner_node_size);
+        intrinsic_column_contribution_changed = recheck_contributions(tree, &mut items, &item_order, AbstractAxis::Inline, &columns, &rows, inner_node_size);
         rerun_column_sizing = intrinsic_column_contribution_changed;
     } else {
         for item in items.iter_mut() {
@@ -286,6 +290,7 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
                 axis_tracks: &mut columns,
                 other_axis_tracks: &mut rows,
                 items: &mut items,
+                order: &mut item_order,
                 get_track_size_estimate: estimate_from_base_size,
                 has_baseline_aligned_item,
                 run_mode,
@@ -293,7 +298,7 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
         );
         let mut rerun_row_sizing = !constrained_available_space.height.is_definite() && has_percentage_row;
         if !rerun_row_sizing {
-            intrinsic_row_contribution_changed = recheck_contributions(tree, &mut items, AbstractAxis::Block, &rows, &columns, inner_node_size);
+            intrinsic_row_contribution_changed = recheck_contributions(tree, &mut items, &item_order, AbstractAxis::Block, &rows, &columns, inner_node_size);
             rerun_row_sizing = intrinsic_row_contribution_changed;
         } else {
             for item in items.iter_mut() {
@@ -317,6 +322,7 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
                     axis_tracks: &mut rows,
                     other_axis_tracks: &mut columns,
                     items: &mut items,
+                    order: &mut item_order,
                     get_track_size_estimate: estimate_from_base_size,
                     has_baseline_aligned_item: false,
                     run_mode,
@@ -370,10 +376,11 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
     // 9. Items.
     let mut item_overflow_rect = Rect::ZERO;
     let mut absolute_overflow_rect = Rect::ZERO;
-    items.sort_by_key(|i| i.source_order);
+    sort_order_by_key(&mut item_order, &items, |i| i.source_order as u64);
     let container_alignment = ContainerAlignment { horizontal: justify_items, vertical: align_items };
     let mut preps: Scratch<ItemPrep> = Scratch::with_capacity(items.len());
-    for item in items.iter() {
+    for &i in item_order.iter() {
+        let item = &items[i as usize];
         let grid_area = Rect {
             top: rows[item.row_indexes.start as usize + 1].offset,
             bottom: rows[item.row_indexes.end as usize].offset,
@@ -386,7 +393,8 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
     let requests: Scratch<crate::tree::ChildRequest> = Scratch::collect(preps.iter().map(ItemPrep::request));
     let mut outputs: Scratch<LayoutOutput> = Scratch::with_capacity(requests.len());
     tree.compute_child_layouts(&requests, &mut outputs);
-    for ((index, item), (prep, out)) in items.iter_mut().enumerate().zip(preps.iter().zip(outputs.drain(..))) {
+    for ((index, &i), (prep, out)) in item_order.iter().enumerate().zip(preps.iter().zip(outputs.drain(..))) {
+        let item = &mut items[i as usize];
         let last_baseline = out.baselines.last;
         let (contribution, y, height) =
             place_item(tree, prep, out, index as u32, direction, container_border_box.width, border, is_scroll_container);
@@ -475,8 +483,9 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
                 offsets: columns.iter().map(|t| t.offset).collect(),
                 auto_repetitions: col_auto_repetition_count,
             },
-            items: items
+            items: item_order
                 .iter()
+                .map(|&i| &items[i as usize])
                 .map(|i| DetailedGridItem {
                     row_start: i.row_indexes.start / 2 + 1,
                     row_end: i.row_indexes.end / 2 + 1,
@@ -503,14 +512,18 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
     let baselines = if contain.suppresses_baseline() {
         Baselines::NONE
     } else {
-        items.sort_by_key(|i| i.row_indexes.start);
-        let first_row = items[0].row_indexes.start;
-        let first_row_items = &items[..items.iter().position(|i| i.row_indexes.start != first_row).unwrap_or(items.len())];
-        let item = first_row_items.iter().find(|i| i.participates_in_baseline_alignment()).unwrap_or(&first_row_items[0]);
+        // Items of one row keep their source order, so scanning in source order finds what a stable
+        // sort by row would put first, and `max_by_key` the same last of equal keys.
+        let in_source_order = || item_order.iter().map(|&i| &items[i as usize]);
+        let first_row = items.iter().map(|i| i.row_indexes.start).min().unwrap_or(0);
+        let first_row_items = || in_source_order().filter(|i| i.row_indexes.start == first_row);
+        let item = first_row_items()
+            .find(|i| i.participates_in_baseline_alignment())
+            .or_else(|| first_row_items().next())
+            .expect("the first row has an item");
         let first = item.y_position + item.baseline.unwrap_or(item.height);
         let last_row_end = items.iter().map(|i| i.row_indexes.end).max().unwrap_or(0);
-        let last = items
-            .iter()
+        let last = in_source_order()
             .filter(|i| i.row_indexes.end == last_row_end)
             .max_by_key(|i| (i.row_indexes.start, i.column_indexes.start))
             .map(|i| i.y_position + i.last_baseline);
@@ -643,13 +656,18 @@ pub(crate) fn reposition_absolute_grid_child<T: LayoutTree + CacheAccess + ?Size
 fn recheck_contributions<T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     items: &mut [item::GridItem],
+    order: &[u32],
     axis: AbstractAxis,
     axis_tracks: &[GridTrack],
     other_axis_tracks: &[GridTrack],
     inner_node_size: Size<Option<f32>>,
 ) -> bool {
     let mut changed = false;
-    for item in items.iter_mut().filter(|i| i.crosses_intrinsic_column) {
+    for &i in order {
+        let item = &mut items[i as usize];
+        if !item.crosses_intrinsic_column {
+            continue;
+        }
         let calc = |id, basis| tree.resolve_calc(id, basis);
         let grid_area_size = item.grid_area_size(axis, axis_tracks, other_axis_tracks, inner_node_size, |t, _| Some(t.base_size), &calc);
         let available = grid_area_size.with_abstract(axis, None);
@@ -665,4 +683,4 @@ fn recheck_contributions<T: LayoutTree + CacheAccess + ?Sized>(
     changed
 }
 
-crate::compute::scratch::pooled!(item::GridItem, GridTrack, ItemPrep);
+crate::compute::scratch::pooled!(item::GridItem, GridTrack, ItemPrep, u32, (u64, u32));
