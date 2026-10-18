@@ -228,8 +228,14 @@ fn cold_groups<Ctx>(tree: &Tree<Ctx>, requests: &[ChildRequest]) -> Vec<Group> {
     // A warm frame is the common case; probing every request of a wide container would cost
     // more than the batch could save, so give up once the first few are all cached.
     const WARM_SAMPLE: usize = 16;
+    // Likewise a row of cheap leaves, which are never distributed: give up when the first ones
+    // all are.
+    const LEAF_SAMPLE: usize = 64;
     let mut probed = 0;
     for (r, req) in requests.iter().enumerate() {
+        if r == LEAF_SAMPLE && probed == 0 {
+            return Vec::new();
+        }
         let i = tree.index(req.node);
         let cheap_leaf = tree.links[i].child_count == 0 && tree.context_slot[i] == NONE;
         if cheap_leaf || tree.style(req.node).generates_no_box() {
