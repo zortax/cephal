@@ -123,9 +123,11 @@ pub fn parse_display(s: &str) -> Option<Display> {
 
 pub fn parse_position(s: &str) -> Option<Position> {
     Some(match s.trim() {
+        "static" => Position::Static,
         "relative" => Position::Relative,
         "absolute" => Position::Absolute,
         "fixed" => Position::Fixed,
+        "sticky" => Position::Sticky,
         _ => return None,
     })
 }

@@ -98,7 +98,8 @@ pub(super) fn generate_item_list<T: LayoutTree + ?Sized>(
             contain,
             scrollbar_width: style.scrollbar_width,
             position,
-            inset: style.inset,
+            // Read only to offset an in-flow box, which only `position: relative` does.
+            inset: if position.offsets_in_flow() { style.inset } else { Rect::splat(LengthPercentageAuto::AUTO) },
             margin: style.margin,
             padding,
             border,

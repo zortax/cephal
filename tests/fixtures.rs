@@ -154,9 +154,8 @@ fn build_style(node: Node, tree: &mut Tree<Ahem>) -> Style {
     if let Some(v) = attr(node, "clear", parse_clear) {
         s.clear = v;
     }
-    // Until cephal has `position: static`, static boxes are laid out as relative ones; fixtures that
-    // tell them apart are listed in `expected_failures.txt`.
-    if let Some(v) = attr(node, "position", |v| if v == "static" { Some(cephal::style::Position::Relative) } else { parse_position(v) }) {
+    // Gentest writes every box's computed `position`; a missing one is `static`, the default.
+    if let Some(v) = attr(node, "position", parse_position) {
         s.position = v;
     }
     let dim = |n: &str| attr(node, n, parse_dimension).unwrap_or(Dimension::AUTO);

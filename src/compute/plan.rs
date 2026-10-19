@@ -25,6 +25,8 @@ pub struct StylePlan {
     /// As a flex item, the style needs none of the general algorithm's handling of `aspect-ratio`,
     /// auto margins, sizing keywords, or a `content` or relative `flex-basis`.
     pub plain_flex_item: bool,
+    /// `position: relative`: an in-flow box is offset by `inset`.
+    pub offsets_in_flow: bool,
     /// The leaf algorithm's box.
     pub leaf: LeafBox,
 }
@@ -52,6 +54,7 @@ impl StylePlan {
             flex_basis: if basis.uses_percentage() { None } else { basis.resolve(None, &calc) },
             flex_basis_is_relative: basis.uses_percentage(),
             plain_flex_item,
+            offsets_in_flow: style.position.offsets_in_flow(),
             leaf,
         })
     }

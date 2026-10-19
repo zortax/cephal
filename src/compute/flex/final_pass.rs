@@ -47,10 +47,16 @@ fn calculate_flex_item<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
 
     // Insets are read only here; resolve them as item generation would have.
     let inset = match tree.style_plan(item.node) {
-        Some(p) => p.inset,
+        Some(p) if p.offsets_in_flow => p.inset,
+        Some(_) => Rect::NONE,
         None => {
-            let calc = |id, basis| tree.resolve_calc(id, basis);
-            tree.style(item.node).inset.zip_size(c.inset_basis, |i, basis| i.resolve(basis, &calc))
+            let style = tree.style(item.node);
+            if style.position.offsets_in_flow() {
+                let calc = |id, basis| tree.resolve_calc(id, basis);
+                style.inset.zip_size(c.inset_basis, |i, basis| i.resolve(basis, &calc))
+            } else {
+                Rect::NONE
+            }
         }
     };
     let main_relative_inset = if is_rtl_row {

@@ -16,7 +16,7 @@ use crate::compute::common::overflow::{scrollable_overflow_contribution, union};
 use crate::compute::common::overflow::union as _overflow_union;
 use crate::compute::{LayoutTreeExt, compute_child_layout};
 use crate::geometry::{Line, MaybeMath, Point, Rect, Size};
-use crate::style::{BoxSizing, Direction, Overflow, Position};
+use crate::style::{BoxSizing, Direction, Overflow};
 use crate::tree::{
     Baselines, CacheAccess, CollapsibleMarginSet, Layout, LayoutInput, LayoutOutput, LayoutTree, NodeId,
     RequestedAxis, RunMode, SizingMode,
@@ -158,12 +158,12 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
     let own_margins_collapse_with_children = Line {
         start: vertical_margins_are_collapsible.start
             && !establishes_new_bfc
-            && style.position == Position::Relative
+            && !style.position.is_out_of_flow()
             && padding.top == 0.0
             && border.top == 0.0,
         end: vertical_margins_are_collapsible.end
             && !establishes_new_bfc
-            && style.position == Position::Relative
+            && !style.position.is_out_of_flow()
             && padding.bottom == 0.0
             && border.bottom == 0.0
             && size.height.is_none(),

@@ -800,7 +800,8 @@ fn final_layout_pass<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     let mut place = |index: usize, item: &Item, out: &LayoutOutput| {
         let size = out.size;
         let plan = tree.style_plan(item.node).expect("plain items have a plan");
-        let (inset, padding, item_border) = (plan.inset, plan.padding, plan.border);
+        let inset = if plan.offsets_in_flow { plan.inset } else { Rect::NONE };
+        let (padding, item_border) = (plan.padding, plan.border);
         let main_relative_inset = if is_rtl_row {
             inset.main_end(dir).or(inset.main_start(dir).map(|p| -p)).unwrap_or(0.0)
         } else {

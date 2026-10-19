@@ -423,21 +423,34 @@ pub fn compute_root_layout<T: LayoutTree + CacheAccess + ?Sized>(
         width: if style.overflow.y == crate::style::Overflow::Scroll { style.scrollbar_width } else { 0.0 },
         height: if style.overflow.x == crate::style::Overflow::Scroll { style.scrollbar_width } else { 0.0 },
     };
-    let x = match (style.direction, available_space.width) {
-        (crate::style::Direction::Rtl, AvailableSpace::Definite(w)) => w - output.size.width,
-        _ => 0.0,
+    // The root's margin box sits at the origin of the initial containing block, whose size is the
+    // viewport; a relatively positioned root is then offset by its insets, resolved against it.
+    let calc = |id, basis| tree.resolve_calc(id, basis);
+    let resolved_margin = margin.map(|m| m.unwrap_or(0.0));
+    let rtl = style.direction == crate::style::Direction::Rtl;
+    let mut location = Point {
+        x: match (rtl, available_space.width) {
+            (true, AvailableSpace::Definite(w)) => w - output.size.width - resolved_margin.right,
+            _ => resolved_margin.left,
+        },
+        y: resolved_margin.top,
     };
+    if style.position.offsets_in_flow() {
+        let inset = style.inset.zip_size(parent_size, |i, basis| i.resolve(basis, &calc));
+        location.x += if rtl { inset.right.map(|r| -r).or(inset.left) } else { inset.left.or(inset.right.map(|r| -r)) }.unwrap_or(0.0);
+        location.y += inset.top.or(inset.bottom.map(|b| -b)).unwrap_or(0.0);
+    }
     tree.set_unrounded_layout(
         root,
         &Layout {
             order: 0,
-            location: Point { x, y: 0.0 },
+            location,
             size: output.size,
             scrollable_overflow_rect: output.scrollable_overflow_rect,
             scrollbar_size,
             border,
             padding,
-            margin: margin.map(|m| m.unwrap_or(0.0)),
+            margin: resolved_margin,
         },
     );
 }
