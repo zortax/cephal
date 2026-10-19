@@ -41,9 +41,22 @@ pub mod stats {
     pub static RUN_SIZE_AXIS: AtomicUsize = AtomicUsize::new(0);
     /// Container runs answering a two-axis size question.
     pub static RUN_SIZE_BOTH: AtomicUsize = AtomicUsize::new(0);
-    /// Single-line flex container runs that took the fused path, and that could not.
+    /// Flex container runs that took the fused path, and that could not.
     pub static FLEX_FUSED: AtomicUsize = AtomicUsize::new(0);
     pub static FLEX_NOT_FUSED: AtomicUsize = AtomicUsize::new(0);
+    /// Why flex container runs did not take the fused path: their `flex-wrap`; an item without a
+    /// style plan (relative lengths); an item with an aspect ratio, an auto margin, a `content`,
+    /// keyword or relative basis, or a sizing keyword size; baseline alignment; no in-flow item.
+    pub static FLEX_MISS_WRAP: AtomicUsize = AtomicUsize::new(0);
+    pub static FLEX_MISS_NO_PLAN: AtomicUsize = AtomicUsize::new(0);
+    pub static FLEX_MISS_ASPECT_RATIO: AtomicUsize = AtomicUsize::new(0);
+    pub static FLEX_MISS_AUTO_MARGIN: AtomicUsize = AtomicUsize::new(0);
+    pub static FLEX_MISS_BASIS: AtomicUsize = AtomicUsize::new(0);
+    pub static FLEX_MISS_SIZE_KEYWORD: AtomicUsize = AtomicUsize::new(0);
+    pub static FLEX_MISS_BASELINE: AtomicUsize = AtomicUsize::new(0);
+    pub static FLEX_MISS_EMPTY: AtomicUsize = AtomicUsize::new(0);
+    /// Multi-line flex container runs, fused or not.
+    pub static FLEX_WRAP: AtomicUsize = AtomicUsize::new(0);
     /// Grid item contributions taken from a known size, and ones measured.
     pub static GRID_MEASURE_ELIDED: AtomicUsize = AtomicUsize::new(0);
     pub static GRID_MEASURED: AtomicUsize = AtomicUsize::new(0);
@@ -51,7 +64,7 @@ pub mod stats {
         c.fetch_add(1, Relaxed);
     }
     pub fn report() -> String {
-        let all = [("hidden", &HIDDEN), ("cheap_leaf", &CHEAP_LEAF), ("hit_size", &HIT_SIZE), ("hit_final", &HIT_FINAL), ("miss_size", &MISS_SIZE), ("miss_final", &MISS_FINAL), ("measure", &MEASURE), ("speculative", &SPECULATIVE), ("relaxed_hit", &RELAXED_HIT), ("batches", &BATCHES), ("plan_few_requests", &PLAN_FEW_REQUESTS), ("plan_few_groups", &PLAN_FEW_GROUPS), ("plan_little_work", &PLAN_LITTLE_WORK), ("batch_us", &BATCH_NANOS), ("batch_requests", &BATCH_REQUESTS), ("collision", &COLLISION), ("run_size_axis", &RUN_SIZE_AXIS), ("run_size_both", &RUN_SIZE_BOTH), ("flex_fused", &FLEX_FUSED), ("flex_not_fused", &FLEX_NOT_FUSED), ("grid_measure_elided", &GRID_MEASURE_ELIDED), ("grid_measured", &GRID_MEASURED)];
+        let all = [("hidden", &HIDDEN), ("cheap_leaf", &CHEAP_LEAF), ("hit_size", &HIT_SIZE), ("hit_final", &HIT_FINAL), ("miss_size", &MISS_SIZE), ("miss_final", &MISS_FINAL), ("measure", &MEASURE), ("speculative", &SPECULATIVE), ("relaxed_hit", &RELAXED_HIT), ("batches", &BATCHES), ("plan_few_requests", &PLAN_FEW_REQUESTS), ("plan_few_groups", &PLAN_FEW_GROUPS), ("plan_little_work", &PLAN_LITTLE_WORK), ("batch_us", &BATCH_NANOS), ("batch_requests", &BATCH_REQUESTS), ("collision", &COLLISION), ("run_size_axis", &RUN_SIZE_AXIS), ("run_size_both", &RUN_SIZE_BOTH), ("flex_fused", &FLEX_FUSED), ("flex_not_fused", &FLEX_NOT_FUSED), ("flex_miss_wrap", &FLEX_MISS_WRAP), ("flex_miss_no_plan", &FLEX_MISS_NO_PLAN), ("flex_miss_aspect_ratio", &FLEX_MISS_ASPECT_RATIO), ("flex_miss_auto_margin", &FLEX_MISS_AUTO_MARGIN), ("flex_miss_basis", &FLEX_MISS_BASIS), ("flex_miss_size_keyword", &FLEX_MISS_SIZE_KEYWORD), ("flex_miss_baseline", &FLEX_MISS_BASELINE), ("flex_miss_empty", &FLEX_MISS_EMPTY), ("flex_wrap", &FLEX_WRAP),("grid_measure_elided", &GRID_MEASURE_ELIDED), ("grid_measured", &GRID_MEASURED)];
         let s = all.iter().map(|(n, c)| format!("{n}={}", c.swap(0, Relaxed))).collect::<Vec<_>>().join(" ");
         s
     }

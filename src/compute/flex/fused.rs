@@ -194,9 +194,24 @@ impl Item {
     }
 }
 
-/// The plain in-flow items and whether any child was left out, or `None` when an item is not
-/// plain.
-fn generate_items<D: FlexDir, T: LayoutTree + ?Sized>(tree: &T, node: NodeId, c: &AlgoConstants<D>) -> Option<(Scratch<Item>, bool)> {
+/// Why a container's items do not fit the fused path.
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(not(feature = "stats"), allow(dead_code))]
+pub(super) enum Miss {
+    /// An item's lengths resolve against the container: it has no
+    /// [`StylePlan`](crate::compute::plan::StylePlan).
+    NoPlan,
+    /// This item has an aspect ratio, an auto margin, a sizing keyword size or a basis only the
+    /// general algorithm handles.
+    NotPlain(NodeId),
+    /// An item is baseline aligned.
+    Baseline,
+    /// No item is in flow.
+    Empty,
+}
+
+/// The plain in-flow items and whether any child was left out, or why the items are not plain.
+fn generate_items<D: FlexDir, T: LayoutTree + ?Sized>(tree: &T, node: NodeId, c: &AlgoConstants<D>) -> Result<(Scratch<Item>, bool), Miss> {
     let dir = c.dir;
     let direct = tree.forwards_child_layout();
     let mut items: Scratch<Item> = Scratch::with_capacity(tree.child_count(node));
@@ -207,11 +222,14 @@ fn generate_items<D: FlexDir, T: LayoutTree + ?Sized>(tree: &T, node: NodeId, c:
             skipped = true;
             continue;
         }
-        let plan = tree.style_plan(child)?;
+        let plan = tree.style_plan(child).ok_or(Miss::NoPlan)?;
         let align_self =
             style.align_self.unwrap_or(c.align_items).resolve_self_relative(style.direction, c.layout_direction, c.is_column);
-        if !plan.plain_flex_item || align_self.keyword == AlignItemsKeyword::Baseline {
-            return None;
+        if !plan.plain_flex_item {
+            return Err(Miss::NotPlain(child));
+        }
+        if align_self.keyword == AlignItemsKeyword::Baseline {
+            return Err(Miss::Baseline);
         }
         let padding_border = (plan.padding + plan.border).sum_axes();
         let box_sizing_adjustment = if style.box_sizing == BoxSizing::ContentBox { padding_border } else { Size::ZERO };
@@ -260,18 +278,18 @@ fn generate_items<D: FlexDir, T: LayoutTree + ?Sized>(tree: &T, node: NodeId, c:
         });
     }
     if items.is_empty() {
-        return None;
+        return Err(Miss::Empty);
     }
-    Some((items, skipped))
+    Ok((items, skipped))
 }
 
-/// Lays out `node` when its items are all plain; `None`, having asked nothing, otherwise.
+/// Lays out `node` when its items are all plain; why not, having asked nothing, otherwise.
 pub(super) fn compute<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     node: NodeId,
     inputs: LayoutInput,
     c: &mut AlgoConstants<D>,
-) -> Option<LayoutOutput> {
+) -> Result<LayoutOutput, Miss> {
     let LayoutInput { known_dimensions, run_mode, .. } = inputs;
     let (mut items, has_other_children) = generate_items(tree, node, c)?;
     let dir = c.dir;
@@ -295,7 +313,7 @@ pub(super) fn compute<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     }
 
     if run_mode == RunMode::ComputeSize && inputs.axis == RequestedAxis::from(dir.main_axis()) {
-        return Some(LayoutOutput::from_outer_size(c.container_size));
+        return Ok(LayoutOutput::from_outer_size(c.container_size));
     }
 
     resolve_flexible_lengths(&mut items, c);
@@ -324,7 +342,7 @@ pub(super) fn compute<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     let total_line_cross_size = cross::determine_container_cross_size(&lines, known_dimensions, c);
 
     if run_mode == RunMode::ComputeSize {
-        return Some(LayoutOutput::from_outer_size(c.container_size));
+        return Ok(LayoutOutput::from_outer_size(c.container_size));
     }
 
     super::align::align_flex_lines_per_align_content(&mut lines, c, total_line_cross_size);
@@ -334,7 +352,7 @@ pub(super) fn compute<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     let mut output =
         LayoutOutput::from_sizes_and_baselines(c.container_size, Rect::ZERO, baselines).with_overflow(inflow_overflow_rect, absolute_overflow_rect);
     output.oof = oof;
-    Some(output)
+    Ok(output)
 }
 
 /// See [`super::base_size::indefinite_stretch_cross`].

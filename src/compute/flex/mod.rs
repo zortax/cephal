@@ -229,14 +229,27 @@ fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized, D: FlexDir>(
     let LayoutInput { known_dimensions, parent_size, available_space, run_mode, .. } = inputs;
     let mut constants =
         compute_constants(tree, node, dir, known_dimensions, inputs.known_dimensions_are_definite, parent_size, available_space);
-    if !constants.is_wrap && fused::enabled() {
-        if let Some(output) = fused::compute(tree, node, inputs, &mut constants) {
+    #[cfg(feature = "stats")]
+    if constants.is_wrap {
+        crate::compute::stats::bump(&crate::compute::stats::FLEX_WRAP);
+    }
+    if fused::enabled() {
+        if constants.is_wrap {
             #[cfg(feature = "stats")]
-            crate::compute::stats::bump(&crate::compute::stats::FLEX_FUSED);
-            return output;
+            count_miss(tree, None);
+        } else {
+            match fused::compute(tree, node, inputs, &mut constants) {
+                Ok(output) => {
+                    #[cfg(feature = "stats")]
+                    crate::compute::stats::bump(&crate::compute::stats::FLEX_FUSED);
+                    return output;
+                }
+                #[cfg(feature = "stats")]
+                Err(miss) => count_miss(tree, Some(miss)),
+                #[cfg(not(feature = "stats"))]
+                Err(_) => {}
+            }
         }
-        #[cfg(feature = "stats")]
-        crate::compute::stats::bump(&crate::compute::stats::FLEX_NOT_FUSED);
     }
     let (mut items, has_other_children) = generate_anonymous_flex_items(tree, node, &constants);
     let available_space = determine_available_space(known_dimensions, available_space, &constants);
@@ -332,6 +345,32 @@ fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized, D: FlexDir>(
         .with_overflow(inflow_overflow_rect, absolute_overflow_rect);
     output.oof = oof;
     output
+}
+
+/// Counts a container the fused path does not take, by reason: `None` for its `flex-wrap`.
+#[cfg(feature = "stats")]
+fn count_miss<T: LayoutTree + ?Sized>(tree: &T, miss: Option<fused::Miss>) {
+    use crate::compute::stats::*;
+    bump(&FLEX_NOT_FUSED);
+    bump(match miss {
+        None => &FLEX_MISS_WRAP,
+        Some(fused::Miss::NoPlan) => &FLEX_MISS_NO_PLAN,
+        Some(fused::Miss::Baseline) => &FLEX_MISS_BASELINE,
+        Some(fused::Miss::Empty) => &FLEX_MISS_EMPTY,
+        Some(fused::Miss::NotPlain(item)) => {
+            let style = tree.style(item);
+            let (basis, m) = (style.flex_basis.raw(), style.margin);
+            if style.aspect_ratio.is_some() {
+                &FLEX_MISS_ASPECT_RATIO
+            } else if m.left.is_auto() || m.right.is_auto() || m.top.is_auto() || m.bottom.is_auto() {
+                &FLEX_MISS_AUTO_MARGIN
+            } else if basis.uses_percentage() || basis.is_content() || basis.is_sizing_keyword() {
+                &FLEX_MISS_BASIS
+            } else {
+                &FLEX_MISS_SIZE_KEYWORD
+            }
+        }
+    });
 }
 
 /// Lays out the hidden children, and ends the final layout's out-of-flow work (see
