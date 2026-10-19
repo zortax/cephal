@@ -69,8 +69,8 @@ pub(super) fn place_grid_items<T: LayoutTree + ?Sized>(
     items: &mut Vec<GridItem>,
     children: &[(usize, NodeId, Placement)],
     auto_flow: GridAutoFlow,
-    align_items: AlignItems,
-    justify_items: AlignItems,
+    align_items: Option<AlignItems>,
+    justify_items: Option<AlignItems>,
 ) {
     let primary_axis = auto_flow.primary_axis();
     let secondary_axis = primary_axis.other();

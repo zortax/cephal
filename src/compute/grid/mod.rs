@@ -152,8 +152,8 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
         &mut items,
         &placements,
         grid_style.auto_flow,
-        align_items.unwrap_or(AlignItems::STRETCH),
-        justify_items.unwrap_or(AlignItems::STRETCH),
+        align_items,
+        justify_items,
     );
     drop(placements);
     let final_col_counts = *matrix.track_counts(AbsoluteAxis::Horizontal);

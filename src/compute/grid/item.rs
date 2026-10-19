@@ -76,10 +76,12 @@ impl GridItem {
         col_span: Line<OriginZeroLine>,
         row_span: Line<OriginZeroLine>,
         style: &Style,
-        parent_align_items: AlignItems,
-        parent_justify_items: AlignItems,
+        parent_align_items: Option<AlignItems>,
+        parent_justify_items: Option<AlignItems>,
         source_order: u16,
     ) -> Self {
+        // `normal` stretches, except replaced items, which it sizes as for `start` (css-grid-1 §6.2).
+        let normal = if style.item_is_replaced { AlignSelf::START } else { AlignSelf::STRETCH };
         Self {
             node,
             source_order,
@@ -98,8 +100,8 @@ impl GridItem {
             fixed_lengths_resolved: false,
             fixed_sizes: None,
             fixed_margin: None,
-            align_self: style.align_self.unwrap_or(parent_align_items),
-            justify_self: style.justify_self.unwrap_or(parent_justify_items),
+            align_self: style.align_self.or(parent_align_items).unwrap_or(normal),
+            justify_self: style.justify_self.or(parent_justify_items).unwrap_or(normal),
             baseline: None,
             baseline_shim: 0.0,
             row_indexes: Line { start: 0, end: 0 },

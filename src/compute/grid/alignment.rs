@@ -171,13 +171,15 @@ pub(super) fn prepare_item<T: LayoutTree + CacheAccess + ?Sized>(
         .maybe_max(padding_border_size.map(Some))
         .maybe_apply_aspect_ratio(aspect_ratio);
     let max_size = raw_max_size.maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment);
-    let alignment_h = justify_self.or(container_h).unwrap_or(if inherent_size.width.is_some() || size_style.width.is_sizing_keyword() {
+    // `normal` sizes replaced items as for `start`.
+    let is_replaced = style.item_is_replaced;
+    let alignment_h = justify_self.or(container_h).unwrap_or(if inherent_size.width.is_some() || size_style.width.is_sizing_keyword() || is_replaced {
         AlignSelf::START
     } else {
         AlignSelf::STRETCH
     });
     let alignment_v = align_self.or(container_v).unwrap_or(
-        if inherent_size.height.is_some() || size_style.height.is_sizing_keyword() || aspect_ratio.is_some() {
+        if inherent_size.height.is_some() || size_style.height.is_sizing_keyword() || aspect_ratio.is_some() || is_replaced {
             AlignSelf::START
         } else {
             AlignSelf::STRETCH
