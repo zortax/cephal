@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    An absolutely positioned box of automatic size gets its width first and its height at that
+    width (CSS 2.2 §10.3.7, §10.6.4): the percentage width of a column flex item, and the
+    percentage margin inside it, resolve against the width the box ends up with
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; position: relative; width: 109px; height: 300px;">
+  <div style="display: flex; flex-direction: column; position: absolute; right: 5%;">
+    <div style="display: block; width: 183px; flex-grow: 2;"></div>
+    <div style="display: block; width: 52%;">
+      <div style="display: block; margin-bottom: 5%;"></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

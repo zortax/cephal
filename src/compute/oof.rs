@@ -726,6 +726,30 @@ fn layout_oof_box<T: LayoutTree + CacheAccess + ?Sized>(
 
     let final_size = match (known_dimensions.width, known_dimensions.height) {
         (Some(width), Some(height)) => Size { width, height },
+        // The width first (CSS 2.2 §10.3.7), then the height at that width (§10.6.4), which
+        // percentages inside then resolve against.
+        (None, None) => {
+            let measured = tree.measure_child_size(
+                node,
+                known_dimensions,
+                area,
+                available_space,
+                SizingMode::ContentSize,
+                crate::geometry::AbsoluteAxis::Horizontal,
+                Line::FALSE,
+            );
+            let width = measured.maybe_clamp(min_size.width, max_size.width);
+            let height = tree.measure_child_size(
+                node,
+                Size { width: Some(width), height: None },
+                area,
+                available_space,
+                SizingMode::ContentSize,
+                crate::geometry::AbsoluteAxis::Vertical,
+                Line::FALSE,
+            );
+            Size { width, height }
+        }
         _ => {
             let measured =
                 tree.measure_child_size_both(node, known_dimensions, area, available_space, SizingMode::ContentSize, Line::FALSE);
