@@ -14,7 +14,7 @@
 22 [RootOffsets,Absolute]
 24 [RootOffsets,Absolute]
 26 [Absolute]
-27 unexplained
+27 [Absolute]
 30 [Absolute]
 31 [Absolute]
 34 [RootOffsets,Absolute]
@@ -478,7 +478,7 @@
 900 combination
 901 [Absolute]
 903 unexplained
-906 unexplained
+906 [Absolute]
 907 [Absolute]
 911 unexplained
 914 [Absolute]

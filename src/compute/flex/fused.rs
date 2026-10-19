@@ -561,6 +561,10 @@ fn determine_container_main_size<D: FlexDir, T: LayoutTree + CacheAccess + ?Size
                                 .map_definite(|val| c.divided_cross_space(cross_axis_parent_size.unwrap_or(val)))
                                 .maybe_clamp(child_min_cross, child_max_cross);
                             let mut child_known_dimensions = item.size.with_main(dir, None);
+                            child_known_dimensions.set_cross(
+                                dir,
+                                child_known_dimensions.cross(dir).maybe_clamp(item.min_size.cross(dir), item.max_size.cross(dir)),
+                            );
                             if item.align_self == AlignSelf::STRETCH && child_known_dimensions.cross(dir).is_none() {
                                 let stretched = c.indefinite_stretch_cross.or(cross_axis_available_space.into_option());
                                 child_known_dimensions

@@ -121,6 +121,10 @@ pub(super) fn determine_container_main_size<D: FlexDir, T: LayoutTree + CacheAcc
                                     .maybe_clamp(child_min_cross, child_max_cross);
                                 let child_known_dimensions = {
                                     let mut ckd = item.size.with_main(dir, None);
+                                    // Measured at its clamped cross size, as for its flex base size.
+                                    let min_cross = item.min_size.maybe_apply_aspect_ratio(item.aspect_ratio).cross(dir);
+                                    let max_cross = item.max_size.maybe_apply_aspect_ratio(item.aspect_ratio).cross(dir);
+                                    ckd.set_cross(dir, ckd.cross(dir).maybe_clamp(min_cross, max_cross));
                                     let keyword = match ckd.cross(dir) {
                                         Some(_) => None,
                                         None => super::base_size::cross_sizing_keyword(c, item),
