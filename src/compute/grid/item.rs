@@ -48,6 +48,8 @@ pub(super) struct GridItem {
     fixed_sizes: Option<ResolvedSizes>,
     /// The margins, when none depends on the percentage basis.
     fixed_margin: Option<Rect<f32>>,
+    /// Every margin is zero or `auto`; set by [`Self::resolve_fixed_lengths`].
+    margin_free: bool,
     pub align_self: AlignSelf,
     pub justify_self: AlignSelf,
     pub baseline: Option<f32>,
@@ -99,6 +101,7 @@ impl GridItem {
             fixed_lengths_resolved: false,
             fixed_sizes: None,
             fixed_margin: None,
+            margin_free: false,
             align_self: style.align_self.or(parent_align_items).unwrap_or(normal),
             justify_self: style.justify_self.or(parent_justify_items).unwrap_or(normal),
             baseline: None,
@@ -149,7 +152,9 @@ impl GridItem {
         }
         let margin = self.margin;
         if ![margin.left, margin.right, margin.top, margin.bottom].iter().any(|m| m.uses_percentage()) {
-            self.fixed_margin = Some(self.resolve_margin(None, &no_basis));
+            let resolved = self.resolve_margin(None, &no_basis);
+            self.fixed_margin = Some(resolved);
+            self.margin_free = resolved == Rect::ZERO;
         }
     }
 
@@ -370,6 +375,38 @@ impl GridItem {
         Rect { top: margin.top + self.baseline_shim, ..margin }.sum_axes()
     }
 
+    /// The space available to the item's border box: its definite margin box space less its
+    /// margins (resolved against the grid area's width, `auto` as zero) and baseline shim.
+    #[inline(always)]
+    fn available_space_minus_margins<T: LayoutTree + ?Sized>(
+        &self,
+        grid_area_size: Size<Option<f32>>,
+        available_space: Size<Option<f32>>,
+        tree: &T,
+    ) -> Size<Option<f32>> {
+        if (self.margin_free && self.baseline_shim == 0.0) || (available_space.width.is_none() && available_space.height.is_none()) {
+            return available_space;
+        }
+        self.subtract_margins(grid_area_size, available_space, tree)
+    }
+
+    #[inline(never)]
+    fn subtract_margins<T: LayoutTree + ?Sized>(
+        &self,
+        grid_area_size: Size<Option<f32>>,
+        available_space: Size<Option<f32>>,
+        tree: &T,
+    ) -> Size<Option<f32>> {
+        let margin = match self.fixed_margin {
+            Some(margin) => margin,
+            None => self.margin.map(|m| m.resolve_or_zero(grid_area_size.width, &|id, basis| tree.resolve_calc(id, basis))),
+        };
+        Size {
+            width: available_space.width.map(|w| (w - margin.horizontal_axis_sum()).max(0.0)),
+            height: available_space.height.map(|h| (h - margin.vertical_axis_sum() - self.baseline_shim).max(0.0)),
+        }
+    }
+
     fn keyword_adjusted_available_space<T: LayoutTree + ?Sized>(
         &self,
         grid_area_size: Size<Option<f32>>,
@@ -408,7 +445,7 @@ impl GridItem {
         let known_dimensions = self.known_dimensions(tree, grid_area_size);
         let available = self.keyword_adjusted_available_space(
             grid_area_size,
-            available_space.map(|o| o.map_or(fallback, AvailableSpace::Definite)),
+            self.available_space_minus_margins(grid_area_size, available_space, tree).map(|o| o.map_or(fallback, AvailableSpace::Definite)),
             tree,
         );
         crate::compute::size_request(self.node, known_dimensions, grid_area_size, available, SizingMode::InherentSize, axis.as_abs().into())
@@ -495,6 +532,7 @@ impl GridItem {
         }
     }
 
+    #[inline]
     fn content_contribution<T: LayoutTree + CacheAccess + ?Sized>(
         &self,
         axis: AbstractAxis,
@@ -506,7 +544,7 @@ impl GridItem {
         let known_dimensions = self.known_dimensions(tree, grid_area_size);
         let available = self.keyword_adjusted_available_space(
             grid_area_size,
-            available_space.map(|o| o.map_or(fallback, AvailableSpace::Definite)),
+            self.available_space_minus_margins(grid_area_size, available_space, tree).map(|o| o.map_or(fallback, AvailableSpace::Definite)),
             tree,
         );
         tree.measure_child_size(
