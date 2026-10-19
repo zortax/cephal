@@ -277,7 +277,8 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
         let clear_pos = clear_threshold.unwrap_or(f32::NEG_INFINITY);
 
         let item_layout = if item.is_in_same_bfc {
-            let width = known_dimensions.width.unwrap_or(stretch_width);
+            // The border box is at least as wide as its padding and border.
+            let width = known_dimensions.width.unwrap_or(stretch_width).max(item.padding_border_sum.width);
             let inset_left = item_non_auto_margin.left + p.content_box_inset.left;
             let inset_right = p.container_outer_width - width - inset_left;
             let mut child_ctx = block_ctx.sub_context((y_offset_for_absolute + item_non_auto_margin.top).max(clear_pos), [inset_left, inset_right]);
