@@ -868,11 +868,16 @@ fn final_layout_pass<const WRAP: bool, D: FlexDir, T: LayoutTree + CacheAccess +
         c.content_box_inset.cross_start(dir)
     };
     let mut overflow_rect = Rect::ZERO;
-    let mut questions: Questions<LayoutOutput> = Questions::new(tree, items.len());
-    for item in items.iter() {
-        ask(&mut questions, tree, item.cheap_leaf, item_request(item, c), |out| *out);
+    // A tree answering one question at a time lays each item out just before placing it, in the
+    // order it would ask them, and keeps no answer; a distributing tree asks them as one batch.
+    let streamed = !tree.batches_help() && !dir.is_reverse();
+    let mut questions: Questions<LayoutOutput> = Questions::new(tree, if streamed { 0 } else { items.len() });
+    if !streamed {
+        for item in items.iter() {
+            ask(&mut questions, tree, item.cheap_leaf, item_request(item, c), |out| *out);
+        }
+        questions.finish(tree, |out| *out);
     }
-    questions.finish(tree, |out| *out);
     let outputs = questions.answers();
 
     let padding_border = c.content_box_inset;
@@ -897,7 +902,7 @@ fn final_layout_pass<const WRAP: bool, D: FlexDir, T: LayoutTree + CacheAccess +
         if is_rtl_column {
             total_offset_cross -= line_offset_cross + line.cross_size;
         }
-        let mut place = |index: usize, item: &Item, out: &LayoutOutput| {
+        let mut place = |tree: &mut T, index: usize, item: &Item, out: &LayoutOutput| {
             let size = out.size;
             let plan = tree.style_plan(item.node).expect("plain items have a plan");
             let inset = if plan.offsets_in_flow { plan.inset } else { Rect::NONE };
@@ -992,14 +997,26 @@ fn final_layout_pass<const WRAP: bool, D: FlexDir, T: LayoutTree + CacheAccess +
                 ),
             );
         };
-        let line_items = items[line.start..line.end].iter().zip(&outputs[line.start..line.end]);
-        if dir.is_reverse() {
-            for (offset, (item, out)) in line_items.enumerate().rev() {
-                place(line.start + offset, item, out);
+        if streamed {
+            for (offset, item) in items[line.start..line.end].iter().enumerate() {
+                let request = item_request(item, c);
+                let out = if item.cheap_leaf {
+                    crate::compute::compute_cheap_leaf(tree, request.node, request.input, None)
+                } else {
+                    tree.compute_child_layout(request.node, request.input, None)
+                };
+                place(tree, line.start + offset, item, &out);
             }
         } else {
-            for (offset, (item, out)) in line_items.enumerate() {
-                place(line.start + offset, item, out);
+            let line_items = items[line.start..line.end].iter().zip(&outputs[line.start..line.end]);
+            if dir.is_reverse() {
+                for (offset, (item, out)) in line_items.enumerate().rev() {
+                    place(tree, line.start + offset, item, out);
+                }
+            } else {
+                for (offset, (item, out)) in line_items.enumerate() {
+                    place(tree, line.start + offset, item, out);
+                }
             }
         }
         if !is_rtl_column {

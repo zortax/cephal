@@ -146,7 +146,7 @@ fn calculate_layout_line<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     line: &FlexLine,
     items: &mut [FlexItem],
-    outputs: &[LayoutOutput],
+    outputs: Option<&[LayoutOutput]>,
     total_offset_cross: &mut f32,
     overflow_rect: &mut Rect<f32>,
     through: &mut Vec<OofEntry>,
@@ -166,14 +166,26 @@ fn calculate_layout_line<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     }
     let (start, end) = (line.start, line.end);
     let line_items = line.items_mut(items);
-    let line_outputs = &outputs[start..end];
-    if dir.is_reverse() {
-        for (item, out) in line_items.iter_mut().zip(line_outputs).rev() {
-            calculate_flex_item(tree, item, *out, &mut total_offset_main, *total_offset_cross, line_offset_cross, overflow_rect, through, c);
+    match outputs {
+        // Streamed: each item is laid out just before it is placed.
+        None => {
+            for item in line_items.iter_mut() {
+                let request = item_request(item, c);
+                let out = tree.compute_child_layout(request.node, request.input, None);
+                calculate_flex_item(tree, item, out, &mut total_offset_main, *total_offset_cross, line_offset_cross, overflow_rect, through, c);
+            }
         }
-    } else {
-        for (item, out) in line_items.iter_mut().zip(line_outputs) {
-            calculate_flex_item(tree, item, *out, &mut total_offset_main, *total_offset_cross, line_offset_cross, overflow_rect, through, c);
+        Some(outputs) => {
+            let line_outputs = &outputs[start..end];
+            if dir.is_reverse() {
+                for (item, out) in line_items.iter_mut().zip(line_outputs).rev() {
+                    calculate_flex_item(tree, item, *out, &mut total_offset_main, *total_offset_cross, line_offset_cross, overflow_rect, through, c);
+                }
+            } else {
+                for (item, out) in line_items.iter_mut().zip(line_outputs) {
+                    calculate_flex_item(tree, item, *out, &mut total_offset_main, *total_offset_cross, line_offset_cross, overflow_rect, through, c);
+                }
+            }
         }
     }
     if !is_rtl_column {
@@ -197,13 +209,18 @@ pub(super) fn final_layout_pass<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized
         c.content_box_inset.cross_start(dir)
     };
     let mut overflow_rect = Rect::ZERO;
-    // Every item's final layout is independent of the others; ask for them as one batch.
-    let mut questions: Questions<LayoutOutput> = Questions::new(tree, items.len());
-    for item in items.iter() {
-        questions.ask(tree, item_request(item, c), |out| *out);
+    // Every item's final layout is independent of the others. A tree answering one question at a
+    // time lays each item out just before placing it, in the order it would ask them, and keeps no
+    // answer; a distributing tree asks them as one batch.
+    let streamed = !tree.batches_help() && !dir.is_reverse() && !c.is_wrap_reverse;
+    let mut questions: Questions<LayoutOutput> = Questions::new(tree, if streamed { 0 } else { items.len() });
+    if !streamed {
+        for item in items.iter() {
+            questions.ask(tree, item_request(item, c), |out| *out);
+        }
+        questions.finish(tree, |out| *out);
     }
-    questions.finish(tree, |out| *out);
-    let outputs = questions.answers();
+    let outputs = (!streamed).then(|| questions.answers());
     if c.is_wrap_reverse {
         for line in lines.iter().rev() {
             calculate_layout_line(tree, line, items, outputs, &mut total_offset_cross, &mut overflow_rect, through, c);

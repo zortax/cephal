@@ -394,11 +394,22 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
         };
         preps.push(prepare_item(tree, item.node, grid_area, &container_alignment, item.baseline_shim, direction));
     }
-    // Every item's final layout is independent of the others; ask for them as one batch.
-    let requests: Scratch<crate::tree::ChildRequest> = Scratch::collect(preps.iter().map(ItemPrep::request));
-    let mut outputs: Scratch<LayoutOutput> = Scratch::with_capacity(requests.len());
-    tree.compute_child_layouts(&requests, &mut outputs);
-    for ((index, &i), (prep, out)) in item_order.iter().enumerate().zip(preps.iter().zip(outputs.drain(..))) {
+    // Every item's final layout is independent of the others. A tree answering one question at a
+    // time lays each item out just before placing it, in the order it would ask them, and keeps no
+    // answer; a distributing tree asks them as one batch.
+    let streamed = !tree.batches_help();
+    let mut outputs: Scratch<LayoutOutput> = Scratch::with_capacity(if streamed { 0 } else { preps.len() });
+    if !streamed {
+        let requests: Scratch<crate::tree::ChildRequest> = Scratch::collect(preps.iter().map(ItemPrep::request));
+        tree.compute_child_layouts(&requests, &mut outputs);
+    }
+    for ((index, &i), prep) in item_order.iter().enumerate().zip(preps.iter()) {
+        let out = if streamed {
+            let request = prep.request();
+            tree.compute_child_layout(request.node, request.input, None)
+        } else {
+            outputs[index]
+        };
         let item = &mut items[i as usize];
         let last_baseline = out.baselines.last;
         let oof = out.oof;
