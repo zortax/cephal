@@ -761,15 +761,20 @@ fn layout_oof_box<T: LayoutTree + CacheAccess + ?Sized>(
                 Line::FALSE,
             );
             let width = measured.maybe_clamp(min_size.width, max_size.width);
-            let height = tree.measure_child_size(
-                node,
-                Size { width: Some(width), height: None },
-                area,
-                available_space,
-                SizingMode::ContentSize,
-                crate::geometry::AbsoluteAxis::Vertical,
-                Line::FALSE,
-            );
+            // The aspect ratio gives the height from the width.
+            let transferred = Size { width: Some(width), height: None }.maybe_apply_aspect_ratio(aspect_ratio);
+            let height = match transferred.height {
+                Some(height) => height,
+                None => tree.measure_child_size(
+                    node,
+                    Size { width: Some(width), height: None },
+                    area,
+                    available_space,
+                    SizingMode::ContentSize,
+                    crate::geometry::AbsoluteAxis::Vertical,
+                    Line::FALSE,
+                ),
+            };
             Size { width, height }
         }
         _ => {
