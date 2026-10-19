@@ -11,7 +11,8 @@ The engine supports:
 - `calc()`, sizing keywords, `box-sizing`, scroll containers, and containment;
 - absolute positioning and pixel snapping.
 
-Cephal passes 6,084 Chrome-generated layout fixtures vendored from taffy.
+Cephal runs the 6,504 Chrome-generated layout fixtures of taffy 0.15. The ones it does not pass yet
+are listed by cause in `tests/fixtures/expected_failures.txt`.
 
 ## Incremental layout
 
@@ -121,8 +122,10 @@ PanGui's `Expand` has no automatic minimum size, but CSS flex items do. The `*_m
 
 ## Tests
 
-- `tests/fixtures.rs` runs 6,084 Chrome-generated fixtures from taffy.
-- `tests/differential.rs` compares random trees with taffy.
+- `tests/fixtures.rs` runs 6,504 Chrome-generated fixtures from taffy 0.15 (`scripts/update_fixtures.sh`
+  regenerates them), apart from the listed expected failures.
+- `tests/differential.rs` compares random trees with taffy, apart from the divergences listed in
+  `tests/differential_known.txt`.
 - `tests/incremental.rs` compares incremental and parallel results with cold serial layouts.
 
 Use `CEPHAL_SEEDS` and `CEPHAL_STEPS` to set the size of the random test suites. Use

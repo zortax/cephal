@@ -2,10 +2,10 @@
 <test name="contain_content_block__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" direction="ltr" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
-      <div display="block" direction="ltr" height="10px" margin-bottom="10px"/>
-      <div display="block" direction="ltr" contain="content">
-        <div display="block" direction="ltr" height="10px" margin-top="20px"/>
+    <div display="block" direction="ltr" position="absolute" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" direction="ltr" position="relative" height="10px" margin-bottom="10px"/>
+      <div display="block" direction="ltr" position="relative" contain="content">
+        <div display="block" direction="ltr" position="relative" height="10px" margin-top="20px"/>
       </div>
     </div>
   </input>
@@ -21,10 +21,10 @@
 <test name="contain_content_block__border_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" direction="rtl" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
-      <div display="block" direction="rtl" height="10px" margin-bottom="10px"/>
-      <div display="block" direction="rtl" contain="content">
-        <div display="block" direction="rtl" height="10px" margin-top="20px"/>
+    <div display="block" direction="rtl" position="absolute" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" direction="rtl" position="relative" height="10px" margin-bottom="10px"/>
+      <div display="block" direction="rtl" position="relative" contain="content">
+        <div display="block" direction="rtl" position="relative" height="10px" margin-top="20px"/>
       </div>
     </div>
   </input>
@@ -40,10 +40,10 @@
 <test name="contain_content_block__content_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" box-sizing="content-box" direction="ltr" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
-      <div display="block" box-sizing="content-box" direction="ltr" height="10px" margin-bottom="10px"/>
-      <div display="block" box-sizing="content-box" direction="ltr" contain="content">
-        <div display="block" box-sizing="content-box" direction="ltr" height="10px" margin-top="20px"/>
+    <div display="block" box-sizing="content-box" direction="ltr" position="absolute" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="10px" margin-bottom="10px"/>
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" contain="content">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="10px" margin-top="20px"/>
       </div>
     </div>
   </input>
@@ -59,10 +59,10 @@
 <test name="contain_content_block__content_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" box-sizing="content-box" direction="rtl" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
-      <div display="block" box-sizing="content-box" direction="rtl" height="10px" margin-bottom="10px"/>
-      <div display="block" box-sizing="content-box" direction="rtl" contain="content">
-        <div display="block" box-sizing="content-box" direction="rtl" height="10px" margin-top="20px"/>
+    <div display="block" box-sizing="content-box" direction="rtl" position="absolute" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="10px" margin-bottom="10px"/>
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" contain="content">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="10px" margin-top="20px"/>
       </div>
     </div>
   </input>
@@ -78,10 +78,10 @@
 <test name="contain_layout_block_avoids_float__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" direction="ltr" width="100px">
-      <div display="block" direction="ltr" float="left" width="30px" height="30px"/>
-      <div display="block" direction="ltr" contain="layout" height="50px">
-        <div display="block" direction="ltr" height="10px"/>
+    <div display="block" direction="ltr" position="absolute" width="100px">
+      <div display="block" direction="ltr" position="relative" float="left" width="30px" height="30px"/>
+      <div display="block" direction="ltr" position="relative" contain="layout" height="50px">
+        <div display="block" direction="ltr" position="relative" height="10px"/>
       </div>
     </div>
   </input>
@@ -97,10 +97,10 @@
 <test name="contain_layout_block_avoids_float__border_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" direction="rtl" width="100px">
-      <div display="block" direction="rtl" float="left" width="30px" height="30px"/>
-      <div display="block" direction="rtl" contain="layout" height="50px">
-        <div display="block" direction="rtl" height="10px"/>
+    <div display="block" direction="rtl" position="absolute" width="100px">
+      <div display="block" direction="rtl" position="relative" float="left" width="30px" height="30px"/>
+      <div display="block" direction="rtl" position="relative" contain="layout" height="50px">
+        <div display="block" direction="rtl" position="relative" height="10px"/>
       </div>
     </div>
   </input>
@@ -116,10 +116,10 @@
 <test name="contain_layout_block_avoids_float__content_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" box-sizing="content-box" direction="ltr" width="100px">
-      <div display="block" box-sizing="content-box" direction="ltr" float="left" width="30px" height="30px"/>
-      <div display="block" box-sizing="content-box" direction="ltr" contain="layout" height="50px">
-        <div display="block" box-sizing="content-box" direction="ltr" height="10px"/>
+    <div display="block" box-sizing="content-box" direction="ltr" position="absolute" width="100px">
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" float="left" width="30px" height="30px"/>
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" contain="layout" height="50px">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="10px"/>
       </div>
     </div>
   </input>
@@ -135,10 +135,10 @@
 <test name="contain_layout_block_avoids_float__content_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" box-sizing="content-box" direction="rtl" width="100px">
-      <div display="block" box-sizing="content-box" direction="rtl" float="left" width="30px" height="30px"/>
-      <div display="block" box-sizing="content-box" direction="rtl" contain="layout" height="50px">
-        <div display="block" box-sizing="content-box" direction="rtl" height="10px"/>
+    <div display="block" box-sizing="content-box" direction="rtl" position="absolute" width="100px">
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" float="left" width="30px" height="30px"/>
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" contain="layout" height="50px">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="10px"/>
       </div>
     </div>
   </input>
@@ -154,11 +154,11 @@
 <test name="contain_layout_block_contains_floats__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" direction="ltr" width="100px">
-      <div display="block" direction="ltr" contain="layout">
-        <div display="block" direction="ltr" float="left" width="30px" height="30px"/>
+    <div display="block" direction="ltr" position="absolute" width="100px">
+      <div display="block" direction="ltr" position="relative" contain="layout">
+        <div display="block" direction="ltr" position="relative" float="left" width="30px" height="30px"/>
       </div>
-      <div display="block" direction="ltr" height="10px"/>
+      <div display="block" direction="ltr" position="relative" height="10px"/>
     </div>
   </input>
   <expectations>
@@ -173,11 +173,11 @@
 <test name="contain_layout_block_contains_floats__border_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" direction="rtl" width="100px">
-      <div display="block" direction="rtl" contain="layout">
-        <div display="block" direction="rtl" float="left" width="30px" height="30px"/>
+    <div display="block" direction="rtl" position="absolute" width="100px">
+      <div display="block" direction="rtl" position="relative" contain="layout">
+        <div display="block" direction="rtl" position="relative" float="left" width="30px" height="30px"/>
       </div>
-      <div display="block" direction="rtl" height="10px"/>
+      <div display="block" direction="rtl" position="relative" height="10px"/>
     </div>
   </input>
   <expectations>
@@ -192,11 +192,11 @@
 <test name="contain_layout_block_contains_floats__content_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" box-sizing="content-box" direction="ltr" width="100px">
-      <div display="block" box-sizing="content-box" direction="ltr" contain="layout">
-        <div display="block" box-sizing="content-box" direction="ltr" float="left" width="30px" height="30px"/>
+    <div display="block" box-sizing="content-box" direction="ltr" position="absolute" width="100px">
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" contain="layout">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" float="left" width="30px" height="30px"/>
       </div>
-      <div display="block" box-sizing="content-box" direction="ltr" height="10px"/>
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="10px"/>
     </div>
   </input>
   <expectations>
@@ -211,11 +211,11 @@
 <test name="contain_layout_block_contains_floats__content_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" box-sizing="content-box" direction="rtl" width="100px">
-      <div display="block" box-sizing="content-box" direction="rtl" contain="layout">
-        <div display="block" box-sizing="content-box" direction="rtl" float="left" width="30px" height="30px"/>
+    <div display="block" box-sizing="content-box" direction="rtl" position="absolute" width="100px">
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" contain="layout">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" float="left" width="30px" height="30px"/>
       </div>
-      <div display="block" box-sizing="content-box" direction="rtl" height="10px"/>
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="10px"/>
     </div>
   </input>
   <expectations>
@@ -230,12 +230,12 @@
 <test name="contain_layout_block_margin_collapse__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" direction="ltr" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
-      <div display="block" direction="ltr" height="10px" margin-bottom="10px"/>
-      <div display="block" direction="ltr" contain="layout">
-        <div display="block" direction="ltr" height="10px" margin-top="20px" margin-bottom="20px"/>
+    <div display="block" direction="ltr" position="absolute" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" direction="ltr" position="relative" height="10px" margin-bottom="10px"/>
+      <div display="block" direction="ltr" position="relative" contain="layout">
+        <div display="block" direction="ltr" position="relative" height="10px" margin-top="20px" margin-bottom="20px"/>
       </div>
-      <div display="block" direction="ltr" height="10px" margin-top="10px"/>
+      <div display="block" direction="ltr" position="relative" height="10px" margin-top="10px"/>
     </div>
   </input>
   <expectations>
@@ -251,12 +251,12 @@
 <test name="contain_layout_block_margin_collapse__border_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" direction="rtl" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
-      <div display="block" direction="rtl" height="10px" margin-bottom="10px"/>
-      <div display="block" direction="rtl" contain="layout">
-        <div display="block" direction="rtl" height="10px" margin-top="20px" margin-bottom="20px"/>
+    <div display="block" direction="rtl" position="absolute" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" direction="rtl" position="relative" height="10px" margin-bottom="10px"/>
+      <div display="block" direction="rtl" position="relative" contain="layout">
+        <div display="block" direction="rtl" position="relative" height="10px" margin-top="20px" margin-bottom="20px"/>
       </div>
-      <div display="block" direction="rtl" height="10px" margin-top="10px"/>
+      <div display="block" direction="rtl" position="relative" height="10px" margin-top="10px"/>
     </div>
   </input>
   <expectations>
@@ -272,12 +272,12 @@
 <test name="contain_layout_block_margin_collapse__content_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" box-sizing="content-box" direction="ltr" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
-      <div display="block" box-sizing="content-box" direction="ltr" height="10px" margin-bottom="10px"/>
-      <div display="block" box-sizing="content-box" direction="ltr" contain="layout">
-        <div display="block" box-sizing="content-box" direction="ltr" height="10px" margin-top="20px" margin-bottom="20px"/>
+    <div display="block" box-sizing="content-box" direction="ltr" position="absolute" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="10px" margin-bottom="10px"/>
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" contain="layout">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="10px" margin-top="20px" margin-bottom="20px"/>
       </div>
-      <div display="block" box-sizing="content-box" direction="ltr" height="10px" margin-top="10px"/>
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="10px" margin-top="10px"/>
     </div>
   </input>
   <expectations>
@@ -293,12 +293,12 @@
 <test name="contain_layout_block_margin_collapse__content_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" box-sizing="content-box" direction="rtl" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
-      <div display="block" box-sizing="content-box" direction="rtl" height="10px" margin-bottom="10px"/>
-      <div display="block" box-sizing="content-box" direction="rtl" contain="layout">
-        <div display="block" box-sizing="content-box" direction="rtl" height="10px" margin-top="20px" margin-bottom="20px"/>
+    <div display="block" box-sizing="content-box" direction="rtl" position="absolute" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="10px" margin-bottom="10px"/>
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" contain="layout">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="10px" margin-top="20px" margin-bottom="20px"/>
       </div>
-      <div display="block" box-sizing="content-box" direction="rtl" height="10px" margin-top="10px"/>
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="10px" margin-top="10px"/>
     </div>
   </input>
   <expectations>
@@ -314,12 +314,12 @@
 <test name="contain_layout_flex_baseline__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div direction="ltr" align-items="baseline" width="200px">
-      <div direction="ltr" width="50px" height="60px">
-        <div direction="ltr" width="50px" height="30px"/>
+    <div direction="ltr" position="absolute" align-items="baseline" width="200px">
+      <div direction="ltr" position="relative" width="50px" height="60px">
+        <div direction="ltr" position="relative" width="50px" height="30px"/>
       </div>
-      <div direction="ltr" contain="layout" width="50px" height="20px">
-        <div direction="ltr" width="50px" height="10px"/>
+      <div direction="ltr" position="relative" contain="layout" width="50px" height="20px">
+        <div direction="ltr" position="relative" width="50px" height="10px"/>
       </div>
     </div>
   </input>
@@ -337,12 +337,12 @@
 <test name="contain_layout_flex_baseline__border_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div direction="rtl" align-items="baseline" width="200px">
-      <div direction="rtl" width="50px" height="60px">
-        <div direction="rtl" width="50px" height="30px"/>
+    <div direction="rtl" position="absolute" align-items="baseline" width="200px">
+      <div direction="rtl" position="relative" width="50px" height="60px">
+        <div direction="rtl" position="relative" width="50px" height="30px"/>
       </div>
-      <div direction="rtl" contain="layout" width="50px" height="20px">
-        <div direction="rtl" width="50px" height="10px"/>
+      <div direction="rtl" position="relative" contain="layout" width="50px" height="20px">
+        <div direction="rtl" position="relative" width="50px" height="10px"/>
       </div>
     </div>
   </input>
@@ -360,12 +360,12 @@
 <test name="contain_layout_flex_baseline__content_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div box-sizing="content-box" direction="ltr" align-items="baseline" width="200px">
-      <div box-sizing="content-box" direction="ltr" width="50px" height="60px">
-        <div box-sizing="content-box" direction="ltr" width="50px" height="30px"/>
+    <div box-sizing="content-box" direction="ltr" position="absolute" align-items="baseline" width="200px">
+      <div box-sizing="content-box" direction="ltr" position="relative" width="50px" height="60px">
+        <div box-sizing="content-box" direction="ltr" position="relative" width="50px" height="30px"/>
       </div>
-      <div box-sizing="content-box" direction="ltr" contain="layout" width="50px" height="20px">
-        <div box-sizing="content-box" direction="ltr" width="50px" height="10px"/>
+      <div box-sizing="content-box" direction="ltr" position="relative" contain="layout" width="50px" height="20px">
+        <div box-sizing="content-box" direction="ltr" position="relative" width="50px" height="10px"/>
       </div>
     </div>
   </input>
@@ -383,12 +383,12 @@
 <test name="contain_layout_flex_baseline__content_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div box-sizing="content-box" direction="rtl" align-items="baseline" width="200px">
-      <div box-sizing="content-box" direction="rtl" width="50px" height="60px">
-        <div box-sizing="content-box" direction="rtl" width="50px" height="30px"/>
+    <div box-sizing="content-box" direction="rtl" position="absolute" align-items="baseline" width="200px">
+      <div box-sizing="content-box" direction="rtl" position="relative" width="50px" height="60px">
+        <div box-sizing="content-box" direction="rtl" position="relative" width="50px" height="30px"/>
       </div>
-      <div box-sizing="content-box" direction="rtl" contain="layout" width="50px" height="20px">
-        <div box-sizing="content-box" direction="rtl" width="50px" height="10px"/>
+      <div box-sizing="content-box" direction="rtl" position="relative" contain="layout" width="50px" height="20px">
+        <div box-sizing="content-box" direction="rtl" position="relative" width="50px" height="10px"/>
       </div>
     </div>
   </input>
@@ -406,11 +406,11 @@
 <test name="contain_paint_block_contains_floats__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" direction="ltr" width="100px">
-      <div display="block" direction="ltr" contain="paint">
-        <div display="block" direction="ltr" float="left" width="30px" height="30px"/>
+    <div display="block" direction="ltr" position="absolute" width="100px">
+      <div display="block" direction="ltr" position="relative" contain="paint">
+        <div display="block" direction="ltr" position="relative" float="left" width="30px" height="30px"/>
       </div>
-      <div display="block" direction="ltr" height="10px"/>
+      <div display="block" direction="ltr" position="relative" height="10px"/>
     </div>
   </input>
   <expectations>
@@ -425,11 +425,11 @@
 <test name="contain_paint_block_contains_floats__border_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" direction="rtl" width="100px">
-      <div display="block" direction="rtl" contain="paint">
-        <div display="block" direction="rtl" float="left" width="30px" height="30px"/>
+    <div display="block" direction="rtl" position="absolute" width="100px">
+      <div display="block" direction="rtl" position="relative" contain="paint">
+        <div display="block" direction="rtl" position="relative" float="left" width="30px" height="30px"/>
       </div>
-      <div display="block" direction="rtl" height="10px"/>
+      <div display="block" direction="rtl" position="relative" height="10px"/>
     </div>
   </input>
   <expectations>
@@ -444,11 +444,11 @@
 <test name="contain_paint_block_contains_floats__content_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" box-sizing="content-box" direction="ltr" width="100px">
-      <div display="block" box-sizing="content-box" direction="ltr" contain="paint">
-        <div display="block" box-sizing="content-box" direction="ltr" float="left" width="30px" height="30px"/>
+    <div display="block" box-sizing="content-box" direction="ltr" position="absolute" width="100px">
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" contain="paint">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" float="left" width="30px" height="30px"/>
       </div>
-      <div display="block" box-sizing="content-box" direction="ltr" height="10px"/>
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="10px"/>
     </div>
   </input>
   <expectations>
@@ -463,11 +463,11 @@
 <test name="contain_paint_block_contains_floats__content_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" box-sizing="content-box" direction="rtl" width="100px">
-      <div display="block" box-sizing="content-box" direction="rtl" contain="paint">
-        <div display="block" box-sizing="content-box" direction="rtl" float="left" width="30px" height="30px"/>
+    <div display="block" box-sizing="content-box" direction="rtl" position="absolute" width="100px">
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" contain="paint">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" float="left" width="30px" height="30px"/>
       </div>
-      <div display="block" box-sizing="content-box" direction="rtl" height="10px"/>
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="10px"/>
     </div>
   </input>
   <expectations>
@@ -482,12 +482,12 @@
 <test name="contain_paint_block_margin_collapse__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" direction="ltr" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
-      <div display="block" direction="ltr" height="10px" margin-bottom="10px"/>
-      <div display="block" direction="ltr" contain="paint">
-        <div display="block" direction="ltr" height="10px" margin-top="20px" margin-bottom="20px"/>
+    <div display="block" direction="ltr" position="absolute" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" direction="ltr" position="relative" height="10px" margin-bottom="10px"/>
+      <div display="block" direction="ltr" position="relative" contain="paint">
+        <div display="block" direction="ltr" position="relative" height="10px" margin-top="20px" margin-bottom="20px"/>
       </div>
-      <div display="block" direction="ltr" height="10px" margin-top="10px"/>
+      <div display="block" direction="ltr" position="relative" height="10px" margin-top="10px"/>
     </div>
   </input>
   <expectations>
@@ -503,12 +503,12 @@
 <test name="contain_paint_block_margin_collapse__border_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" direction="rtl" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
-      <div display="block" direction="rtl" height="10px" margin-bottom="10px"/>
-      <div display="block" direction="rtl" contain="paint">
-        <div display="block" direction="rtl" height="10px" margin-top="20px" margin-bottom="20px"/>
+    <div display="block" direction="rtl" position="absolute" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" direction="rtl" position="relative" height="10px" margin-bottom="10px"/>
+      <div display="block" direction="rtl" position="relative" contain="paint">
+        <div display="block" direction="rtl" position="relative" height="10px" margin-top="20px" margin-bottom="20px"/>
       </div>
-      <div display="block" direction="rtl" height="10px" margin-top="10px"/>
+      <div display="block" direction="rtl" position="relative" height="10px" margin-top="10px"/>
     </div>
   </input>
   <expectations>
@@ -524,12 +524,12 @@
 <test name="contain_paint_block_margin_collapse__content_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" box-sizing="content-box" direction="ltr" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
-      <div display="block" box-sizing="content-box" direction="ltr" height="10px" margin-bottom="10px"/>
-      <div display="block" box-sizing="content-box" direction="ltr" contain="paint">
-        <div display="block" box-sizing="content-box" direction="ltr" height="10px" margin-top="20px" margin-bottom="20px"/>
+    <div display="block" box-sizing="content-box" direction="ltr" position="absolute" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="10px" margin-bottom="10px"/>
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" contain="paint">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="10px" margin-top="20px" margin-bottom="20px"/>
       </div>
-      <div display="block" box-sizing="content-box" direction="ltr" height="10px" margin-top="10px"/>
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="10px" margin-top="10px"/>
     </div>
   </input>
   <expectations>
@@ -545,12 +545,12 @@
 <test name="contain_paint_block_margin_collapse__content_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="block" box-sizing="content-box" direction="rtl" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
-      <div display="block" box-sizing="content-box" direction="rtl" height="10px" margin-bottom="10px"/>
-      <div display="block" box-sizing="content-box" direction="rtl" contain="paint">
-        <div display="block" box-sizing="content-box" direction="rtl" height="10px" margin-top="20px" margin-bottom="20px"/>
+    <div display="block" box-sizing="content-box" direction="rtl" position="absolute" width="100px" border-top="2px" border-left="2px" border-bottom="2px" border-right="2px">
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="10px" margin-bottom="10px"/>
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" contain="paint">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="10px" margin-top="20px" margin-bottom="20px"/>
       </div>
-      <div display="block" box-sizing="content-box" direction="rtl" height="10px" margin-top="10px"/>
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="10px" margin-top="10px"/>
     </div>
   </input>
   <expectations>
@@ -566,12 +566,12 @@
 <test name="contain_paint_flex_baseline__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div direction="ltr" align-items="baseline" width="200px">
-      <div direction="ltr" width="50px" height="60px">
-        <div direction="ltr" width="50px" height="30px"/>
+    <div direction="ltr" position="absolute" align-items="baseline" width="200px">
+      <div direction="ltr" position="relative" width="50px" height="60px">
+        <div direction="ltr" position="relative" width="50px" height="30px"/>
       </div>
-      <div direction="ltr" contain="paint" width="50px" height="20px">
-        <div direction="ltr" width="50px" height="10px"/>
+      <div direction="ltr" position="relative" contain="paint" width="50px" height="20px">
+        <div direction="ltr" position="relative" width="50px" height="10px"/>
       </div>
     </div>
   </input>
@@ -589,12 +589,12 @@
 <test name="contain_paint_flex_baseline__border_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div direction="rtl" align-items="baseline" width="200px">
-      <div direction="rtl" width="50px" height="60px">
-        <div direction="rtl" width="50px" height="30px"/>
+    <div direction="rtl" position="absolute" align-items="baseline" width="200px">
+      <div direction="rtl" position="relative" width="50px" height="60px">
+        <div direction="rtl" position="relative" width="50px" height="30px"/>
       </div>
-      <div direction="rtl" contain="paint" width="50px" height="20px">
-        <div direction="rtl" width="50px" height="10px"/>
+      <div direction="rtl" position="relative" contain="paint" width="50px" height="20px">
+        <div direction="rtl" position="relative" width="50px" height="10px"/>
       </div>
     </div>
   </input>
@@ -612,12 +612,12 @@
 <test name="contain_paint_flex_baseline__content_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div box-sizing="content-box" direction="ltr" align-items="baseline" width="200px">
-      <div box-sizing="content-box" direction="ltr" width="50px" height="60px">
-        <div box-sizing="content-box" direction="ltr" width="50px" height="30px"/>
+    <div box-sizing="content-box" direction="ltr" position="absolute" align-items="baseline" width="200px">
+      <div box-sizing="content-box" direction="ltr" position="relative" width="50px" height="60px">
+        <div box-sizing="content-box" direction="ltr" position="relative" width="50px" height="30px"/>
       </div>
-      <div box-sizing="content-box" direction="ltr" contain="paint" width="50px" height="20px">
-        <div box-sizing="content-box" direction="ltr" width="50px" height="10px"/>
+      <div box-sizing="content-box" direction="ltr" position="relative" contain="paint" width="50px" height="20px">
+        <div box-sizing="content-box" direction="ltr" position="relative" width="50px" height="10px"/>
       </div>
     </div>
   </input>
@@ -635,12 +635,12 @@
 <test name="contain_paint_flex_baseline__content_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div box-sizing="content-box" direction="rtl" align-items="baseline" width="200px">
-      <div box-sizing="content-box" direction="rtl" width="50px" height="60px">
-        <div box-sizing="content-box" direction="rtl" width="50px" height="30px"/>
+    <div box-sizing="content-box" direction="rtl" position="absolute" align-items="baseline" width="200px">
+      <div box-sizing="content-box" direction="rtl" position="relative" width="50px" height="60px">
+        <div box-sizing="content-box" direction="rtl" position="relative" width="50px" height="30px"/>
       </div>
-      <div box-sizing="content-box" direction="rtl" contain="paint" width="50px" height="20px">
-        <div box-sizing="content-box" direction="rtl" width="50px" height="10px"/>
+      <div box-sizing="content-box" direction="rtl" position="relative" contain="paint" width="50px" height="20px">
+        <div box-sizing="content-box" direction="rtl" position="relative" width="50px" height="10px"/>
       </div>
     </div>
   </input>
