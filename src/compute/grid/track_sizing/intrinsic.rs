@@ -277,22 +277,30 @@ fn size_batch<T: LayoutTree + CacheAccess + ?Sized>(
                 // Not intrinsic: a length, or a percentage against a definite size.
                 _ => track.base_size,
             };
-            let growth_limit_min_content =
-                if !item.overflow.get(axis.as_abs()).is_scroll_container() { Some(m.min_content(item, axis_tracks)) } else { None };
-            let growth_limit_max_content = m.max_content(item, axis_tracks);
-            let growth_limit_intrinsic_min_content = m.min_content(item, axis_tracks);
+            // Contributions call into the child, so only the ones the growth limit uses are measured;
+            // and the min-content one of every item in an intrinsic track, which
+            // `recheck_contributions` compares against.
+            let max = axis_tracks[track_index].max;
+            let uses_max_content = max.is_max_content_alike() || (max.uses_percentage() && axis_inner_node_size.is_none());
+            let min_content = if axis_tracks[track_index].has_intrinsic_sizing_function() { m.min_content(item, axis_tracks) } else { f32::NAN };
+            let max_content = if uses_max_content { m.max_content(item, axis_tracks) } else { f32::NAN };
+            // Measuring caches the item's grid area, which a rerun of the other axis may still read;
+            // cache it as measuring would.
+            if m.prefetch.is_none() {
+                m.grid_area_size(item, axis_tracks);
+            }
             let track = &mut axis_tracks[track_index];
             track.base_size = new_base_size;
-            if track.max.is_fit_content() {
-                if let Some(mc) = growth_limit_min_content {
-                    track.growth_limit_planned_increase = track.growth_limit_planned_increase.max(mc);
+            if max.is_fit_content() {
+                if !item.overflow.get(axis.as_abs()).is_scroll_container() {
+                    track.growth_limit_planned_increase = track.growth_limit_planned_increase.max(min_content);
                 }
                 let limit = track.fit_content_limit(axis_inner_node_size);
-                track.growth_limit_planned_increase = track.growth_limit_planned_increase.max(growth_limit_max_content.min(limit));
-            } else if track.max.is_max_content_alike() || (track.max.uses_percentage() && axis_inner_node_size.is_none()) {
-                track.growth_limit_planned_increase = track.growth_limit_planned_increase.max(growth_limit_max_content);
-            } else if track.max.is_intrinsic() {
-                track.growth_limit_planned_increase = track.growth_limit_planned_increase.max(growth_limit_intrinsic_min_content);
+                track.growth_limit_planned_increase = track.growth_limit_planned_increase.max(max_content.min(limit));
+            } else if uses_max_content {
+                track.growth_limit_planned_increase = track.growth_limit_planned_increase.max(max_content);
+            } else if max.is_intrinsic() {
+                track.growth_limit_planned_increase = track.growth_limit_planned_increase.max(min_content);
             }
         }
         for t in axis_tracks.iter_mut() {
