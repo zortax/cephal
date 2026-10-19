@@ -64,8 +64,12 @@ pub fn compute_block_layout<T: LayoutTree + CacheAccess + ?Sized>(
     });
     let styled_known = known_dimensions.or(min_max_definite_size).or(clamped_style_size).maybe_max(padding_border_size.map(Some));
 
+    // A parent collapsing margins with this box needs its margins, which depend on its content.
+    let margins_wanted = inputs.vertical_margins_are_collapsible != Line::FALSE;
     if run_mode == RunMode::ComputeSize {
-        if let Size { width: Some(width), height: Some(height) } = styled_known {
+        if let Size { width: Some(width), height: Some(height) } = styled_known
+            && !margins_wanted
+        {
             return LayoutOutput::from_outer_size(Size { width, height });
         }
         if inputs.axis == RequestedAxis::Horizontal
@@ -192,7 +196,7 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
         intrinsic_width.maybe_clamp(min_size.width, max_size.width).maybe_max(Some(padding_border_size.width))
     });
 
-    if let (RunMode::ComputeSize, Some(height)) = (run_mode, known_dimensions.height) {
+    if let (RunMode::ComputeSize, Some(height), false) = (run_mode, known_dimensions.height, vertical_margins_are_collapsible != Line::FALSE) {
         return LayoutOutput::from_outer_size(Size { width: container_outer_width, height });
     }
     if run_mode == RunMode::ComputeSize && inputs.axis == RequestedAxis::Horizontal {

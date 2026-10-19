@@ -123,3 +123,54 @@ fn align_content_makes_a_child_avoid_floats() {
     assert_eq!(tree.layout(aligned).location.x, 30.0);
     assert_eq!(tree.layout(aligned).size.width, 70.0);
 }
+
+/// A flex row measuring a block item, then laying it out at the measured height.
+fn measured_item(children: &[Style]) -> (Tree<()>, NodeId, Vec<NodeId>) {
+    let mut tree: Tree<()> = Tree::new();
+    let children: Vec<NodeId> = children.iter().map(|s| tree.new_leaf(s.clone())).collect();
+    let item = tree.new_with_children(block(), &children);
+    let mut root = Style::DEFAULT;
+    root.display = Display::Flex;
+    root.position = Position::Absolute;
+    root.size.width = Dimension::length(100.0);
+    let root = tree.new_with_children(root, &[item]);
+    layout(&mut tree, root);
+    (tree, item, children)
+}
+
+#[test]
+fn measuring_a_block_keeps_margins_collapsing_through_sized_children() {
+    // A sized child's top margin collapses with its own first child's, inside the flow-root item.
+    let mut tree: Tree<()> = Tree::new();
+    let mut grandchild = block();
+    grandchild.margin = margins(20.0, Some(0.0), 0.0, Some(0.0));
+    grandchild.size.height = Dimension::length(10.0);
+    let grandchild = tree.new_leaf(grandchild);
+    let mut child = block();
+    child.size.height = Dimension::length(50.0);
+    let child = tree.new_with_children(child, &[grandchild]);
+    let item = tree.new_with_children(block(), &[child]);
+    let mut root = Style::DEFAULT;
+    root.display = Display::Flex;
+    root.position = Position::Absolute;
+    root.size.width = Dimension::length(100.0);
+    let root = tree.new_with_children(root, &[item]);
+    layout(&mut tree, root);
+    assert_eq!(tree.layout(child).location.y, 20.0);
+    assert_eq!(tree.layout(item).size.height, 70.0);
+
+    // Margins collapse through a child whose used height is zero.
+    let mut first = block();
+    first.size.height = Dimension::length(10.0);
+    first.margin = margins(0.0, Some(0.0), 10.0, Some(0.0));
+    let mut empty = block();
+    empty.size.height = Dimension::length(1.0);
+    empty.max_size.height = LengthPercentageAuto::length(0.0);
+    empty.margin = margins(10.0, Some(0.0), 10.0, Some(0.0));
+    let mut last = block();
+    last.size.height = Dimension::length(10.0);
+    last.margin = margins(10.0, Some(0.0), 0.0, Some(0.0));
+    let (tree, item, children) = measured_item(&[first, empty, last]);
+    assert_eq!(tree.layout(children[2]).location.y, 20.0);
+    assert_eq!(tree.layout(item).size.height, 30.0);
+}
