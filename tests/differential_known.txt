@@ -354,7 +354,7 @@
 714 [Absolute]
 718 [RootOffsets,Absolute]
 719 [Absolute]
-721 unexplained
+721 combination
 723 [RootOffsets,Absolute]
 724 [Absolute]
 725 [Absolute]
@@ -374,7 +374,7 @@
 749 [Absolute]
 753 [RootOffsets,Absolute]
 756 [Absolute]
-758 [Absolute]
+758 unexplained
 761 [Absolute]
 762 [Absolute]
 763 [Absolute]
@@ -420,7 +420,7 @@
 833 [Absolute]
 834 [Absolute]
 835 [Absolute]
-839 [Absolute]
+839 unexplained
 842 [RootOffsets,Absolute]
 845 [Absolute]
 847 [Absolute]
@@ -460,7 +460,7 @@
 917 [Absolute]
 919 [Absolute]
 921 [RootOffsets,Absolute]
-924 unexplained
+924 [Absolute]
 927 [Absolute]
 928 [Absolute]
 929 [Absolute]
