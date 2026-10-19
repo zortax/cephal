@@ -24,6 +24,13 @@ enum Strip {
     Absolute,
     /// `align-self` / `justify-self` of absolutely positioned boxes.
     AbsoluteSelfAlignment,
+    /// Grid placement of out-of-flow boxes under a grid root: taffy resolves it against the root's
+    /// grid for boxes the initial containing block lays out, which is no grid (css-grid-1 §9.1).
+    InitialContainingBlockGridPlacement,
+    /// Margins of out-of-flow boxes.
+    OutOfFlowMargins,
+    /// `position: relative` and `sticky`: such boxes become static.
+    Positioned,
     /// Percentage `flex-basis`.
     PercentBasis,
     /// Percentage padding.
@@ -40,6 +47,9 @@ const STRIPS: &[Strip] = &[
     Strip::RootOffsets,
     Strip::Absolute,
     Strip::AbsoluteSelfAlignment,
+    Strip::InitialContainingBlockGridPlacement,
+    Strip::OutOfFlowMargins,
+    Strip::Positioned,
     Strip::PercentBasis,
     Strip::PercentPadding,
     Strip::PercentTracks,
@@ -51,8 +61,10 @@ fn strip(tree: &mut Tree<Text>, root: cephal::tree::NodeId, what: Strip) {
     use cephal::style::{GridTemplateComponent, LengthPercentage, LengthPercentageAuto, Position, TrackSizingFunction};
     let mut nodes = Vec::new();
     all_nodes(tree, root, &mut nodes);
+    let root_is_grid = tree.style(root).display == Display::Grid;
     for node in nodes {
         let parent_is_grid = tree.parent(node).is_some_and(|p| tree.style(p).display == Display::Grid);
+        let initial_containing_block = tree.containing_block(node).is_none();
         tree.patch_style(node, |s| match what {
             Strip::RootOffsets if node == root => {
                 s.margin = cephal::geometry::Rect::splat(LengthPercentageAuto::ZERO);
@@ -68,6 +80,15 @@ fn strip(tree: &mut Tree<Text>, root: cephal::tree::NodeId, what: Strip) {
             Strip::AbsoluteSelfAlignment if s.position.is_out_of_flow() => {
                 s.align_self = None;
                 s.justify_self = None;
+            }
+            Strip::InitialContainingBlockGridPlacement if root_is_grid && s.position.is_out_of_flow() && initial_containing_block => {
+                s.grid_row = Default::default();
+                s.grid_column = Default::default();
+            }
+            Strip::OutOfFlowMargins if s.position.is_out_of_flow() => s.margin = cephal::geometry::Rect::splat(LengthPercentageAuto::ZERO),
+            Strip::Positioned if matches!(s.position, Position::Relative | Position::Sticky) => {
+                s.position = Position::Static;
+                s.inset = cephal::geometry::Rect::splat(LengthPercentageAuto::AUTO);
             }
             Strip::PercentBasis if s.flex_basis.0.uses_percentage() => s.flex_basis = Dimension::AUTO,
             Strip::PercentPadding => {

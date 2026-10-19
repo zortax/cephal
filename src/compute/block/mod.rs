@@ -256,9 +256,12 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
         let container_inner_height = container_outer_height - resolved_content_box_inset.vertical_axis_sum();
         let inflow_content_height = intrinsic_outer_height - resolved_content_box_inset.vertical_axis_sum();
         let free_space = container_inner_height - inflow_content_height;
-        if items.iter().any(|item| item.final_layout.is_some()) {
+        let group_offset = || {
             let keyword = apply_alignment_fallback(free_space, 1, align_content);
-            let group_offset = compute_alignment_offset(free_space, 1, 0.0, keyword, true, false);
+            compute_alignment_offset(free_space, 1, 0.0, keyword, true, false)
+        };
+        if items.iter().any(|item| item.final_layout.is_some()) {
+            let group_offset = group_offset();
             first_baseline = first_baseline.map(|b| b + group_offset);
             last_baseline = last_baseline.map(|b| b + group_offset);
             for item in items.iter_mut() {
@@ -293,6 +296,12 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
                         ),
                     );
                 }
+            }
+        } else if flow.has_out_of_flow {
+            // Without in-flow content the static positions still sit where it would start.
+            let group_offset = group_offset();
+            for item in items.iter_mut().filter(|item| item.position.is_out_of_flow()) {
+                item.static_position.y += group_offset;
             }
         }
     }
