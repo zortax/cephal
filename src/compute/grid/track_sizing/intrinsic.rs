@@ -259,7 +259,7 @@ fn size_batch<T: LayoutTree + CacheAccess + ?Sized>(
                 LengthKind::MinContent => track.base_size.max(m.min_content(item, axis_tracks)),
                 LengthKind::MaxContent => track.base_size.max(m.max_content(item, axis_tracks)),
                 // A percentage against an indefinite container behaves as `auto`.
-                _ if track.min_behaves_as_auto(axis_inner_node_size) => {
+                LengthKind::Auto | LengthKind::Percent(_) | LengthKind::Calc(_) if track.min_behaves_as_auto(axis_inner_node_size) => {
                     let space = match axis_available_grid_space {
                         AvailableSpace::MinContent | AvailableSpace::MaxContent
                             if !item.overflow.get(axis.as_abs()).is_scroll_container() =>
