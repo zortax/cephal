@@ -276,17 +276,20 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
         let clear_threshold = block_ctx.cleared_threshold(item.clear);
         let clear_pos = clear_threshold.unwrap_or(f32::NEG_INFINITY);
 
+        // Height taken by floats inside a same-BFC child, from its border-top.
+        let mut child_float_contribution = f32::NEG_INFINITY;
         let item_layout = if item.is_in_same_bfc {
             // The border box is at least as wide as its padding and border.
             let width = known_dimensions.width.unwrap_or(stretch_width).max(item.padding_border_sum.width);
             let inset_left = item_non_auto_margin.left + p.content_box_inset.left;
             let inset_right = p.container_outer_width - width - inset_left;
-            let mut child_ctx = block_ctx.sub_context((y_offset_for_absolute + item_non_auto_margin.top).max(clear_pos), [inset_left, inset_right]);
+            // The child's own collapsed-through margins are not known yet.
+            let estimated_y = committed_y_offset + active_collapsible_margin_set.collapse_with_margin(item_non_auto_margin.top).resolve();
+            let mut child_ctx = block_ctx.sub_context(estimated_y.max(clear_pos), [inset_left, inset_right]);
             inputs.context_key = child_ctx.key();
             let output = super::compute_block_child(tree, item.node, inputs, Some(&mut child_ctx));
-            let child_contribution = child_ctx.floated_content_height_contribution();
+            child_float_contribution = child_ctx.floated_content_height_contribution();
             let child_top_adjoining = child_ctx.top_adjoining_floats();
-            block_ctx.add_child_floated_content_height_contribution(y_offset_for_absolute + child_contribution);
             block_ctx.merge_adjoining_floats(child_top_adjoining);
             output
         } else {
@@ -386,6 +389,11 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
                 y: float_avoiding_position.y + inset_offset.y,
             }
         };
+
+        // Floats inside count from the child's final, margin-collapsed position.
+        if item.is_in_same_bfc {
+            block_ctx.add_child_floated_content_height_contribution(location.y - inset_offset.y + child_float_contribution);
+        }
 
         // `justify-self` aligns the margin box and beats `text-align`; auto margins beat `justify-self`.
         let item_outer_width = final_size.width + resolved_margin.horizontal_axis_sum();

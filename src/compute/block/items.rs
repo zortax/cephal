@@ -79,7 +79,9 @@ pub(super) fn generate_item_list<T: LayoutTree + ?Sized>(
             && !position.is_out_of_flow()
             && float == Float::None
             && !style.is_scroll_container()
-            && !contain.establishes_independent_formatting_context();
+            && !contain.establishes_independent_formatting_context()
+            // css-align-3 §5.1.1: so does a non-`normal` `align-content`.
+            && style.align_content.is_none();
         let justify_self = style.justify_self.or(justify_items);
         let resolve = |s: Size<crate::style::Length>| super::resolve_size(s, node_inner_size, &calc);
         let (size, min_size, max_size) = match plan {

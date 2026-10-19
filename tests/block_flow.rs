@@ -1,4 +1,4 @@
-//! `Layout::margin` of in-flow block children holds their used margins, which fixtures cannot check.
+//! Block flow cases the Chrome fixtures do not cover.
 
 use cephal::geometry::{AvailableSpace, Rect, Size};
 use cephal::style::{Dimension, Display, Float, LengthPercentageAuto, Position};
@@ -73,4 +73,53 @@ fn auto_margins_beside_floats_reach_the_content_edges() {
     assert_eq!(tree.layout(boxed).location.x, 15.0);
     let margin = tree.layout(boxed).margin;
     assert_eq!((margin.left, margin.right), (15.0, 35.0));
+}
+
+#[test]
+fn floats_count_from_a_childs_collapsed_position() {
+    // A flow root holds an empty box with a 30px bottom margin, then a box with a 20px top margin
+    // holding a 50px float. The margins collapse to 30px, so the float spans 30..80.
+    let mut tree: Tree<()> = Tree::new();
+    let mut empty = block();
+    empty.margin = margins(0.0, Some(0.0), 30.0, Some(0.0));
+    let empty = tree.new_leaf(empty);
+    let mut float = block();
+    float.float = Float::Left;
+    float.size = Size { width: Dimension::length(20.0), height: Dimension::length(50.0) };
+    let float = tree.new_leaf(float);
+    let mut holder = block();
+    holder.margin = margins(20.0, Some(0.0), 0.0, Some(0.0));
+    let holder = tree.new_with_children(holder, &[float]);
+    let mut root = block();
+    root.position = Position::Absolute;
+    root.size.width = Dimension::length(100.0);
+    let root = tree.new_with_children(root, &[empty, holder]);
+    layout(&mut tree, root);
+
+    assert_eq!(tree.layout(holder).location.y, 30.0);
+    assert_eq!(tree.layout(float).location.y, 0.0);
+    assert_eq!(tree.layout(root).size.height, 80.0);
+}
+
+#[test]
+fn align_content_makes_a_child_avoid_floats() {
+    // A child with `align-content` establishes an independent formatting context, so it sits
+    // beside a float instead of overlapping it.
+    let mut tree: Tree<()> = Tree::new();
+    let mut float = block();
+    float.float = Float::Left;
+    float.size = Size { width: Dimension::length(30.0), height: Dimension::length(20.0) };
+    let float = tree.new_leaf(float);
+    let mut aligned = block();
+    aligned.align_content = Some(cephal::style::AlignContent::CENTER);
+    aligned.size.height = Dimension::length(10.0);
+    let aligned = tree.new_leaf(aligned);
+    let mut root = block();
+    root.position = Position::Absolute;
+    root.size.width = Dimension::length(100.0);
+    let root = tree.new_with_children(root, &[float, aligned]);
+    layout(&mut tree, root);
+
+    assert_eq!(tree.layout(aligned).location.x, 30.0);
+    assert_eq!(tree.layout(aligned).size.width, 70.0);
 }
