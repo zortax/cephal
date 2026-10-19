@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    Margins collapse through an empty block whose used height is zero because max-height clamps its
+    height, and not through one whose min-height keeps it tall
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; width: 100px;">
+  <div style="display: block; height: 10px; margin-bottom: 10px;"></div>
+  <div style="display: block; height: 1px; max-height: 0px; margin-top: 15px; margin-bottom: 5px;"></div>
+  <div style="display: block; height: 10px; margin-top: 8px;"></div>
+  <div style="display: block; height: 0px; min-height: 2px; margin-top: 12px; margin-bottom: 4px;"></div>
+  <div style="display: block; height: 10px; margin-top: 6px;"></div>
+</div>
+
+</body>
+</html>
