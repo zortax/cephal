@@ -7,7 +7,7 @@ use crate::compute::LayoutTreeExt;
 use crate::compute::common::overflow::{scrollable_overflow_contribution, union};
 use crate::compute::common::sizing_keyword::{SizingKeywordResolution, resolve_sizing_keyword};
 use crate::geometry::{AbsoluteAxis, AvailableSpace, Line, MaybeMath, Point, Rect, Size};
-use crate::style::{Dimension, Direction, Overflow, TextAlign};
+use crate::style::{Dimension, Direction, LengthKind, Overflow, TextAlign};
 use crate::tree::{CacheAccess, CollapsibleMarginSet, Layout, LayoutInput, LayoutTree, RequestedAxis, RunMode, SizingMode};
 
 pub(super) struct FlowParams {
@@ -19,6 +19,7 @@ pub(super) struct FlowParams {
     pub text_align: TextAlign,
     pub direction: Direction,
     pub own_margins_collapse_with_children: Line<bool>,
+    pub children_margins_adjoin_own_edges: Line<bool>,
     pub is_scroll_container: bool,
 }
 
@@ -32,12 +33,17 @@ pub(super) struct FlowResult {
 }
 
 /// `stretch` is the only block-axis keyword that needs resolving; intrinsic keywords equal `auto`.
+///
+/// A margin that could collapse through the container's edge on its side counts as zero
+/// (csswg-drafts#11044, #13260).
 #[inline]
-fn resolve_stretch_height(height: Dimension, container_inner_height: Option<f32>, y_margin_sum: f32) -> Option<f32> {
-    match resolve_sizing_keyword(height.raw(), container_inner_height.maybe_sub(y_margin_sum), container_inner_height) {
-        Some(SizingKeywordResolution::Exact(h)) => Some(h),
-        _ => None,
+fn resolve_stretch_height(height: Dimension, container_inner_height: Option<f32>, margin: Rect<f32>, margins_treated_as_zero: Line<bool>) -> Option<f32> {
+    if height.raw().kind() != LengthKind::Stretch {
+        return None;
     }
+    let top = if margins_treated_as_zero.start { 0.0 } else { margin.top };
+    let bottom = if margins_treated_as_zero.end { 0.0 } else { margin.bottom };
+    container_inner_height.map(|h| h - top - bottom)
 }
 
 #[inline]
@@ -112,8 +118,8 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
                     Some(SizingKeywordResolution::Exact(w)) => (Some(w), AvailableSpace::Definite(w)),
                     None => (None, AvailableSpace::Definite(available_width)),
                 };
-            let known_height =
-                resolve_stretch_height(item.size_style.height, container_percentage_resolution_height, item_non_auto_margin.vertical_axis_sum());
+            // The margins of a float never collapse.
+            let known_height = resolve_stretch_height(item.size_style.height, container_percentage_resolution_height, item_non_auto_margin, Line::FALSE);
             let float_inputs = LayoutInput {
                 run_mode: RunMode::PerformLayout,
                 sizing_mode: SizingMode::InherentSize,
@@ -221,8 +227,12 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
                         Line::TRUE,
                     ),
                 });
-            let keyword_height =
-                resolve_stretch_height(item.size_style.height, container_percentage_resolution_height, item_non_auto_margin.vertical_axis_sum());
+            let keyword_height = resolve_stretch_height(
+                item.size_style.height,
+                container_percentage_resolution_height,
+                item_non_auto_margin,
+                p.children_margins_adjoin_own_edges,
+            );
             item.size
                 .map_width(|w| Some(w.or(keyword_width).unwrap_or(stretch_width).maybe_clamp(item.min_size.width, item.max_size.width)))
                 .map_height(|h| h.or(keyword_height))

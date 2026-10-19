@@ -155,7 +155,8 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
     let establishes_new_bfc =
         is_scroll_container || style.align_content.is_some() || style.contain.establishes_independent_formatting_context();
 
-    let own_margins_collapse_with_children = Line {
+    // Whether a child's margins could collapse through each block-axis edge of this box.
+    let children_margins_adjoin_own_edges = Line {
         start: vertical_margins_are_collapsible.start
             && !establishes_new_bfc
             && !style.position.is_out_of_flow()
@@ -165,9 +166,10 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
             && !establishes_new_bfc
             && !style.position.is_out_of_flow()
             && padding.bottom == 0.0
-            && border.bottom == 0.0
-            && size.height.is_none(),
+            && border.bottom == 0.0,
     };
+    let own_margins_collapse_with_children =
+        Line { start: children_margins_adjoin_own_edges.start, end: children_margins_adjoin_own_edges.end && size.height.is_none() };
     let has_styles_preventing_being_collapsed_through = !style.is_block()
         || block_ctx.is_bfc_root()
         || establishes_new_bfc
@@ -175,9 +177,7 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
         || padding.top > 0.0
         || padding.bottom > 0.0
         || border.top > 0.0
-        || border.bottom > 0.0
-        || matches!(size.height, Some(h) if h > 0.0)
-        || matches!(min_size.height, Some(h) if h > 0.0);
+        || border.bottom > 0.0;
 
     let text_align = style.text_align;
     let align_content = style.align_content;
@@ -220,6 +220,7 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
             text_align,
             direction,
             own_margins_collapse_with_children,
+            children_margins_adjoin_own_edges,
             is_scroll_container,
         },
         block_ctx,
@@ -287,8 +288,10 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
 
     let all_in_flow_children_can_be_collapsed_through =
         items.iter().all(|item| item.is_floated() || item.position.is_out_of_flow() || item.can_be_collapsed_through);
+    // Margins collapse through a box whose *used* height is zero, as in browsers (CSS 2.2 §8.3.1
+    // speaks of computed heights).
     let can_be_collapsed_through =
-        !has_styles_preventing_being_collapsed_through && all_in_flow_children_can_be_collapsed_through;
+        !has_styles_preventing_being_collapsed_through && container_outer_height == 0.0 && all_in_flow_children_can_be_collapsed_through;
 
     let calc = |id, basis| tree.resolve_calc(id, basis);
     let mut output = LayoutOutput {
