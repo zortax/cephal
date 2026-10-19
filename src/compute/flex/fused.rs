@@ -615,7 +615,7 @@ fn determine_container_main_size<const WRAP: bool, D: FlexDir, T: LayoutTree + C
                             .max(item.resolved_minimum_main_size);
                         let max_main_size = style_max.maybe_min(flex_basis_max).or(flex_basis_max).unwrap_or(f32::INFINITY);
                         let content_contribution = match (min_main_size, style_preferred, max_main_size) {
-                            (min, Some(pref), max) if max <= min || max <= pref => {
+                            (min, Some(pref), max) if c.is_row && (max <= min || max <= pref) => {
                                 pref.min(max).max(min) + item.margin.main_axis_sum(dir)
                             }
                             (min, _, max) if max <= min => min + item.margin.main_axis_sum(dir),
@@ -627,7 +627,8 @@ fn determine_container_main_size<const WRAP: bool, D: FlexDir, T: LayoutTree + C
                                 if c.is_row {
                                     (inner_main_size + item.margin.main_axis_sum(dir)).maybe_clamp(style_min, style_max)
                                 } else {
-                                    (inner_main_size.max(item.flex_basis) + item.margin.main_axis_sum(dir)).maybe_clamp(style_min, style_max)
+                                    (item.flex_basis.max(min_main_size).min(max_main_size) + item.margin.main_axis_sum(dir))
+                                        .maybe_clamp(style_min, style_max)
                                 }
                             }
                             _ => {

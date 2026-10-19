@@ -832,6 +832,106 @@
     </node>
   </expectations>
 </test>
+<test name="flex_column_intrinsic_height_from_flex_basis__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="ltr" position="absolute" width="200px">
+      <div display="flex" direction="ltr" position="relative" flex-direction="column">
+        <div display="block" direction="ltr" position="relative" flex-grow="2" flex-basis="10px" height="147px"/>
+      </div>
+      <div display="flex" direction="ltr" position="relative" flex-direction="column">
+        <text display="block" direction="ltr" position="relative" flex-grow="1" flex-basis="max-content" height="147px" max-height="100px">
+          X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="200" height="20">
+      <node x="0" y="0" width="200" height="10">
+        <node x="0" y="0" width="200" height="10"/>
+      </node>
+      <node x="0" y="10" width="200" height="10">
+        <node x="0" y="0" width="200" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_column_intrinsic_height_from_flex_basis__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="rtl" position="absolute" width="200px">
+      <div display="flex" direction="rtl" position="relative" flex-direction="column">
+        <div display="block" direction="rtl" position="relative" flex-grow="2" flex-basis="10px" height="147px"/>
+      </div>
+      <div display="flex" direction="rtl" position="relative" flex-direction="column">
+        <text display="block" direction="rtl" position="relative" flex-grow="1" flex-basis="max-content" height="147px" max-height="100px">
+          X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="200" height="20">
+      <node x="0" y="0" width="200" height="10">
+        <node x="0" y="0" width="200" height="10"/>
+      </node>
+      <node x="0" y="10" width="200" height="10">
+        <node x="0" y="0" width="200" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_column_intrinsic_height_from_flex_basis__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" position="absolute" width="200px">
+      <div display="flex" box-sizing="content-box" direction="ltr" position="relative" flex-direction="column">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" flex-grow="2" flex-basis="10px" height="147px"/>
+      </div>
+      <div display="flex" box-sizing="content-box" direction="ltr" position="relative" flex-direction="column">
+        <text display="block" box-sizing="content-box" direction="ltr" position="relative" flex-grow="1" flex-basis="max-content" height="147px" max-height="100px">
+          X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="200" height="20">
+      <node x="0" y="0" width="200" height="10">
+        <node x="0" y="0" width="200" height="10"/>
+      </node>
+      <node x="0" y="10" width="200" height="10">
+        <node x="0" y="0" width="200" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_column_intrinsic_height_from_flex_basis__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" position="absolute" width="200px">
+      <div display="flex" box-sizing="content-box" direction="rtl" position="relative" flex-direction="column">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" flex-grow="2" flex-basis="10px" height="147px"/>
+      </div>
+      <div display="flex" box-sizing="content-box" direction="rtl" position="relative" flex-direction="column">
+        <text display="block" box-sizing="content-box" direction="rtl" position="relative" flex-grow="1" flex-basis="max-content" height="147px" max-height="100px">
+          X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="200" height="20">
+      <node x="0" y="0" width="200" height="10">
+        <node x="0" y="0" width="200" height="10"/>
+      </node>
+      <node x="0" y="10" width="200" height="10">
+        <node x="0" y="0" width="200" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
 <test name="flex_column_percentage_row_gap_indefinite__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>

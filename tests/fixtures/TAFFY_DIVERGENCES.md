@@ -79,6 +79,16 @@ size it is laid out at, whether or not that size counts as definite for percenta
 height of a column flex item in a container of auto height, held by a max-height). Taffy puts
 all items of such a container on one line.
 
+## A column flex container's content height from items' heights
+
+No census category of its own (seeds 484, 491). Fixture
+`flex_column_intrinsic_height_from_flex_basis`.
+
+The content height of a column flex container is the sum of its items' hypothetical main sizes,
+their flex base sizes clamped (Chrome; css-flexbox-1 §9.9.1 describes contributions instead): a
+flex basis overrides the item's `height`. Taffy lets the `height` raise the item's contribution
+past its flex base size, and the container grows by it.
+
 ## The root (both engines, by design)
 
 Not a divergence between the engines, but where both differ from a browser's root element,
