@@ -197,6 +197,19 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
     );
     let initial_column_sum: f32 = columns.iter().map(|t| t.base_size).sum();
     inner_node_size.width = inner_node_size.width.or(Some(initial_column_sum));
+    // A width question needs no rows: sizing them measures every item's height. The width is the
+    // one the full run returns below; `verify-cache` runs on and checks it there.
+    let width_only = (run_mode == RunMode::ComputeSize && inputs.axis == RequestedAxis::Horizontal).then(|| {
+        styled
+            .width
+            .unwrap_or(initial_column_sum + content_box_inset.horizontal_axis_sum())
+            .maybe_clamp(min_size.width, max_size.width)
+            .max(padding_border_size.width)
+    });
+    #[cfg(not(feature = "verify-cache"))]
+    if let Some(width) = width_only {
+        return LayoutOutput::from_outer_size(Size { width, height: 0.0 });
+    }
     for item in items.iter_mut() {
         item.grid_area_size_cache = None;
     }
@@ -239,6 +252,10 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
         height: (container_border_box.height - content_box_inset.vertical_axis_sum()).max(0.0),
     };
     if run_mode == RunMode::ComputeSize {
+        #[cfg(feature = "verify-cache")]
+        if let Some(width) = width_only {
+            assert!(width.to_bits() == container_border_box.width.to_bits(), "grid width-only answer {width:?} differs: {container_border_box:?}");
+        }
         return LayoutOutput::from_outer_size(container_border_box);
     }
 
