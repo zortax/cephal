@@ -39,6 +39,17 @@ count as zero (css-sizing-3 §5.2.1), and resolve against the width found afterw
 resolves them against the available space, so the shrink-to-fit width of an absolutely
 positioned block grows by 3% of its containing block for a child's `margin-left: 3%`.
 
+## Percentage heights in a row flex item that is not stretched
+
+Census category `FlexCrossAlignment`. Fixture `flex_item_unstretched_cross_size_indefinite`.
+
+Only a stretched flex item's cross size is definite (css-flexbox-1 §9.8); one aligned otherwise,
+or with an `auto` cross margin, is laid out at its content height, which percentages of its
+contents cannot refer to: when it is a flex container, its items' percentage heights and minimum
+heights and its percentage row gap behave as `auto` (CSS 2.2 §10.5). Taffy resolves them
+against the height the item ends up with. (A width is always definite for percentages, so
+column flex items are not affected.)
+
 ## The root (both engines, by design)
 
 Not a divergence between the engines, but where both differ from a browser's root element,

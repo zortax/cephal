@@ -21,7 +21,7 @@ fn item_request<D: FlexDir>(item: &FlexItem, c: &AlgoConstants<D>) -> ChildReque
             axis: RequestedAxis::Both,
             known_dimensions: item.target_size.map(Some),
             known_dimensions_are_definite: item_known_dimension_definiteness(c, item),
-            parent_size: c.node_inner_size,
+            parent_size: c.percent_basis(),
             // Both axes are known, and the item reads them instead (see `compute::normalize`).
             available_space: c.container_size.map(AvailableSpace::Definite),
             vertical_margins_are_collapsible: Line::FALSE,

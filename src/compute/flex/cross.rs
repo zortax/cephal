@@ -98,7 +98,7 @@ pub(super) fn determine_hypothetical_cross_size<D: FlexDir, T: LayoutTree + Cach
                     height: if c.is_row { None } else { Some(child.target_size.height) },
                 },
                 known_dimensions_are_definite: item_known_dimension_definiteness(c, child),
-                parent_size: c.node_inner_size,
+                parent_size: c.percent_basis(),
                 available_space: Size {
                     width: if c.is_row { child_known_main } else { child_available_cross },
                     height: if c.is_row { child_available_cross } else { child_known_main },
@@ -172,7 +172,7 @@ fn baselines_inner<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
                         height: Some(if c.is_row { child.hypothetical_inner_size.height } else { child.target_size.height }),
                     },
                     known_dimensions_are_definite: item_known_dimension_definiteness(c, child),
-                    parent_size: c.node_inner_size,
+                    parent_size: c.percent_basis(),
                     available_space: Size {
                         width: if c.is_row {
                             AvailableSpace::Definite(c.container_size.width)

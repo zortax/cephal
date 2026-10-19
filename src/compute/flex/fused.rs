@@ -417,7 +417,7 @@ fn indefinite_stretch_cross<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
         let request = size_request(
             item.node,
             item.size.with_cross(dir, None),
-            c.node_inner_size,
+            c.percent_basis(),
             Size::MAX_CONTENT.with_cross(dir, space),
             SizingMode::ContentSize,
             dir.cross_axis().into(),
@@ -458,7 +458,7 @@ fn determine_flex_base_size<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     let mut questions: Questions<f32> = Questions::new(tree, items.len() * 2);
     let mut observes_cross = false;
     let cross_axis_parent_size = c.node_inner_size.cross(dir);
-    let child_parent_size = from_cross(dir, cross_axis_parent_size);
+    let child_parent_size = from_cross(dir, c.percent_basis().cross(dir));
     let available_cross = available_space.cross(dir);
     let main_available =
         if available_space.main(dir) == AvailableSpace::MinContent { AvailableSpace::MinContent } else { AvailableSpace::MaxContent };
@@ -653,7 +653,7 @@ fn determine_container_main_size<const WRAP: bool, D: FlexDir, T: LayoutTree + C
                                 let measured_main_size = tree.measure_child_size(
                                     item.node,
                                     child_known_dimensions,
-                                    c.node_inner_size,
+                                    c.percent_basis(),
                                     child_available_space,
                                     SizingMode::ContentSize,
                                     abs_main(dir),
@@ -753,7 +753,7 @@ fn determine_hypothetical_cross_size<D: FlexDir, T: LayoutTree + CacheAccess + ?
                     height: if c.is_row { None } else { Some(child.target_size.height) },
                 },
                 known_dimensions_are_definite: child.known_dimension_definiteness(c),
-                parent_size: c.node_inner_size,
+                parent_size: c.percent_basis(),
                 available_space: Size {
                     width: if c.is_row { child_known_main } else { child_available_cross },
                     height: if c.is_row { child_available_cross } else { child_known_main },
@@ -841,7 +841,7 @@ fn item_request<D: FlexDir>(item: &Item, c: &AlgoConstants<D>) -> ChildRequest {
             axis: RequestedAxis::Both,
             known_dimensions: item.target_size.map(Some),
             known_dimensions_are_definite: item.known_dimension_definiteness(c),
-            parent_size: c.node_inner_size,
+            parent_size: c.percent_basis(),
             // Both axes are known, and the item reads them instead (see `compute::normalize`).
             available_space: c.container_size.map(AvailableSpace::Definite),
             vertical_margins_are_collapsible: Line::FALSE,

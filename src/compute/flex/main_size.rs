@@ -152,7 +152,7 @@ pub(super) fn determine_container_main_size<D: FlexDir, T: LayoutTree + CacheAcc
                                 let measured_main_size = tree.measure_child_size(
                                     item.node,
                                     child_known_dimensions,
-                                    c.node_inner_size,
+                                    c.percent_basis(),
                                     child_available_space,
                                     SizingMode::ContentSize,
                                     abs_main(dir),

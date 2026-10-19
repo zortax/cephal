@@ -129,9 +129,18 @@ pub(super) struct AlgoConstants<D> {
     /// The basis items' percentage insets resolve against: the inner size when the items were
     /// generated, before an indefinite main size is found.
     inset_basis: Size<Option<f32>>,
+    /// The container was given a height its items' percentages do not resolve against (a row
+    /// flex item's that is not stretched, css-flexbox-1 §9.8); a width always resolves them.
+    cross_size_is_indefinite: bool,
 }
 
 impl<D: FlexDir> AlgoConstants<D> {
+    /// The size the items' percentages resolve against: the inner size, less an indefinite cross
+    /// size.
+    #[inline]
+    fn percent_basis(&self) -> Size<Option<f32>> {
+        if self.cross_size_is_indefinite { self.node_inner_size.with_cross(self.dir, None) } else { self.node_inner_size }
+    }
     /// Cross space per line when `flex-line-count` splits it.
     #[inline]
     fn divided_cross_space(&self, cross_available_space: f32) -> f32 {
@@ -537,7 +546,9 @@ fn compute_constants<T: LayoutTree + ?Sized, D: FlexDir>(
     let has_definite_cross_size = known_dimensions_are_definite.cross(dir) && known_dimensions.cross(dir).is_some();
     let cross_axis_available_space_is_definite =
         has_definite_cross_size || matches!(available_space.cross(dir), AvailableSpace::Definite(_));
-    let gap_basis = node_inner_size.or(Size::ZERO.map(Some));
+    let cross_size_is_indefinite = is_row && known_dimensions.height.is_some() && !known_dimensions_are_definite.height;
+    let percent_basis = if cross_size_is_indefinite { node_inner_size.with_cross(dir, None) } else { node_inner_size };
+    let gap_basis = percent_basis.or(Size::ZERO.map(Some));
     let gap = Size {
         width: style.gap.width.resolve_or_zero(gap_basis.width, &calc),
         height: style.gap.height.resolve_or_zero(gap_basis.height, &calc),
@@ -571,7 +582,8 @@ fn compute_constants<T: LayoutTree + ?Sized, D: FlexDir>(
         container_size: Size::ZERO,
         inner_container_size: Size::ZERO,
         indefinite_stretch_cross: None,
-        inset_basis: node_inner_size,
+        inset_basis: percent_basis,
+        cross_size_is_indefinite,
     }
 }
 
@@ -580,9 +592,9 @@ fn generate_anonymous_flex_items<D: FlexDir, T: LayoutTree + ?Sized>(tree: &T, n
     let calc = |id, basis| tree.resolve_calc(id, basis);
     // Percentages against an indefinite main size resolve to `None`.
     let percent_resolution_size = if constants.known_main_size_is_definite {
-        constants.node_inner_size
+        constants.percent_basis()
     } else {
-        constants.node_inner_size.with_main(constants.dir, None)
+        constants.percent_basis().with_main(constants.dir, None)
     };
     let mut items = Scratch::with_capacity(tree.child_count(node));
     let mut skipped = false;
@@ -602,9 +614,9 @@ fn generate_anonymous_flex_items<D: FlexDir, T: LayoutTree + ?Sized>(tree: &T, n
                     resolve(style.size.map(|v| v.raw())),
                     resolve(style.min_size.map(|v| v.raw())),
                     resolve(style.max_size.map(|v| v.raw())),
-                    style.margin.map(|m| m.resolve_or_zero(constants.node_inner_size.width, &calc)),
-                    style.padding.map(|p| p.resolve_or_zero(constants.node_inner_size.width, &calc)),
-                    style.border.map(|b| b.resolve_or_zero(constants.node_inner_size.width, &calc)),
+                    style.margin.map(|m| m.resolve_or_zero(constants.percent_basis().width, &calc)),
+                    style.padding.map(|p| p.resolve_or_zero(constants.percent_basis().width, &calc)),
+                    style.border.map(|b| b.resolve_or_zero(constants.percent_basis().width, &calc)),
                 )
             }
         };

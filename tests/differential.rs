@@ -47,6 +47,9 @@ enum Strip {
     GridItemPaddingBorder,
     /// `min-content` grid tracks.
     MinContentTracks,
+    /// Cross-axis alignment in flex containers (items are stretched instead): taffy lets the
+    /// percentage heights inside a row flex item that is not stretched resolve against its height.
+    FlexCrossAlignment,
     /// Padding, borders and scrollbars of measured leaves: taffy measures a leaf of known size at
     /// its border-box size instead of its content-box size.
     LeafInsets,
@@ -66,6 +69,7 @@ const STRIPS: &[Strip] = &[
     Strip::GridItemMargins,
     Strip::GridItemPaddingBorder,
     Strip::MinContentTracks,
+    Strip::FlexCrossAlignment,
     Strip::LeafInsets,
 ];
 
@@ -78,6 +82,7 @@ fn strip(tree: &mut Tree<Text>, root: cephal::tree::NodeId, what: Strip) {
         let parent_is_grid = tree.parent(node).is_some_and(|p| tree.style(p).display == Display::Grid);
         let initial_containing_block = tree.containing_block(node).is_none();
         let is_text = tree.context(node).is_some();
+        let parent_is_flex = tree.parent(node).is_some_and(|p| tree.style(p).display == Display::Flex);
         tree.patch_style(node, |s| match what {
             Strip::RootOffsets if node == root => {
                 s.margin = cephal::geometry::Rect::splat(LengthPercentageAuto::ZERO);
@@ -135,6 +140,19 @@ fn strip(tree: &mut Tree<Text>, root: cephal::tree::NodeId, what: Strip) {
                 g.auto_rows.iter_mut().for_each(fix);
             }
             Strip::GridItemMargins if parent_is_grid => s.margin = cephal::geometry::Rect::splat(LengthPercentageAuto::ZERO),
+            Strip::FlexCrossAlignment => {
+                if s.display == Display::Flex {
+                    s.align_items = None;
+                }
+                if parent_is_flex {
+                    s.align_self = None;
+                    for m in [&mut s.margin.top, &mut s.margin.bottom, &mut s.margin.left, &mut s.margin.right] {
+                        if m.is_auto() {
+                            *m = LengthPercentageAuto::ZERO;
+                        }
+                    }
+                }
+            }
             Strip::LeafInsets if is_text => {
                 s.padding = cephal::geometry::Rect::splat(LengthPercentage::ZERO);
                 s.border = cephal::geometry::Rect::splat(LengthPercentage::ZERO);
@@ -783,7 +801,19 @@ enum Keep {
 }
 
 /// Renders `trees` in Chrome; per tree, whether the disagreement `keep` is there.
-fn chrome_check(dir: &str, trees: &[Tree<Text>], root: cephal::tree::NodeId, viewport: Size<AvailableSpace>, keep: Keep, max_caveats: usize) -> Vec<bool> {
+/// The kinds of `chrome::caveats` of a tree: the notes without the boxes they name.
+fn caveat_kinds(tree: &Tree<Text>, root: cephal::tree::NodeId, viewport: Size<AvailableSpace>) -> std::collections::BTreeSet<String> {
+    chrome::caveats(tree, root, viewport).iter().map(|c| c.split(' ').filter(|w| !w.starts_with('#')).collect::<Vec<_>>().join(" ")).collect()
+}
+
+fn chrome_check(
+    dir: &str,
+    trees: &[Tree<Text>],
+    root: cephal::tree::NodeId,
+    viewport: Size<AvailableSpace>,
+    keep: Keep,
+    allowed_caveats: &std::collections::BTreeSet<String>,
+) -> Vec<bool> {
     if trees.is_empty() {
         return Vec::new();
     }
@@ -805,7 +835,7 @@ fn chrome_check(dir: &str, trees: &[Tree<Text>], root: cephal::tree::NodeId, vie
         .iter()
         .enumerate()
         .map(|(i, t)| {
-            if chrome::caveats(t, root, viewport).len() > max_caveats {
+            if !caveat_kinds(t, root, viewport).is_subset(allowed_caveats) {
                 return false;
             }
             let Some(expected) = chrome::expectations(&xml, &format!("c{i}__border_box_ltr"), t, root, viewport) else { return false };
@@ -841,12 +871,13 @@ fn reduce() {
     };
     let dir = format!("{}/target/reduce/{seed}", env!("CARGO_MANIFEST_DIR"));
     let (mut tree, root, viewport, _) = expressible(seed, relaxed);
-    let max_caveats = chrome::caveats(&tree, root, viewport).len();
-    assert!(chrome_check(&dir, &[tree.clone_cold()], root, viewport, keep, max_caveats)[0], "Chrome does not show the disagreement");
+    // Candidates may not bring in what the fixtures cannot express.
+    let allowed = caveat_kinds(&tree, root, viewport);
+    assert!(chrome_check(&dir, &[tree.clone_cold()], root, viewport, keep, &allowed)[0], "Chrome does not show the disagreement");
     loop {
         let edits = candidate_edits(&tree, root);
         let trees: Vec<Tree<Text>> = edits.iter().map(|&e| apply_edits(&tree, root, &[e])).collect();
-        let ok = chrome_check(&dir, &trees, root, viewport, keep, max_caveats);
+        let ok = chrome_check(&dir, &trees, root, viewport, keep, &allowed);
         let passing: Vec<Edit> = edits.iter().zip(&ok).filter(|(_, ok)| **ok).map(|(e, _)| *e).collect();
         if passing.is_empty() {
             break;
@@ -859,7 +890,7 @@ fn reduce() {
             n /= 2;
         }
         let combined: Vec<Tree<Text>> = prefixes.iter().map(|&n| apply_edits(&tree, root, &passing[..n])).collect();
-        let ok = chrome_check(&dir, &combined, root, viewport, keep, max_caveats);
+        let ok = chrome_check(&dir, &combined, root, viewport, keep, &allowed);
         let n = prefixes.iter().zip(&ok).find(|(_, ok)| **ok).map_or(1, |(n, _)| *n);
         tree = apply_edits(&tree, root, &passing[..n]);
         let mut nodes = Vec::new();

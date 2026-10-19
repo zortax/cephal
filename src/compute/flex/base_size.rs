@@ -90,7 +90,7 @@ pub(super) fn determine_flex_base_size<D: FlexDir, T: LayoutTree + CacheAccess +
         let mut min_request = None;
         if basis.is_err() || measures_min {
             let cross_axis_parent_size = c.node_inner_size.cross(dir);
-            let child_parent_size = from_cross(dir, cross_axis_parent_size);
+            let child_parent_size = from_cross(dir, c.percent_basis().cross(dir));
             let child_min_cross = transferred_min_size.cross(dir);
             let child_max_cross = transferred_max_size.cross(dir);
             // Clamping turns min-content and max-content cross space into different definite sizes.
@@ -293,7 +293,7 @@ pub(super) fn indefinite_stretch_cross<D: FlexDir, T: LayoutTree + CacheAccess +
         let request = size_request(
             item.node,
             item.size.with_cross(dir, None),
-            c.node_inner_size,
+            c.percent_basis(),
             Size::MAX_CONTENT.with_cross(dir, space),
             SizingMode::ContentSize,
             dir.cross_axis().into(),
