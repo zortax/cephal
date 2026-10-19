@@ -6,7 +6,6 @@ use super::{AlgoConstants, FlexItem, FlexLine};
 use crate::compute::LayoutTreeExt;
 use crate::compute::common::sizing_keyword::SizingKeywordResolution;
 use crate::geometry::{AvailableSpace, Line, MaybeMath, Size};
-use crate::style::AlignSelf;
 use crate::tree::{CacheAccess, LayoutTree, SizingMode};
 
 #[inline]
@@ -138,7 +137,7 @@ pub(super) fn determine_container_main_size<D: FlexDir, T: LayoutTree + CacheAcc
                                         Some(SizingKeywordResolution::Exact(size)) => ckd.set_cross(dir, Some(size)),
                                         Some(SizingKeywordResolution::Measure(space)) => cross_axis_available_space = space,
                                         None => {
-                                            if item.align_self == AlignSelf::STRETCH && ckd.cross(dir).is_none() {
+                                            if item.align_self.keyword == crate::style::AlignItemsKeyword::Stretch && ckd.cross(dir).is_none() {
                                                 let stretched = match c.indefinite_stretch_cross {
                                                     Some(cross) => Some((cross - item.margin.cross_axis_sum(dir)).max(0.0)),
                                                     None => cross_axis_available_space.into_option(),

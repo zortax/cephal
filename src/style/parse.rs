@@ -72,7 +72,7 @@ fn split_safety(s: &str) -> (AlignmentSafety, &str) {
     } else if let Some(r) = s.strip_prefix("unsafe ") {
         (AlignmentSafety::Unsafe, r.trim())
     } else {
-        (AlignmentSafety::Unsafe, s)
+        (AlignmentSafety::Default, s)
     }
 }
 

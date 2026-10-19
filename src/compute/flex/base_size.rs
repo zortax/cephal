@@ -5,7 +5,7 @@ use super::axis::{FlexAxisRect, FlexAxisSize, FlexAxisSum, abs_main, from_cross}
 use super::{AlgoConstants, FlexItem};
 use crate::compute::common::sizing_keyword::{SizingKeywordResolution, resolve_sizing_keyword};
 use crate::geometry::{AvailableSpace, MaybeMath, Size};
-use crate::style::{AlignSelf, BoxSizing, Overflow};
+use crate::style::{BoxSizing, Overflow};
 use crate::compute::scratch::Scratch;
 use crate::compute::{Questions, size_request};
 use crate::tree::{CacheAccess, LayoutOutput, LayoutTree, SizingMode};
@@ -127,7 +127,7 @@ pub(super) fn determine_flex_base_size<D: FlexDir, T: LayoutTree + CacheAccess +
                         carries_cross_space = false;
                     }
                     None => {
-                        if child.align_self == AlignSelf::STRETCH
+                        if child.align_self.keyword == crate::style::AlignItemsKeyword::Stretch
                             && !child.margin_is_auto.cross_start(dir)
                             && !child.margin_is_auto.cross_end(dir)
                             && ckd.cross(dir).is_none()
@@ -277,7 +277,7 @@ pub(super) fn indefinite_stretch_cross<D: FlexDir, T: LayoutTree + CacheAccess +
     }
     let needs = |item: &FlexItem| {
         item.size.cross(dir).is_none()
-            && (item.align_self == AlignSelf::STRETCH || item.size_style.cross(dir).is_sizing_keyword())
+            && (item.align_self.keyword == crate::style::AlignItemsKeyword::Stretch || item.size_style.cross(dir).is_sizing_keyword())
     };
     if !items.iter().any(needs) {
         return None;

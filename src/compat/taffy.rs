@@ -53,9 +53,12 @@ fn align_items(a: crate::style::AlignItems) -> taffy::AlignItems {
     }
 }
 
-/// Cephal's `Unsafe` is also what a bare keyword means, which is taffy's `Default`.
 fn safety(s: AlignmentSafety) -> taffy::AlignmentSafety {
-    if s == AlignmentSafety::Safe { taffy::AlignmentSafety::Safe } else { taffy::AlignmentSafety::Default }
+    match s {
+        AlignmentSafety::Default => taffy::AlignmentSafety::Default,
+        AlignmentSafety::Unsafe => taffy::AlignmentSafety::Unsafe,
+        AlignmentSafety::Safe => taffy::AlignmentSafety::Safe,
+    }
 }
 
 fn align_content(a: crate::style::AlignContent) -> taffy::AlignContent {

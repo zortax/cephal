@@ -7,7 +7,7 @@ use crate::compute::common::sizing_keyword::{SizingKeywordResolution, resolve_si
 use crate::compute::Questions;
 use crate::compute::scratch::Scratch;
 use crate::geometry::{AvailableSpace, Line, MaybeMath, Size};
-use crate::style::{AlignContent, AlignSelf, BoxSizing};
+use crate::style::BoxSizing;
 use crate::tree::{CacheAccess, ChildRequest, LayoutInput, LayoutOutput, LayoutTree, RequestedAxis, RunMode, SizingMode};
 
 /// Per-item state carried across the batch of cross-size questions.
@@ -26,7 +26,7 @@ fn is_stretched(child: &FlexItem, dir: impl FlexDir) -> bool {
     let cross_size = child.size_style.cross(dir);
     !child.margin_is_auto.cross_start(dir)
         && !child.margin_is_auto.cross_end(dir)
-        && (cross_size.is_stretch() || (child.align_self == AlignSelf::STRETCH && cross_size.is_auto()))
+        && (cross_size.is_stretch() || (child.align_self.keyword == crate::style::AlignItemsKeyword::Stretch && cross_size.is_auto()))
 }
 
 /// `fixed_line_cross` is the container's known cross size when it has a single line: the line is
@@ -55,7 +55,7 @@ pub(super) fn determine_hypothetical_cross_size<D: FlexDir, T: LayoutTree + Cach
             let stretched_cross = c
                 .indefinite_stretch_cross
                 .filter(|_| {
-                    child.align_self == AlignSelf::STRETCH
+                    child.align_self.keyword == crate::style::AlignItemsKeyword::Stretch
                         && !child.margin_is_auto.cross_start(dir)
                         && !child.margin_is_auto.cross_end(dir)
                         && child.size_style.cross(dir).is_auto()
@@ -254,7 +254,7 @@ pub(super) fn calculate_cross_size<D: FlexDir>(lines: &mut [FlexLine], items: &[
 }
 
 pub(super) fn handle_align_content_stretch<D: FlexDir>(lines: &mut [FlexLine], node_size: Size<Option<f32>>, c: &AlgoConstants<D>) {
-    if c.align_content != AlignContent::STRETCH {
+    if c.align_content.keyword != crate::style::AlignContentKeyword::Stretch {
         return;
     }
     let dir = c.dir;

@@ -72,7 +72,7 @@ impl FlexItem {
     }
     #[inline]
     fn participates_in_baseline_alignment(&self, dir: impl FlexDir) -> bool {
-        self.align_self == AlignSelf::BASELINE && !self.margin_is_auto.cross_start(dir) && !self.margin_is_auto.cross_end(dir)
+        self.align_self.keyword == crate::style::AlignItemsKeyword::Baseline && !self.margin_is_auto.cross_start(dir) && !self.margin_is_auto.cross_end(dir)
     }
 }
 
@@ -530,7 +530,7 @@ fn item_known_dimension_definiteness<D: FlexDir>(c: &AlgoConstants<D>, item: &Fl
     let has_cross_auto_margins = item.margin_is_auto.cross_start(dir) || item.margin_is_auto.cross_end(dir);
     let cross_size = item.size_style.cross(dir);
     let is_stretched =
-        !has_cross_auto_margins && (cross_size.is_stretch() || (item.align_self == AlignSelf::STRETCH && cross_size.is_auto()));
+        !has_cross_auto_margins && (cross_size.is_stretch() || (item.align_self.keyword == crate::style::AlignItemsKeyword::Stretch && cross_size.is_auto()));
     let cross_is_definite =
         is_stretched || item.size.cross(dir).is_some() || (!dir.is_row() && c.cross_axis_available_space_is_definite);
     Size::TRUE.with_main(dir, main_is_definite).with_cross(dir, cross_is_definite)

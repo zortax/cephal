@@ -237,7 +237,7 @@ pub(super) fn track_sizing_algorithm<T: LayoutTree + CacheAccess + ?Sized>(tree:
         inner_node_size,
         get_track_size_estimate,
     );
-    if axis_alignment == AlignContent::STRETCH {
+    if axis_alignment.keyword == AlignContentKeyword::Stretch {
         stretch_auto_tracks(axis_tracks, axis_min_size, available_for_expansion);
     }
 }

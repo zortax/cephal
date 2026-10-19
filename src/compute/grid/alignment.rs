@@ -240,7 +240,7 @@ pub(super) fn prepare_item<T: LayoutTree + CacheAccess + ?Sized>(
                     },
                 });
             }
-            if margin.left.is_some() && margin.right.is_some() && alignment_h == AlignSelf::STRETCH && !position.is_out_of_flow() {
+            if margin.left.is_some() && margin.right.is_some() && alignment_h.keyword == AlignItemsKeyword::Stretch && !position.is_out_of_flow() {
                 break 'w Some(area_minus_margins.width);
             }
             None
@@ -275,7 +275,7 @@ pub(super) fn prepare_item<T: LayoutTree + CacheAccess + ?Sized>(
                     },
                 });
             }
-            if margin.top.is_some() && margin.bottom.is_some() && alignment_v == AlignSelf::STRETCH && !position.is_out_of_flow() {
+            if margin.top.is_some() && margin.bottom.is_some() && alignment_v.keyword == AlignItemsKeyword::Stretch && !position.is_out_of_flow() {
                 break 'h Some(area_minus_margins.height);
             }
             None

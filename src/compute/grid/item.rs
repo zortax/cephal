@@ -290,7 +290,7 @@ impl GridItem {
                     _ => None,
                 };
             }
-            if !self.margin.left.is_auto() && !self.margin.right.is_auto() && self.justify_self == AlignSelf::STRETCH {
+            if !self.margin.left.is_auto() && !self.margin.right.is_auto() && self.justify_self.keyword == AlignItemsKeyword::Stretch {
                 return grid_area_minus_margins.width;
             }
             None
@@ -303,7 +303,7 @@ impl GridItem {
                     _ => None,
                 };
             }
-            if !self.margin.top.is_auto() && !self.margin.bottom.is_auto() && self.align_self == AlignSelf::STRETCH {
+            if !self.margin.top.is_auto() && !self.margin.bottom.is_auto() && self.align_self.keyword == AlignItemsKeyword::Stretch {
                 return grid_area_minus_margins.height;
             }
             None

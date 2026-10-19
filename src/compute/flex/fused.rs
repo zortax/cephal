@@ -231,7 +231,7 @@ fn generate_items<D: FlexDir, T: LayoutTree + ?Sized>(tree: &T, node: NodeId, c:
             contain: style.contain,
             flex_basis_is_definite: basis.is_some(),
             measures_min: min_size.or(automatic_min).main(dir).is_none(),
-            stretched: align_self == AlignSelf::STRETCH && style.size.cross(dir).is_auto(),
+            stretched: align_self.keyword == AlignItemsKeyword::Stretch && style.size.cross(dir).is_auto(),
             cheap_leaf: direct && {
                 let meta = tree.query_meta(child);
                 meta.cheap_leaf && !meta.hidden
@@ -347,7 +347,7 @@ fn indefinite_stretch_cross<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     if !c.is_column || c.node_inner_size.cross(dir).is_some() {
         return None;
     }
-    if !items.iter().any(|item| item.size.cross(dir).is_none() && item.align_self == AlignSelf::STRETCH) {
+    if !items.iter().any(|item| item.size.cross(dir).is_none() && item.align_self.keyword == AlignItemsKeyword::Stretch) {
         return None;
     }
     let available_cross = available_space.cross(dir);
@@ -425,7 +425,7 @@ fn determine_flex_base_size<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
             dir,
             child_known_dimensions.cross(dir).maybe_clamp(child.min_size.cross(dir), child.max_size.cross(dir)),
         );
-        if child.align_self == AlignSelf::STRETCH && child_known_dimensions.cross(dir).is_none() {
+        if child.align_self.keyword == AlignItemsKeyword::Stretch && child_known_dimensions.cross(dir).is_none() {
             let stretched = match c.indefinite_stretch_cross {
                 Some(cross) => Some(
                     (cross - child.margin.cross_axis_sum(dir)).maybe_clamp(child.min_size.cross(dir), child.max_size.cross(dir)),
@@ -569,7 +569,7 @@ fn determine_container_main_size<D: FlexDir, T: LayoutTree + CacheAccess + ?Size
                                 dir,
                                 child_known_dimensions.cross(dir).maybe_clamp(item.min_size.cross(dir), item.max_size.cross(dir)),
                             );
-                            if item.align_self == AlignSelf::STRETCH && child_known_dimensions.cross(dir).is_none() {
+                            if item.align_self.keyword == AlignItemsKeyword::Stretch && child_known_dimensions.cross(dir).is_none() {
                                 let stretched = match c.indefinite_stretch_cross {
                                     Some(cross) => Some((cross - item.margin.cross_axis_sum(dir)).max(0.0)),
                                     None => cross_axis_available_space.into_option(),
