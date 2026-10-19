@@ -50,6 +50,18 @@ heights and its percentage row gap behave as `auto` (CSS 2.2 §10.5). Taffy reso
 against the height the item ends up with. (A width is always definite for percentages, so
 column flex items are not affected.)
 
+## An absolutely positioned box's content height before its width
+
+Census category `Absolute` (with others). Fixtures `abspos_width_before_height`,
+`abspos_content_sized_height_after_width`.
+
+An absolutely positioned box of automatic (or content-based keyword) height gets its width
+first and then its height at that width (CSS 2.2 §10.3.7 before §10.6.4), so percentages inside
+resolve against the width it ends up with. Taffy finds a content-sized height (`fit-content`,
+`max-content`, `min-content`) before the width, and lays out an absolutely positioned root
+measuring both axes at once; the percentage width of a column flex item, and margins inside
+it, then resolve against nothing.
+
 ## The root (both engines, by design)
 
 Not a divergence between the engines, but where both differ from a browser's root element,

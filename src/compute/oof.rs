@@ -693,8 +693,14 @@ fn layout_oof_box<T: LayoutTree + CacheAccess + ?Sized>(
     }
     let available_space = available_space.maybe_clamp(min_size, max_size).map(AvailableSpace::Definite);
 
-    // Sizing keywords: an explicitly sized axis takes precedence over the automatic size.
-    if size_style.width.is_sizing_keyword() || size_style.height.is_sizing_keyword() {
+    // Sizing keywords: an explicitly sized axis takes precedence over the automatic size. A
+    // content-sized height waits for the automatic width (CSS 2.2 §10.3.7 before §10.6.4).
+    let defer_height = size_style.height.is_sizing_keyword()
+        && !size_style.width.is_sizing_keyword()
+        && known_dimensions.width.is_none()
+        && known_dimensions.height.is_none()
+        && aspect_ratio.is_none();
+    if size_style.width.is_sizing_keyword() || (size_style.height.is_sizing_keyword() && !defer_height) {
         resolve_sizing_keywords(tree, node, &mut known_dimensions, size_style, area_size, Rect { left, right, top, bottom }, margin);
         known_dimensions = known_dimensions.maybe_apply_aspect_ratio(aspect_ratio).maybe_clamp(min_size, max_size);
     }
@@ -703,7 +709,7 @@ fn layout_oof_box<T: LayoutTree + CacheAccess + ?Sized>(
     // between two insets, first, so the other axis can follow through the aspect ratio; both
     // explicitly stretched ignore it.
     let stretch_width = known_dimensions.width.is_none() && horizontal.is_stretch_sized(is_replaced, is_table);
-    let stretch_height = known_dimensions.height.is_none() && vertical.is_stretch_sized(is_replaced, is_table);
+    let stretch_height = !defer_height && known_dimensions.height.is_none() && vertical.is_stretch_sized(is_replaced, is_table);
     let both_explicit_stretch = horizontal.alignment == OofAlignment::Stretch && vertical.alignment == OofAlignment::Stretch;
     let stretch_aspect_ratio = if stretch_width && stretch_height && both_explicit_stretch { None } else { aspect_ratio };
     if stretch_width {
@@ -714,6 +720,15 @@ fn layout_oof_box<T: LayoutTree + CacheAccess + ?Sized>(
             known_dimensions.width = Some(stretch_fit_size.width);
             known_dimensions = known_dimensions.maybe_apply_aspect_ratio(stretch_aspect_ratio).maybe_clamp(min_size, max_size);
         }
+    }
+    if defer_height {
+        if known_dimensions.width.is_none() {
+            let width =
+                tree.measure_child_size(node, Size::NONE, area, available_space, SizingMode::ContentSize, AbsoluteAxis::Horizontal, Line::FALSE);
+            known_dimensions.width = Some(width.maybe_clamp(min_size.width, max_size.width));
+        }
+        resolve_sizing_keywords(tree, node, &mut known_dimensions, size_style, area_size, Rect { left, right, top, bottom }, margin);
+        known_dimensions = known_dimensions.maybe_clamp(min_size, max_size);
     }
     if known_dimensions.height.is_none() && stretch_height {
         if is_table {
@@ -831,43 +846,34 @@ fn resolve_sizing_keywords<T: LayoutTree + CacheAccess + ?Sized>(
         None
     };
     use SizingKeywordResolution::*;
-    match (keyword_width, keyword_height) {
-        // Both measured: one question.
-        (Some(Measure(aw)), Some(Measure(ah))) => {
-            let measured =
-                tree.measure_child_size_both(node, Size::NONE, area, Size { width: aw, height: ah }, SizingMode::ContentSize, Line::FALSE);
-            *known_dimensions = measured.map(Some);
-        }
-        (kw, kh) => {
-            if let Some(r) = kw {
-                known_dimensions.width = Some(match r {
-                    Exact(w) => w,
-                    Measure(aw) => tree.measure_child_size(
-                        node,
-                        *known_dimensions,
-                        area,
-                        Size { width: aw, height: AvailableSpace::Definite(stretch.height) },
-                        SizingMode::ContentSize,
-                        AbsoluteAxis::Horizontal,
-                        Line::FALSE,
-                    ),
-                });
-            }
-            if let Some(r) = kh {
-                known_dimensions.height = Some(match r {
-                    Exact(h) => h,
-                    Measure(ah) => tree.measure_child_size(
-                        node,
-                        *known_dimensions,
-                        area,
-                        Size { width: known_dimensions.width.map_or(AvailableSpace::Definite(stretch.width), AvailableSpace::Definite), height: ah },
-                        SizingMode::ContentSize,
-                        AbsoluteAxis::Vertical,
-                        Line::FALSE,
-                    ),
-                });
-            }
-        }
+    // The width first, then the height at that width.
+    if let Some(r) = keyword_width {
+        known_dimensions.width = Some(match r {
+            Exact(w) => w,
+            Measure(aw) => tree.measure_child_size(
+                node,
+                *known_dimensions,
+                area,
+                Size { width: aw, height: AvailableSpace::Definite(stretch.height) },
+                SizingMode::ContentSize,
+                AbsoluteAxis::Horizontal,
+                Line::FALSE,
+            ),
+        });
+    }
+    if let Some(r) = keyword_height {
+        known_dimensions.height = Some(match r {
+            Exact(h) => h,
+            Measure(ah) => tree.measure_child_size(
+                node,
+                *known_dimensions,
+                area,
+                Size { width: known_dimensions.width.map_or(AvailableSpace::Definite(stretch.width), AvailableSpace::Definite), height: ah },
+                SizingMode::ContentSize,
+                AbsoluteAxis::Vertical,
+                Line::FALSE,
+            ),
+        });
     }
 }
 
