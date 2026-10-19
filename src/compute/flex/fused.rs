@@ -354,11 +354,12 @@ fn indefinite_stretch_cross<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     let read_cross = |out: &LayoutOutput| out.size.get(dir.cross_axis());
     let mut questions: Questions<f32> = Questions::new(tree, items.len());
     for item in items.iter().filter(|item| item.size.cross(dir).is_none()) {
+        let space = available_cross.maybe_sub(item.margin.cross_axis_sum(dir)).maybe_max(0.0);
         let request = size_request(
             item.node,
             item.size.with_cross(dir, None),
             c.node_inner_size,
-            Size::MAX_CONTENT.with_cross(dir, available_cross),
+            Size::MAX_CONTENT.with_cross(dir, space),
             SizingMode::ContentSize,
             dir.cross_axis().into(),
         );
@@ -399,7 +400,6 @@ fn determine_flex_base_size<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     let mut observes_cross = false;
     let cross_axis_parent_size = c.node_inner_size.cross(dir);
     let child_parent_size = from_cross(dir, cross_axis_parent_size);
-    let cross_axis_margin_sum = c.margin.cross_axis_sum(dir);
     let available_cross = available_space.cross(dir);
     let main_available =
         if available_space.main(dir) == AvailableSpace::MinContent { AvailableSpace::MinContent } else { AvailableSpace::MaxContent };
@@ -407,12 +407,14 @@ fn determine_flex_base_size<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
         if child.flex_basis_is_definite && !child.measures_min {
             continue;
         }
-        let child_min_cross = child.min_size.cross(dir).maybe_add(cross_axis_margin_sum);
-        let child_max_cross = child.max_size.cross(dir).maybe_add(cross_axis_margin_sum);
+        let child_min_cross = child.min_size.cross(dir);
+        let child_max_cross = child.max_size.cross(dir);
         let clamp_tells_apart = (child_min_cross.is_some() || child_max_cross.is_some()) && !available_cross.is_definite();
         let cross_axis_available_space = match available_cross {
             AvailableSpace::Definite(val) => AvailableSpace::Definite(
-                c.divided_cross_space(cross_axis_parent_size.unwrap_or(val)).maybe_clamp(child_min_cross, child_max_cross),
+                (c.divided_cross_space(cross_axis_parent_size.unwrap_or(val)) - child.margin.cross_axis_sum(dir))
+                    .max(0.0)
+                    .maybe_clamp(child_min_cross, child_max_cross),
             ),
             AvailableSpace::MinContent => child_min_cross.map_or(AvailableSpace::MinContent, AvailableSpace::Definite),
             AvailableSpace::MaxContent => child_max_cross.map_or(AvailableSpace::MaxContent, AvailableSpace::Definite),
@@ -430,7 +432,7 @@ fn determine_flex_base_size<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
                 ),
                 None => {
                     stretched_from_space = true;
-                    cross_axis_available_space.into_option().maybe_sub(child.margin.cross_axis_sum(dir))
+                    cross_axis_available_space.into_option()
                 }
             };
             child_known_dimensions.set_cross(dir, stretched.maybe_max(0.0));
@@ -554,12 +556,13 @@ fn determine_container_main_size<D: FlexDir, T: LayoutTree + CacheAccess + ?Size
                         }
                         _ => {
                             let cross_axis_parent_size = c.node_inner_size.cross(dir);
-                            let cross_axis_margin_sum = c.margin.cross_axis_sum(dir);
-                            let child_min_cross = item.min_size.cross(dir).maybe_add(cross_axis_margin_sum);
-                            let child_max_cross = item.max_size.cross(dir).maybe_add(cross_axis_margin_sum);
+                            let child_min_cross = item.min_size.cross(dir);
+                            let child_max_cross = item.max_size.cross(dir);
                             let cross_axis_available_space = available_space
                                 .cross(dir)
-                                .map_definite(|val| c.divided_cross_space(cross_axis_parent_size.unwrap_or(val)))
+                                .map_definite(|val| {
+                                    (c.divided_cross_space(cross_axis_parent_size.unwrap_or(val)) - item.margin.cross_axis_sum(dir)).max(0.0)
+                                })
                                 .maybe_clamp(child_min_cross, child_max_cross);
                             let mut child_known_dimensions = item.size.with_main(dir, None);
                             child_known_dimensions.set_cross(
@@ -567,9 +570,11 @@ fn determine_container_main_size<D: FlexDir, T: LayoutTree + CacheAccess + ?Size
                                 child_known_dimensions.cross(dir).maybe_clamp(item.min_size.cross(dir), item.max_size.cross(dir)),
                             );
                             if item.align_self == AlignSelf::STRETCH && child_known_dimensions.cross(dir).is_none() {
-                                let stretched = c.indefinite_stretch_cross.or(cross_axis_available_space.into_option());
-                                child_known_dimensions
-                                    .set_cross(dir, stretched.maybe_sub(item.margin.cross_axis_sum(dir)).maybe_max(0.0));
+                                let stretched = match c.indefinite_stretch_cross {
+                                    Some(cross) => Some((cross - item.margin.cross_axis_sum(dir)).max(0.0)),
+                                    None => cross_axis_available_space.into_option(),
+                                };
+                                child_known_dimensions.set_cross(dir, stretched);
                             }
                             let child_available_space = available_space.with_cross(dir, cross_axis_available_space);
                             let measured_main_size = tree.measure_child_size(
@@ -656,10 +661,10 @@ fn determine_hypothetical_cross_size<D: FlexDir, T: LayoutTree + CacheAccess + ?
             child.hypothetical_inner_size.set_cross(dir, child_inner_cross);
             continue;
         }
-        let child_known_main = AvailableSpace::Definite(c.container_size.main(dir));
+        let child_known_main = AvailableSpace::Definite((c.container_size.main(dir) - child.margin.main_axis_sum(dir)).max(0.0));
         let child_available_cross = available_space
             .cross(dir)
-            .map_definite(|val| c.divided_cross_space(val))
+            .map_definite(|val| (c.divided_cross_space(val) - child.margin.cross_axis_sum(dir)).max(0.0))
             .maybe_clamp(min, max)
             .maybe_max(padding_border_sum);
         let request = ChildRequest {
@@ -754,6 +759,7 @@ fn item_request<D: FlexDir>(item: &Item, c: &AlgoConstants<D>) -> ChildRequest {
             known_dimensions: item.target_size.map(Some),
             known_dimensions_are_definite: item.known_dimension_definiteness(c),
             parent_size: c.node_inner_size,
+            // Both axes are known, and the item reads them instead (see `compute::normalize`).
             available_space: c.container_size.map(AvailableSpace::Definite),
             vertical_margins_are_collapsible: Line::FALSE,
             context_key: 0,

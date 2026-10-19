@@ -110,7 +110,6 @@ pub(super) struct AlgoConstants<D> {
     line_count: Option<u16>,
     min_size: Size<Option<f32>>,
     max_size: Size<Option<f32>>,
-    margin: Rect<f32>,
     border: Rect<f32>,
     content_box_inset: Rect<f32>,
     scrollbar_gutter: Point<f32>,
@@ -366,7 +365,6 @@ fn compute_constants<T: LayoutTree + ?Sized, D: FlexDir>(
     let is_balance = flex_wrap.is_balance();
     let line_count = if is_wrap { Some(style.flex_line_count.max(1)) } else { None };
     let aspect_ratio = style.aspect_ratio;
-    let margin = style.margin.map(|m| m.resolve_or_zero(parent_size.width, &calc));
     let padding = style.padding.map(|p| p.resolve_or_zero(parent_size.width, &calc));
     let border = style.border.map(|b| b.resolve_or_zero(parent_size.width, &calc));
     let padding_border_sum = padding.sum_axes() + border.sum_axes();
@@ -407,7 +405,6 @@ fn compute_constants<T: LayoutTree + ?Sized, D: FlexDir>(
         line_count,
         min_size: resolve(style.min_size.map(|v| v.raw())).maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment),
         max_size: resolve(style.max_size.map(|v| v.raw())).maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment),
-        margin,
         border,
         gap,
         content_box_inset,
@@ -516,19 +513,11 @@ fn determine_available_space<D: FlexDir>(
     Size {
         width: match known_dimensions.width {
             Some(w) => AvailableSpace::Definite((w - c.content_box_inset.horizontal_axis_sum()).max(0.0)),
-            None => outer
-                .width
-                .maybe_sub(c.margin.horizontal_axis_sum())
-                .maybe_sub(c.content_box_inset.horizontal_axis_sum())
-                .maybe_max(0.0),
+            None => outer.width.maybe_sub(c.content_box_inset.horizontal_axis_sum()).maybe_max(0.0),
         },
         height: match known_dimensions.height {
             Some(h) => AvailableSpace::Definite((h - c.content_box_inset.vertical_axis_sum()).max(0.0)),
-            None => outer
-                .height
-                .maybe_sub(c.margin.vertical_axis_sum())
-                .maybe_sub(c.content_box_inset.vertical_axis_sum())
-                .maybe_max(0.0),
+            None => outer.height.maybe_sub(c.content_box_inset.vertical_axis_sum()).maybe_max(0.0),
         },
     }
 }

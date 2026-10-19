@@ -81,6 +81,8 @@ pub struct LayoutInput {
     pub known_dimensions_are_definite: Size<bool>,
     /// Percentage basis.
     pub parent_size: Size<Option<f32>>,
+    /// Space for the border box: the parent has already subtracted the child's margins (`auto`
+    /// ones counting as zero), and no algorithm subtracts a node's own margins again.
     pub available_space: Size<AvailableSpace>,
     /// Whether the block-start/end margins may collapse with the parent's.
     pub vertical_margins_are_collapsible: Line<bool>,

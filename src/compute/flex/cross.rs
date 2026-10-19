@@ -73,10 +73,11 @@ pub(super) fn determine_hypothetical_cross_size<D: FlexDir, T: LayoutTree + Cach
             child.hypothetical_outer_size.set_cross(dir, child_inner_cross + child.margin.cross_axis_sum(dir));
             continue;
         }
-        let child_known_main = AvailableSpace::Definite(c.container_size.main(dir));
+        // The space for the item's border box.
+        let child_known_main = AvailableSpace::Definite((c.container_size.main(dir) - child.margin.main_axis_sum(dir)).max(0.0));
         let child_available_cross = available_space
             .cross(dir)
-            .map_definite(|val| c.divided_cross_space(val))
+            .map_definite(|val| (c.divided_cross_space(val) - child.margin.cross_axis_sum(dir)).max(0.0))
             .maybe_clamp(transferred_min_cross, transferred_max_cross)
             .maybe_max(padding_border_sum);
         let cross_stretch_size =
@@ -183,7 +184,9 @@ fn baselines_inner<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
                         } else {
                             AvailableSpace::Definite(c.container_size.height)
                         },
-                    },
+                    }
+                    .maybe_sub(child.margin.sum_axes())
+                    .maybe_max(Size::ZERO),
                     vertical_margins_are_collapsible: Line::FALSE,
                     context_key: 0,
                 },

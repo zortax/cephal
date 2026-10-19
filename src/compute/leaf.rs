@@ -147,7 +147,6 @@ struct Prepared {
     node_max_size: Size<Option<f32>>,
     aspect_ratio: Option<f32>,
     has_styles_preventing_being_collapsed_through: bool,
-    margin_sum: Size<f32>,
     content_box_inset_sum: Size<f32>,
     content_box_inset_top: f32,
     pb_sum: Size<f32>,
@@ -173,7 +172,6 @@ fn prepare(resolved: &LeafBox, known_dimensions: Size<Option<f32>>, sizing_mode:
         node_max_size,
         aspect_ratio,
         has_styles_preventing_being_collapsed_through,
-        margin_sum: resolved.margin.sum_axes(),
         content_box_inset_sum: resolved.content_box_inset.sum_axes(),
         content_box_inset_top: resolved.content_box_inset.top,
         pb_sum: resolved.padding_border_sum,
@@ -204,7 +202,6 @@ pub fn compute_leaf_layout_with<T: LayoutTree + ?Sized>(
         node_max_size,
         aspect_ratio,
         has_styles_preventing_being_collapsed_through,
-        margin_sum,
         content_box_inset_sum,
         content_box_inset_top,
         pb_sum,
@@ -236,20 +233,18 @@ pub fn compute_leaf_layout_with<T: LayoutTree + ?Sized>(
         };
     }
 
-    // Content-box available space: margins subtracted, clamped by min/max.
+    // Content-box available space, clamped by min/max. The parent subtracted the margins.
     let available_for_measure = Size {
         width: known_dimensions
             .width
             .map(AvailableSpace::Definite)
             .unwrap_or(available_space.width)
-            .maybe_sub(margin_sum.width)
             .maybe_set(node_size.width)
             .map_definite(|w| w.maybe_clamp(node_min_size.width, node_max_size.width) - content_box_inset_sum.width),
         height: known_dimensions
             .height
             .map(AvailableSpace::Definite)
             .unwrap_or(available_space.height)
-            .maybe_sub(margin_sum.height)
             .maybe_set(node_size.height)
             .map_definite(|h| h.maybe_clamp(node_min_size.height, node_max_size.height) - content_box_inset_sum.height),
     };

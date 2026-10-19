@@ -91,17 +91,19 @@ pub(super) fn determine_flex_base_size<D: FlexDir, T: LayoutTree + CacheAccess +
         if basis.is_err() || measures_min {
             let cross_axis_parent_size = c.node_inner_size.cross(dir);
             let child_parent_size = from_cross(dir, cross_axis_parent_size);
-            let cross_axis_margin_sum = c.margin.cross_axis_sum(dir);
-            let child_min_cross = transferred_min_size.cross(dir).maybe_add(cross_axis_margin_sum);
-            let child_max_cross = transferred_max_size.cross(dir).maybe_add(cross_axis_margin_sum);
+            let child_min_cross = transferred_min_size.cross(dir);
+            let child_max_cross = transferred_max_size.cross(dir);
             // Clamping turns min-content and max-content cross space into different definite sizes.
             let clamp_tells_apart =
                 (child_min_cross.is_some() || child_max_cross.is_some()) && !available_space.cross(dir).is_definite();
             // Whether the item's questions carry that space: as their own, or as a stretched size.
             let mut carries_cross_space = true;
+            // The space for the item's border box: its margins are subtracted here, not by the item.
             let mut cross_axis_available_space = match available_space.cross(dir) {
                 AvailableSpace::Definite(val) => AvailableSpace::Definite(
-                    c.divided_cross_space(cross_axis_parent_size.unwrap_or(val)).maybe_clamp(child_min_cross, child_max_cross),
+                    (c.divided_cross_space(cross_axis_parent_size.unwrap_or(val)) - child.margin.cross_axis_sum(dir))
+                        .max(0.0)
+                        .maybe_clamp(child_min_cross, child_max_cross),
                 ),
                 AvailableSpace::MinContent => child_min_cross.map_or(AvailableSpace::MinContent, AvailableSpace::Definite),
                 AvailableSpace::MaxContent => child_max_cross.map_or(AvailableSpace::MaxContent, AvailableSpace::Definite),
@@ -137,7 +139,7 @@ pub(super) fn determine_flex_base_size<D: FlexDir, T: LayoutTree + CacheAccess +
                                 ),
                                 None => {
                                     stretched_from_space = true;
-                                    cross_axis_available_space.into_option().maybe_sub(child.margin.cross_axis_sum(dir))
+                                    cross_axis_available_space.into_option()
                                 }
                             };
                             ckd.set_cross(dir, stretched.maybe_max(0.0));
@@ -286,7 +288,7 @@ pub(super) fn indefinite_stretch_cross<D: FlexDir, T: LayoutTree + CacheAccess +
     for item in items.iter().filter(|item| item.size.cross(dir).is_none()) {
         let space = match resolve_sizing_keyword(item.size_style.cross(dir).raw(), None, None) {
             Some(SizingKeywordResolution::Measure(space)) => space,
-            _ => available_cross,
+            _ => available_cross.maybe_sub(item.margin.cross_axis_sum(dir)).maybe_max(0.0),
         };
         let request = size_request(
             item.node,

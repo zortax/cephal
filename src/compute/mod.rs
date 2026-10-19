@@ -374,6 +374,9 @@ pub fn compute_root_layout<T: LayoutTree + CacheAccess + ?Sized>(
         if style.box_sizing == crate::style::BoxSizing::ContentBox { padding_border_size } else { Size::ZERO };
 
     use crate::geometry::MaybeMath;
+    // The root's border box gets the available space less its margins, `auto` ones counting as zero.
+    let resolved_margin = margin.map(|m| m.unwrap_or(0.0));
+    let root_available_space = available_space.maybe_sub(resolved_margin.sum_axes()).maybe_max(Size::ZERO);
     let mut known_dimensions = Size::NONE;
     if style.is_block() {
         let resolve = |s: Size<crate::style::Length>| block::resolve_size(s, parent_size, &calc);
@@ -392,9 +395,7 @@ pub fn compute_root_layout<T: LayoutTree + CacheAccess + ?Sized>(
             _ => None,
         });
         // A block root stretches to a definite available width less its margins.
-        let margin_sum = margin.left.unwrap_or(0.0) + margin.right.unwrap_or(0.0);
-        let available_space_based_size =
-            Size { width: available_space.width.into_option().maybe_sub(margin_sum), height: None };
+        let available_space_based_size = Size { width: root_available_space.width.into_option(), height: None };
         known_dimensions = min_max_definite_size
             .or(clamped_style_size)
             .or(available_space_based_size)
@@ -411,7 +412,7 @@ pub fn compute_root_layout<T: LayoutTree + CacheAccess + ?Sized>(
             known_dimensions,
             known_dimensions_are_definite: Size::TRUE,
             parent_size,
-            available_space,
+            available_space: root_available_space,
             vertical_margins_are_collapsible: Line::FALSE,
             context_key: 0,
         },
@@ -426,7 +427,6 @@ pub fn compute_root_layout<T: LayoutTree + CacheAccess + ?Sized>(
     // The root's margin box sits at the origin of the initial containing block, whose size is the
     // viewport; a relatively positioned root is then offset by its insets, resolved against it.
     let calc = |id, basis| tree.resolve_calc(id, basis);
-    let resolved_margin = margin.map(|m| m.unwrap_or(0.0));
     let rtl = style.direction == crate::style::Direction::Rtl;
     let mut location = Point {
         x: match (rtl, available_space.width) {

@@ -115,12 +115,14 @@ pub(super) fn determine_container_main_size<D: FlexDir, T: LayoutTree + CacheAcc
                             }
                             _ => {
                                 let cross_axis_parent_size = c.node_inner_size.cross(dir);
-                                let cross_axis_margin_sum = c.margin.cross_axis_sum(dir);
-                                let child_min_cross = item.min_size.cross(dir).maybe_add(cross_axis_margin_sum);
-                                let child_max_cross = item.max_size.cross(dir).maybe_add(cross_axis_margin_sum);
+                                let child_min_cross = item.min_size.cross(dir);
+                                let child_max_cross = item.max_size.cross(dir);
+                                // The space for the item's border box.
                                 let mut cross_axis_available_space = available_space
                                     .cross(dir)
-                                    .map_definite(|val| c.divided_cross_space(cross_axis_parent_size.unwrap_or(val)))
+                                    .map_definite(|val| {
+                                        (c.divided_cross_space(cross_axis_parent_size.unwrap_or(val)) - item.margin.cross_axis_sum(dir)).max(0.0)
+                                    })
                                     .maybe_clamp(child_min_cross, child_max_cross);
                                 let child_known_dimensions = {
                                     let mut ckd = item.size.with_main(dir, None);
@@ -137,11 +139,11 @@ pub(super) fn determine_container_main_size<D: FlexDir, T: LayoutTree + CacheAcc
                                         Some(SizingKeywordResolution::Measure(space)) => cross_axis_available_space = space,
                                         None => {
                                             if item.align_self == AlignSelf::STRETCH && ckd.cross(dir).is_none() {
-                                                let stretched = c.indefinite_stretch_cross.or(cross_axis_available_space.into_option());
-                                                ckd.set_cross(
-                                                    dir,
-                                                    stretched.maybe_sub(item.margin.cross_axis_sum(dir)).maybe_max(0.0),
-                                                );
+                                                let stretched = match c.indefinite_stretch_cross {
+                                                    Some(cross) => Some((cross - item.margin.cross_axis_sum(dir)).max(0.0)),
+                                                    None => cross_axis_available_space.into_option(),
+                                                };
+                                                ckd.set_cross(dir, stretched);
                                             }
                                         }
                                     }
