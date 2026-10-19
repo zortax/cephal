@@ -6,36 +6,101 @@ mod key;
 pub use key::CacheKey;
 
 use super::{LayoutInput, LayoutOutput, RunMode};
-use entry::Entry;
+use entry::{Entry, SizeAnswer, Slots};
 
+/// Size answers kept per node, the first few without a second allocation.
+const SIZE_ENTRIES: usize = 11;
 const INLINE_SIZE_ENTRIES: usize = 3;
-const SPILL_SIZE_ENTRIES: usize = 8;
+const SPILL_SIZE_ENTRIES: usize = SIZE_ENTRIES - INLINE_SIZE_ENTRIES;
 
 /// One `PerformLayout` answer plus a few `ComputeSize` answers.
 ///
-/// Allocated on the first store, so nodes that never store (cheap leaves) cost one word.
-#[derive(Clone, Debug, Default)]
+/// Allocated on the first store, so nodes that never store (cheap leaves) cost one word. A size
+/// answer keeps only what [`LayoutOutput::size_answer`] specifies.
+#[derive(Clone, Default)]
 pub struct NodeCache(Option<Box<Inner>>);
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 struct Inner {
     final_entry: Option<Entry>,
-    inline: [Option<Entry>; INLINE_SIZE_ENTRIES],
-    spill: Option<Box<[Option<Entry>; SPILL_SIZE_ENTRIES]>>,
+    /// Live size entries: the first `len` slots of `inline`, then of `spill`. Entries are never
+    /// removed one by one, only all at once.
+    len: u8,
     /// Set when a size entry was evicted since the last drain.
     evicted: bool,
+    inline: Slots<INLINE_SIZE_ENTRIES>,
+    /// Kept when the entries are cleared, for the next stores.
+    spill: Option<Box<Slots<SPILL_SIZE_ENTRIES>>>,
 }
 
 impl Inner {
-    const EMPTY: Self = Self { final_entry: None, inline: [const { None }; INLINE_SIZE_ENTRIES], spill: None, evicted: false };
-
-    #[inline]
-    fn size_entries(&self) -> impl Iterator<Item = &Option<Entry>> {
-        self.inline.iter().chain(self.spill.as_deref().into_iter().flat_map(|s| s.iter()))
+    const fn empty() -> Self {
+        Self { final_entry: None, len: 0, evicted: false, inline: Slots::empty(), spill: None }
     }
 
-    fn size_entries_mut(&mut self) -> impl Iterator<Item = &mut Option<Entry>> {
-        self.inline.iter_mut().chain(self.spill.as_deref_mut().into_iter().flat_map(|s| s.iter_mut()))
+    /// The first live size entry that answers `key`.
+    #[inline]
+    fn find(&self, key: &CacheKey) -> Option<usize> {
+        let len = self.len as usize;
+        if let Some(i) = self.inline.find(len, key) {
+            return Some(i);
+        }
+        if len <= INLINE_SIZE_ENTRIES {
+            return None;
+        }
+        let spill = self.spill.as_deref()?;
+        spill.find(len - INLINE_SIZE_ENTRIES, key).map(|i| i + INLINE_SIZE_ENTRIES)
+    }
+
+    /// The live size entry stored under exactly `key`.
+    fn find_exact(&self, key: &CacheKey) -> Option<usize> {
+        (0..self.len as usize).find(|&i| self.key(i) == *key)
+    }
+
+    #[inline]
+    fn key(&self, i: usize) -> CacheKey {
+        match i.checked_sub(INLINE_SIZE_ENTRIES) {
+            None => self.inline.keys[i],
+            Some(j) => self.spill.as_deref().expect("live spill slot").keys[j],
+        }
+    }
+
+    /// Size entry `i`'s question, answer and observed axes.
+    #[inline]
+    fn get(&self, i: usize) -> (CacheKey, LayoutOutput, u8) {
+        match i.checked_sub(INLINE_SIZE_ENTRIES) {
+            None => self.inline.get(i),
+            Some(j) => self.spill.as_deref().expect("live spill slot").get(j),
+        }
+    }
+
+    #[inline]
+    fn generation(&self, i: usize) -> u32 {
+        match i.checked_sub(INLINE_SIZE_ENTRIES) {
+            None => self.inline.generation(i),
+            Some(j) => self.spill.as_deref().expect("live spill slot").generation(j),
+        }
+    }
+
+    #[inline]
+    fn touch(&self, i: usize, generation: u32) {
+        match i.checked_sub(INLINE_SIZE_ENTRIES) {
+            None => self.inline.touch(i, generation),
+            Some(j) => self.spill.as_deref().expect("live spill slot").touch(j, generation),
+        }
+    }
+
+    fn set(&mut self, i: usize, key: CacheKey, answer: SizeAnswer, generation: u32, observed: u8) {
+        match i.checked_sub(INLINE_SIZE_ENTRIES) {
+            None => self.inline.set(i, key, answer, generation, observed),
+            Some(j) => self.spill.get_or_insert_with(|| Box::new(Slots::empty())).set(j, key, answer, generation, observed),
+        }
+    }
+}
+
+impl core::fmt::Debug for NodeCache {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_list().entries(self.entries()).finish()
     }
 }
 
@@ -46,11 +111,7 @@ impl NodeCache {
 
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.0.as_deref().is_none_or(|c| {
-            c.final_entry.is_none()
-                && c.inline.iter().all(Option::is_none)
-                && c.spill.as_ref().is_none_or(|s| s.iter().all(Option::is_none))
-        })
+        self.0.as_deref().is_none_or(|c| c.final_entry.is_none() && c.len == 0)
     }
 
     /// Looks up an answer, marking the entry live for `generation`; shared access suffices.
@@ -83,17 +144,16 @@ impl NodeCache {
                 }
             }
             RunMode::ComputeSize => {
-                c.inline[0].as_ref()?;
-                for e in c.size_entries() {
-                    if let Some(e) = e
-                        && e.key.answers_unobserved(key, e.observed)
-                    {
-                        e.touch(generation);
-                        return Some((e.output, e.observed));
-                    }
+                if c.len == 0 {
+                    return None;
+                }
+                if let Some(i) = c.find(key) {
+                    c.touch(i, generation);
+                    let (_, output, observed) = c.get(i);
+                    return Some((output, observed));
                 }
                 #[cfg(feature = "stats")]
-                if c.size_entries().any(|e| e.as_ref().is_some_and(|e| e.key.answers_relaxed(key))) {
+                if (0..c.len as usize).any(|i| c.key(i).answers_relaxed(key)) {
                     crate::compute::stats::bump(&crate::compute::stats::RELAXED_HIT);
                 }
                 None
@@ -108,7 +168,7 @@ impl NodeCache {
         let key = CacheKey::from_input(input);
         match input.run_mode {
             RunMode::PerformLayout => c.final_entry.as_ref().is_some_and(|e| e.key == key),
-            RunMode::ComputeSize => c.size_entries().any(|e| e.as_ref().is_some_and(|e| e.key.answers_unobserved(&key, e.observed))),
+            RunMode::ComputeSize => c.find(&key).is_some(),
             RunMode::PerformHiddenLayout => false,
         }
     }
@@ -118,7 +178,7 @@ impl NodeCache {
         let c = self.0.as_deref()?;
         match run_mode {
             RunMode::PerformLayout => c.final_entry.as_ref().filter(|e| e.key == *key).map(|e| e.key),
-            RunMode::ComputeSize => c.size_entries().flatten().find(|e| e.key.answers_unobserved(key, e.observed)).map(|e| e.key),
+            RunMode::ComputeSize => c.find(key).map(|i| c.key(i)),
             RunMode::PerformHiddenLayout => None,
         }
     }
@@ -129,7 +189,7 @@ impl NodeCache {
         let key = CacheKey::from_input(input);
         match input.run_mode {
             RunMode::PerformLayout => c.final_entry.as_ref().filter(|e| e.key == key).map(|e| e.observed),
-            RunMode::ComputeSize => c.size_entries().flatten().find(|e| e.key.answers_unobserved(&key, e.observed)).map(|e| e.observed),
+            RunMode::ComputeSize => c.find(&key).map(|i| c.get(i).2),
             RunMode::PerformHiddenLayout => None,
         }
     }
@@ -144,13 +204,13 @@ impl NodeCache {
     }
 
     /// [`Self::store_keyed`] for an answer that told min-content from max-content available space
-    /// only on the `observed` axes.
+    /// only on the `observed` axes. A size answer keeps only what [`LayoutOutput::size_answer`]
+    /// specifies.
     pub fn store_observed(&mut self, key: CacheKey, run_mode: RunMode, output: LayoutOutput, generation: u32, observed: u8) {
         if run_mode == RunMode::PerformHiddenLayout {
             return;
         }
-        let c = self.0.get_or_insert_with(|| Box::new(Inner::EMPTY));
-        let entry = Entry { key, output, generation: core::sync::atomic::AtomicU32::new(generation), observed };
+        let c = self.0.get_or_insert_with(|| Box::new(Inner::empty()));
         match run_mode {
             RunMode::PerformLayout => {
                 // Two final-layout questions in one frame: the parent depends on both, only one survives.
@@ -160,39 +220,36 @@ impl NodeCache {
                 {
                     c.evicted = true;
                 }
-                c.final_entry = Some(entry);
+                c.final_entry = Some(Entry { key, output, generation: core::sync::atomic::AtomicU32::new(generation), observed });
             }
             RunMode::ComputeSize => {
+                let answer = SizeAnswer::new(&output);
                 // Replace an identical key in place.
-                if let Some(slot) = c.size_entries_mut().find(|s| s.as_ref().is_some_and(|e| e.key == key)) {
-                    *slot = Some(entry);
+                if let Some(i) = c.find_exact(&key) {
+                    c.set(i, key, answer, generation, observed);
                     return;
                 }
-                if let Some(slot) = c.inline.iter_mut().find(|s| s.is_none()) {
-                    *slot = Some(entry);
-                    return;
-                }
-                let spill = c.spill.get_or_insert_with(|| Box::new([const { None }; SPILL_SIZE_ENTRIES]));
-                if let Some(slot) = spill.iter_mut().find(|s| s.is_none()) {
-                    *slot = Some(entry);
+                let len = c.len as usize;
+                if len < SIZE_ENTRIES {
+                    c.set(len, key, answer, generation, observed);
+                    c.len += 1;
                     return;
                 }
                 // Evict the least recently used entry.
                 c.evicted = true;
-                let victim = c
-                    .size_entries_mut()
-                    .min_by_key(|s| s.as_ref().map_or(0, |e| e.generation()))
-                    .expect("cache has size slots");
-                *victim = Some(entry);
+                let victim = (0..SIZE_ENTRIES).min_by_key(|&i| c.generation(i)).expect("cache has size slots");
+                c.set(victim, key, answer, generation, observed);
             }
             RunMode::PerformHiddenLayout => {}
         }
     }
 
-    /// Drops every answer, keeping the allocation for the next store.
+    /// Drops every answer, keeping the allocations for the next stores.
     pub fn clear(&mut self) {
         if let Some(c) = self.0.as_deref_mut() {
-            *c = Inner::EMPTY;
+            c.final_entry = None;
+            c.len = 0;
+            c.evicted = false;
         }
     }
 
@@ -214,8 +271,9 @@ impl NodeCache {
     pub fn entries(&self) -> Vec<(LayoutInput, LayoutOutput)> {
         let mut out = Vec::new();
         let Some(c) = self.0.as_deref() else { return out };
-        for e in c.size_entries().flatten() {
-            out.push((e.key.into_input(RunMode::ComputeSize), e.output));
+        for i in 0..c.len as usize {
+            let (key, output, _) = c.get(i);
+            out.push((key.into_input(RunMode::ComputeSize), output));
         }
         if let Some(e) = &c.final_entry {
             out.push((e.key.into_input(RunMode::PerformLayout), e.output));
@@ -240,18 +298,12 @@ impl NodeCache {
     /// [`Self::drain_all`] with each answer's observed axes.
     pub fn drain_observed(&mut self, out: &mut Vec<(LayoutInput, LayoutOutput, u8)>) {
         let Some(c) = self.0.as_deref_mut() else { return };
-        let final_entry = c.final_entry.take();
-        for slot in c.inline.iter_mut() {
-            if let Some(e) = slot.take() {
-                out.push((e.key.into_input(RunMode::ComputeSize), e.output, e.observed));
-            }
+        for i in 0..c.len as usize {
+            let (key, output, observed) = c.get(i);
+            out.push((key.into_input(RunMode::ComputeSize), output, observed));
         }
-        if let Some(spill) = c.spill.take() {
-            for e in spill.into_iter().flatten() {
-                out.push((e.key.into_input(RunMode::ComputeSize), e.output, e.observed));
-            }
-        }
-        if let Some(e) = final_entry {
+        c.len = 0;
+        if let Some(e) = c.final_entry.take() {
             out.push((e.key.into_input(RunMode::PerformLayout), e.output, e.observed));
         }
         c.evicted = false;
@@ -276,6 +328,32 @@ mod tests {
             vertical_margins_are_collapsible: Line::FALSE,
             context_key: 0,
         }
+    }
+
+    #[test]
+    fn size_entries_keep_what_size_answers_specify() {
+        use crate::geometry::Rect;
+        use crate::tree::{Baselines, CollapsibleMarginSet};
+        let mut c = NodeCache::new();
+        let q = input(RunMode::ComputeSize, None, AvailableSpace::Definite(40.0), RequestedAxis::Both);
+        let rect = Rect { left: -1.0, right: 7.0, top: 0.5, bottom: 9.0 };
+        let full = LayoutOutput {
+            size: Size { width: 3.0, height: -0.0 },
+            scrollable_overflow_rect: rect,
+            inflow_overflow_rect: rect,
+            baselines: Baselines { first: Some(f32::from_bits(0x7fc0_1234)), last: None },
+            top_margin: CollapsibleMarginSet { positive: 2.0, negative: -0.0 },
+            bottom_margin: CollapsibleMarginSet { positive: 0.0, negative: -3.0 },
+            margins_can_collapse_through: true,
+            oof: 3,
+        };
+        c.store(&q, full, 1);
+        let got = c.get(&q, 1).unwrap();
+        let bits = |o: LayoutOutput| format!("{o:?} {:x?}", o.baselines.first.map(f32::to_bits));
+        assert_eq!(bits(got), bits(full.size_answer()));
+        let last_only = LayoutOutput { baselines: Baselines { first: None, last: Some(0.0) }, ..full };
+        c.store(&q, last_only, 2);
+        assert_eq!(c.get(&q, 2).unwrap().baselines, last_only.baselines);
     }
 
     #[test]

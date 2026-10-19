@@ -47,6 +47,9 @@ fn avail_from_bits(b: u32) -> AvailableSpace {
 }
 
 impl CacheKey {
+    /// A placeholder for unused slots.
+    pub const EMPTY: Self = Self { known: [0; 2], avail: [0; 2], parent: [0; 2], context: 0, flags: 0 };
+
     #[inline]
     pub fn from_input(i: &LayoutInput) -> Self {
         let mut flags = 0u16;

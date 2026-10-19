@@ -137,7 +137,7 @@ pub fn compute_child_layout<T: LayoutTree + CacheAccess + ?Sized>(
     tree.note_observed(outer | observed);
     #[cfg(feature = "stats")]
     if inputs.run_mode == RunMode::ComputeSize
-        && tree.cache(node).entries().iter().any(|(i, o)| i.run_mode == RunMode::ComputeSize && i.axis == inputs.axis && *o == output)
+        && tree.cache(node).entries().iter().any(|(i, o)| i.run_mode == RunMode::ComputeSize && i.axis == inputs.axis && *o == output.size_answer())
     {
         stats::bump(&stats::COLLISION);
     }
@@ -169,8 +169,10 @@ pub fn compute_cheap_leaf<T: LayoutTree + CacheAccess + ?Sized>(
 pub mod verify {
     use super::*;
 
-    /// Without `verify-cache`, the answer unchanged; with it, the axis a single-axis question did
-    /// not ask for is NaN, so any caller reading it fails the tests.
+    /// Without `verify-cache`, the answer unchanged; with it, what a size answer leaves
+    /// unspecified is poisoned, so any caller reading it fails the tests: the axis a single-axis
+    /// question did not ask for is NaN, and the overflow rectangles and out-of-flow bits, which no
+    /// caller of a size question reads, are far-out sentinels.
     #[inline(always)]
     pub fn poison(inputs: &LayoutInput, output: LayoutOutput) -> LayoutOutput {
         #[cfg(feature = "verify-cache")]
@@ -181,6 +183,10 @@ pub mod verify {
                 RequestedAxis::Vertical => output.size.width = f32::NAN,
                 RequestedAxis::Both => {}
             }
+            let far = crate::geometry::Rect { left: -1.0e30, right: 1.0e30, top: -1.0e30, bottom: 1.0e30 };
+            output.scrollable_overflow_rect = far;
+            output.inflow_overflow_rect = far;
+            output.oof = u8::MAX;
             return output;
         }
         let _ = inputs;
@@ -189,9 +195,9 @@ pub mod verify {
 
     /// Recomputes `raw` speculatively and asserts it matches `answer` bit for bit.
     ///
-    /// A final layout's overflow and out-of-flow bits are exempt: they come from out-of-flow passes
-    /// over records the subtree's last real layout stored, which speculation neither reads nor
-    /// writes (incremental-versus-cold tests cover them).
+    /// Overflow and out-of-flow bits are exempt: a size answer leaves them unspecified, and a final
+    /// layout's come from out-of-flow passes over records the subtree's last real layout stored,
+    /// which speculation neither reads nor writes (incremental-versus-cold tests cover them).
     #[cfg(feature = "verify-cache")]
     pub fn shortcut<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, node: NodeId, raw: LayoutInput, answer: &LayoutOutput, what: &str) {
         let outer = tree.take_observed();
@@ -232,19 +238,15 @@ pub mod verify {
         match (run_mode, axis) {
             (RunMode::ComputeSize, RequestedAxis::Horizontal) => w,
             (RunMode::ComputeSize, RequestedAxis::Vertical) => h,
+            // Overflow and out-of-flow bits are exempt (see `shortcut`).
             _ => {
-                let rect = |r: crate::geometry::Rect<f32>| [r.left, r.right, r.top, r.bottom].map(bits);
                 let opt = |v: Option<f32>| v.map(bits);
-                let final_layout = run_mode == RunMode::PerformLayout;
                 w && h
-                    && (final_layout || rect(a.scrollable_overflow_rect) == rect(b.scrollable_overflow_rect))
-                    && (final_layout || rect(a.inflow_overflow_rect) == rect(b.inflow_overflow_rect))
                     && opt(a.baselines.first) == opt(b.baselines.first)
                     && opt(a.baselines.last) == opt(b.baselines.last)
                     && a.top_margin == b.top_margin
                     && a.bottom_margin == b.bottom_margin
                     && a.margins_can_collapse_through == b.margins_can_collapse_through
-                    && (final_layout || a.oof == b.oof)
             }
         }
     }

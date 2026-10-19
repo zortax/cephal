@@ -246,6 +246,8 @@ fn in_hidden_subtree<T: Incremental + ?Sized>(tree: &T, node: NodeId) -> bool {
 /// which nevertheless stores that rectangle in the node's layout; it is patched here so the
 /// layout still equals a cold computation.
 fn answer_changed<T: Incremental + ?Sized>(tree: &mut T, node: NodeId, run_mode: RunMode, new: LayoutOutput, old: LayoutOutput) -> bool {
+    // Size answers leave their overflow and out-of-flow bits unspecified: a cached one has none.
+    let (new, old) = if run_mode == RunMode::ComputeSize { (new.size_answer(), old.size_answer()) } else { (new, old) };
     if new == old {
         return false;
     }

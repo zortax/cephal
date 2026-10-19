@@ -167,6 +167,15 @@ impl LayoutOutput {
         (same_x || !propagates_x) && (same_y || !propagates_y)
     }
 
+    /// What `self` specifies as the answer to a `ComputeSize` question: the size, baselines and
+    /// collapsible margins. The overflow rectangles and out-of-flow bits of a size answer are
+    /// unspecified, since no caller of a size question reads them; here they are zero, as in a
+    /// cached size answer. Caches keep only this much.
+    #[inline]
+    pub const fn size_answer(self) -> Self {
+        Self { scrollable_overflow_rect: Rect::ZERO, inflow_overflow_rect: Rect::ZERO, oof: 0, ..self }
+    }
+
     pub const HIDDEN: Self = Self::from_outer_size(Size::ZERO);
     pub const DEFAULT: Self = Self::HIDDEN;
 
