@@ -284,12 +284,15 @@ fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized, D: FlexDir>(
         main_size::determine_container_main_size(tree, available_space, &mut lines, &mut items, &mut constants);
         constants.node_inner_size.set_main(dir, Some(constants.inner_container_size.main(dir)));
         constants.node_outer_size.set_main(dir, Some(constants.container_size.main(dir)));
-        // Percentage gaps resolve against the now known main size.
-        let style = tree.style(node);
-        let calc = |id, basis| tree.resolve_calc(id, basis);
-        let inner = constants.inner_container_size.main(dir);
-        let new_gap = style.gap.main(dir).resolve(Some(inner), &calc).unwrap_or(0.0);
-        constants.gap.set_main(dir, new_gap);
+        // A percentage column gap resolves against the now known width; a percentage row gap
+        // against an indefinite height stays zero.
+        if dir.is_row() {
+            let style = tree.style(node);
+            let calc = |id, basis| tree.resolve_calc(id, basis);
+            let inner = constants.inner_container_size.main(dir);
+            let new_gap = style.gap.main(dir).resolve(Some(inner), &calc).unwrap_or(0.0);
+            constants.gap.set_main(dir, new_gap);
+        }
     }
 
     // The main size is all a main-axis size question needs; the other axis of a single-axis
@@ -548,7 +551,8 @@ fn compute_constants<T: LayoutTree + ?Sized, D: FlexDir>(
         has_definite_cross_size || matches!(available_space.cross(dir), AvailableSpace::Definite(_));
     let cross_size_is_indefinite = is_row && known_dimensions.height.is_some() && !known_dimensions_are_definite.height;
     let percent_basis = if cross_size_is_indefinite { node_inner_size.with_cross(dir, None) } else { node_inner_size };
-    let gap_basis = percent_basis.or(Size::ZERO.map(Some));
+    let gap_basis = if is_column && !known_main_size_is_definite { percent_basis.with_main(dir, None) } else { percent_basis };
+    let gap_basis = gap_basis.or(Size::ZERO.map(Some));
     let gap = Size {
         width: style.gap.width.resolve_or_zero(gap_basis.width, &calc),
         height: style.gap.height.resolve_or_zero(gap_basis.height, &calc),

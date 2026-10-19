@@ -340,11 +340,14 @@ fn lay_out<const WRAP: bool, D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
         determine_container_main_size::<WRAP, _, _>(tree, available_space, lines, &items, c);
         c.node_inner_size.set_main(dir, Some(c.inner_container_size.main(dir)));
         c.node_outer_size.set_main(dir, Some(c.container_size.main(dir)));
-        let style = tree.style(node);
-        let calc = |id, basis| tree.resolve_calc(id, basis);
-        let inner = c.inner_container_size.main(dir);
-        let new_gap = style.gap.main(dir).resolve(Some(inner), &calc).unwrap_or(0.0);
-        c.gap.set_main(dir, new_gap);
+        // See `compute_preliminary`: only a column gap resolves against the found size.
+        if dir.is_row() {
+            let style = tree.style(node);
+            let calc = |id, basis| tree.resolve_calc(id, basis);
+            let inner = c.inner_container_size.main(dir);
+            let new_gap = style.gap.main(dir).resolve(Some(inner), &calc).unwrap_or(0.0);
+            c.gap.set_main(dir, new_gap);
+        }
     }
 
     if run_mode == RunMode::ComputeSize && inputs.axis == RequestedAxis::from(dir.main_axis()) {

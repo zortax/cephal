@@ -62,6 +62,14 @@ resolve against the width it ends up with. Taffy finds a content-sized height (`
 measuring both axes at once; the percentage width of a column flex item, and margins inside
 it, then resolve against nothing.
 
+## A percentage row gap against an indefinite height
+
+Census category `PercentGaps`. Fixture `flex_column_percentage_row_gap_indefinite`.
+
+A percentage gap refers to the container's content box (css-align-3 §8.1); Chrome takes a
+percentage row gap of a flex container whose height is indefinite as zero, also once the height
+is found from the content. Taffy resolves it against that height, which then shrinks the items.
+
 ## The root (both engines, by design)
 
 Not a divergence between the engines, but where both differ from a browser's root element,

@@ -35,6 +35,9 @@ enum Strip {
     PercentBasis,
     /// Percentage padding.
     PercentPadding,
+    /// Percentage gaps: taffy resolves a column flex container's row gap against the height it
+    /// finds for it.
+    PercentGaps,
     /// Percentage margins: taffy resolves those of a block's children against the available
     /// space when it finds the block's intrinsic width.
     PercentMargins,
@@ -64,6 +67,7 @@ const STRIPS: &[Strip] = &[
     Strip::Positioned,
     Strip::PercentBasis,
     Strip::PercentPadding,
+    Strip::PercentGaps,
     Strip::PercentMargins,
     Strip::PercentTracks,
     Strip::GridItemMargins,
@@ -113,6 +117,13 @@ fn strip(tree: &mut Tree<Text>, root: cephal::tree::NodeId, what: Strip) {
                 for side in [&mut s.padding.left, &mut s.padding.right, &mut s.padding.top, &mut s.padding.bottom] {
                     if side.0.uses_percentage() {
                         *side = LengthPercentage::ZERO;
+                    }
+                }
+            }
+            Strip::PercentGaps => {
+                for gap in [&mut s.gap.width, &mut s.gap.height] {
+                    if gap.0.uses_percentage() {
+                        *gap = LengthPercentage::ZERO;
                     }
                 }
             }
