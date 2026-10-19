@@ -18,6 +18,8 @@ pub(super) struct ResolvedSizes {
     pub size: Size<Option<f32>>,
     pub min_size: Size<Option<f32>>,
     pub max_size: Size<Option<f32>>,
+    /// Padding plus border, which the border box never gets smaller than.
+    pub padding_border: Size<f32>,
 }
 
 /// The minimum contribution as the item's style determines it.
@@ -177,6 +179,7 @@ impl GridItem {
             size: resolve(self.size.map(|v| v.raw())),
             min_size: resolve(self.min_size.map(|v| v.raw())),
             max_size: resolve(self.max_size.map(|v| v.raw())),
+            padding_border: padding_border_size,
         }
     }
 
@@ -281,7 +284,7 @@ impl GridItem {
         let calc = |id, basis| tree.resolve_calc(id, basis);
         let margins = self.margins_axis_sums_with_baseline_shims(grid_area_size.width, tree);
         let aspect_ratio = self.aspect_ratio;
-        let ResolvedSizes { size: inherent_size, min_size, max_size, .. } = self.sizes(grid_area_size, &calc);
+        let ResolvedSizes { size: inherent_size, min_size, max_size, padding_border } = self.sizes(grid_area_size, &calc);
         let grid_area_minus_margins = grid_area_size.maybe_sub(margins).maybe_max(Size::ZERO);
         let width = inherent_size.width.or_else(|| {
             if self.size.width.is_sizing_keyword() {
@@ -308,7 +311,8 @@ impl GridItem {
             }
             None
         });
-        Size { width, height }.maybe_apply_aspect_ratio(aspect_ratio).maybe_clamp(min_size, max_size)
+        // The border box never gets smaller than the padding and border.
+        Size { width, height }.maybe_apply_aspect_ratio(aspect_ratio).maybe_clamp(min_size, max_size).maybe_max(padding_border.map(Some))
     }
 
     /// The item's grid area: definite fixed tracks in `axis`, estimated tracks in the other.
@@ -502,10 +506,13 @@ impl GridItem {
     fn style_minimum(&self, axis: AbstractAxis, grid_area_size: Size<Option<f32>>, calc: &impl Fn(CalcId, f32) -> f32) -> Option<StyleMinimum> {
         let sizes = self.sizes(grid_area_size, calc);
         if let Some(size) = sizes.size.get_abstract(axis) {
-            if self.min_size.get_abstract(axis).is_auto() && self.max_size.get_abstract(axis).is_auto() {
-                return Some(StyleMinimum::Fixed(size));
-            }
-            return Some(StyleMinimum::Fixed(self.clamp_preferred_size(axis, size, grid_area_size, calc)));
+            let size = if self.min_size.get_abstract(axis).is_auto() && self.max_size.get_abstract(axis).is_auto() {
+                size
+            } else {
+                self.clamp_preferred_size(axis, size, grid_area_size, calc)
+            };
+            // The border box never gets smaller than the padding and border.
+            return Some(StyleMinimum::Fixed(size.max(sizes.padding_border.get_abstract(axis))));
         }
         let size = self.size.get_abstract(axis);
         if size.is_sizing_keyword() && !size.is_stretch() {
@@ -516,7 +523,8 @@ impl GridItem {
         } else {
             self.min_size_against_zero(axis, grid_area_size, calc)
         };
-        min_size.or_else(|| self.overflow.get(axis.as_abs()).maybe_into_automatic_min_size()).map(StyleMinimum::Fixed)
+        let padding_border = sizes.padding_border.get_abstract(axis);
+        min_size.or_else(|| self.overflow.get(axis.as_abs()).maybe_into_automatic_min_size()).map(|m| StyleMinimum::Fixed(m.max(padding_border)))
     }
 
     /// A definite preferred size clamped by the min and max sizes; a compressible replaced element

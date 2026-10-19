@@ -70,7 +70,7 @@ fn measure_ahem(ctx: &mut Ahem, input: MeasureInput, _style: &Style) -> MeasureO
     })
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Expected {
     location: Point<f32>,
     size: Size<f32>,
@@ -346,6 +346,70 @@ fn check(tree: &Tree<Ahem>, id: NodeId, exp: &Expected, path: &str, errors: &mut
     }
 }
 
+/// How taffy 0.15 lays the fixture out, where it differs from Chrome (`CEPHAL_FIXTURE_TAFFY=1`).
+/// Taffy places an out-of-flow box relative to its containing block as gentest does, so the
+/// expectations are compared as they are.
+fn taffy_errors(tree: &Tree<Ahem>, root: NodeId, expected: &Expected, available_space: Size<AvailableSpace>, use_rounding: bool) -> String {
+    let mut t: taffy::TaffyTree<String> = taffy::TaffyTree::new();
+    fn go(tree: &Tree<Ahem>, node: NodeId, t: &mut taffy::TaffyTree<String>) -> taffy::NodeId {
+        let style = cephal::compat::taffy::to_taffy(tree.style(node), &|i| tree.ident_name(i).to_owned());
+        let id = match tree.context(node) {
+            Some(ctx) => t.new_leaf_with_context(style, ctx.text.clone()).unwrap(),
+            None => t.new_leaf(style).unwrap(),
+        };
+        for c in tree.children(node) {
+            let child = go(tree, c, t);
+            t.add_child(id, child).unwrap();
+        }
+        id
+    }
+    let troot = go(tree, root, &mut t);
+    if !use_rounding {
+        t.disable_rounding();
+    }
+    let space = |a: AvailableSpace| match a {
+        AvailableSpace::Definite(v) => taffy::AvailableSpace::Definite(v),
+        AvailableSpace::MinContent => taffy::AvailableSpace::MinContent,
+        AvailableSpace::MaxContent => taffy::AvailableSpace::MaxContent,
+    };
+    let viewport = taffy::Size { width: space(available_space.width), height: space(available_space.height) };
+    t.compute_layout_with_measure(troot, viewport, |inputs, _, text, style| {
+        let text = text.map(|t| t.clone());
+        taffy::compute_leaf_layout(inputs, style, |_, _| 0.0, |known, available| {
+            let Some(text) = &text else { return known.map(|v| v.unwrap_or(0.0)) };
+            let back = |a: taffy::AvailableSpace| match a {
+                taffy::AvailableSpace::Definite(v) => AvailableSpace::Definite(v),
+                taffy::AvailableSpace::MinContent => AvailableSpace::MinContent,
+                taffy::AvailableSpace::MaxContent => AvailableSpace::MaxContent,
+            };
+            let input = MeasureInput {
+                known_dimensions: Size { width: known.width, height: known.height },
+                available_space: Size { width: back(available.width), height: back(available.height) },
+            };
+            let out = measure_ahem(&mut Ahem { text: text.clone(), writing_mode: WritingMode::Horizontal }, input, &Style::DEFAULT);
+            taffy::Size { width: out.size.width, height: out.size.height }
+        })
+    })
+    .unwrap();
+    let mut errors = String::new();
+    fn walk(t: &taffy::TaffyTree<String>, n: taffy::NodeId, exp: &Expected, path: &str, rounded: bool, errors: &mut String) {
+        let l = if rounded { *t.layout(n).unwrap() } else { *t.unrounded_layout(n) };
+        let near = |a: f32, b: f32| (a - b).abs() < 0.1;
+        if !(near(l.location.x, exp.location.x) && near(l.location.y, exp.location.y) && near(l.size.width, exp.size.width) && near(l.size.height, exp.size.height)) {
+            let _ = writeln!(
+                errors,
+                "  {path}: expected x={} y={} w={} h={}; taffy x={} y={} w={} h={}",
+                exp.location.x, exp.location.y, exp.size.width, exp.size.height, l.location.x, l.location.y, l.size.width, l.size.height
+            );
+        }
+        for (i, (c, ce)) in t.children(n).unwrap().into_iter().zip(exp.children.iter()).enumerate() {
+            walk(t, c, ce, &format!("{path}/{i}"), rounded, errors);
+        }
+    }
+    walk(&t, troot, expected, "root", use_rounding, &mut errors);
+    errors
+}
+
 fn run_group(group: &str) {
     run_file(group, &format!("{}/tests/fixtures/{group}.xml", env!("CARGO_MANIFEST_DIR")));
 }
@@ -380,6 +444,9 @@ fn run_file(group: &str, path: &str) {
             tree.disable_rounding();
         }
         let (root, mut expected) = build(input.first_element_child().unwrap(), expectations.first_element_child().unwrap(), &mut tree);
+        if std::env::var_os("CEPHAL_FIXTURE_TAFFY").is_some() {
+            println!("{name}: taffy\n{}", taffy_errors(&tree, root, &expected, available_space, use_rounding));
+        }
         to_parent_relative(&tree, root, &mut expected, &mut Vec::new());
         tree.compute_layout_with_measure(root, available_space, measure_ahem);
         let mut errors = String::new();

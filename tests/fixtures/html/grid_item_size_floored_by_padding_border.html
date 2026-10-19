@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    A grid item's border box is never smaller than its padding and border, also where a max size
+    clamps its preferred size below them (the first row) or its preferred size is smaller (the
+    minimum contribution to the first column of the second grid)
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; width: 200px;">
+  <div style="display: grid; width: 191px;">
+    <div style="display: flex; height: 11px; max-height: 0px; border: 2px solid;">
+      <div style="display: block;"></div>
+    </div>
+  </div>
+  <div style="display: grid; grid-template-columns: minmax(auto, 0px) 20px; grid-template-rows: 10px;">
+    <div style="display: block; width: 2px; padding-left: 10px;"></div>
+    <div style="display: block;"></div>
+  </div>
+</div>
+
+</body>
+</html>

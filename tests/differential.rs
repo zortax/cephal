@@ -39,6 +39,9 @@ enum Strip {
     PercentTracks,
     /// Margins of grid items.
     GridItemMargins,
+    /// Padding and borders of grid items: taffy lets a definite preferred, minimum or maximum size
+    /// make an item's minimum contribution smaller than its padding and border.
+    GridItemPaddingBorder,
     /// `min-content` grid tracks.
     MinContentTracks,
 }
@@ -54,6 +57,7 @@ const STRIPS: &[Strip] = &[
     Strip::PercentPadding,
     Strip::PercentTracks,
     Strip::GridItemMargins,
+    Strip::GridItemPaddingBorder,
     Strip::MinContentTracks,
 ];
 
@@ -115,6 +119,10 @@ fn strip(tree: &mut Tree<Text>, root: cephal::tree::NodeId, what: Strip) {
                 g.auto_rows.iter_mut().for_each(fix);
             }
             Strip::GridItemMargins if parent_is_grid => s.margin = cephal::geometry::Rect::splat(LengthPercentageAuto::ZERO),
+            Strip::GridItemPaddingBorder if parent_is_grid => {
+                s.padding = cephal::geometry::Rect::splat(LengthPercentage::ZERO);
+                s.border = cephal::geometry::Rect::splat(LengthPercentage::ZERO);
+            }
             _ => {}
         });
     }
