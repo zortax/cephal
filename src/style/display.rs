@@ -35,10 +35,12 @@ pub enum Position {
     Static,
     /// In flow, offset by its insets; the containing block of absolutely positioned descendants.
     Relative,
+    /// Out of flow, placed against its containing block: the nearest positioned ancestor, or the
+    /// initial containing block (the viewport).
     Absolute,
-    /// Placed exactly like [`Position::Absolute`], against the parent; the host anchors the box to
-    /// the viewport, through where it parents it or how it composes scroll offsets. A fixed box
-    /// scrolls with nothing, so it adds no scrollable overflow to its container.
+    /// Placed like [`Position::Absolute`], against the initial containing block (or an ancestor a
+    /// tree's [`crate::tree::LayoutTree::containing_block_claims`] says contains it), whose
+    /// overflow scrolls nothing; the host anchors the viewport.
     Fixed,
     /// Laid out as [`Position::Static`] (sticky offsets need scroll positions, which layout does not
     /// have), but the containing block of absolutely positioned descendants.

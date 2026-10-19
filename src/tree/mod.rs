@@ -10,5 +10,5 @@ pub use cache::NodeCache;
 pub use input::{Baselines, CollapsibleMarginSet, LayoutInput, LayoutOutput, RequestedAxis, RunMode, SizingMode};
 pub use layout::{DetailedGridInfo, DetailedGridItem, DetailedGridTracks, Layout};
 pub use node::NodeId;
-pub use crate::compute::reposition::{AbsoluteContext, AbsoluteGeometry};
+pub use crate::compute::oof::{AbsoluteContext, OofEntry, OofGeometry};
 pub use traits::{AnswerSource, CacheAccess, ChildRequest, IdentSuffix, LayoutTree, MeasureInput, MeasureOutput, NodeKind, QueryMeta};

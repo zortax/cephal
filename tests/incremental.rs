@@ -3,7 +3,7 @@
 mod common;
 
 use cephal::geometry::{AvailableSpace, Size};
-use cephal::style::{Dimension, FlexWrap, Position};
+use cephal::style::{AlignItems, Dimension, FlexWrap, Position};
 use cephal::tree::{Layout, NodeId};
 use cephal::{Parallel, Tree};
 use common::*;
@@ -44,7 +44,7 @@ fn edit(rng: &mut Rng, tree: &mut Tree<Text>, root: NodeId) -> String {
     let mut nodes = Vec::new();
     all_nodes(tree, root, &mut nodes);
     let target = rng.pick(&nodes);
-    match rng.below(12) {
+    match rng.below(18) {
         0 | 1 => {
             let container = tree.child_count(target) > 0;
             tree.set_style(target, random_style(rng, container));
@@ -130,11 +130,74 @@ fn edit(rng: &mut Rng, tree: &mut Tree<Text>, root: NodeId) -> String {
             });
             format!("patch clamps {target:?}")
         }
+        // Out-of-flow edits; each falls back to `target` when the tree has no fitting node.
+        12 => {
+            // Containing blocks appearing and disappearing above out-of-flow boxes.
+            let n = pick_or(rng, nodes.iter().copied().filter(|&n| has_out_of_flow_below(tree, n)), target);
+            let position = match tree.style(n).position {
+                Position::Static => rng.pick(&[Position::Relative, Position::Sticky]),
+                Position::Relative | Position::Sticky => Position::Static,
+                other => other,
+            };
+            tree.patch_style(n, |s| s.position = position);
+            format!("patch position {n:?} to {position:?}")
+        }
+        13 => {
+            // Moves the static position of the out-of-flow box following it.
+            let n = pick_or(rng, nodes.iter().copied().filter(|&n| next_is_out_of_flow(tree, n)), target);
+            tree.patch_style(n, |s| {
+                s.size.width = dimension(rng);
+                s.size.height = dimension(rng);
+                s.margin.top = lpa(rng);
+            });
+            format!("resize static-position predecessor {n:?}")
+        }
+        14 => {
+            let n = pick_or(rng, nodes.iter().copied().filter(|&n| tree.style(n).position.is_out_of_flow()), target);
+            tree.patch_style(n, |s| s.inset = cephal::geometry::Rect { left: lpa(rng), right: lpa(rng), top: lpa(rng), bottom: lpa(rng) });
+            format!("patch insets {n:?}")
+        }
+        15 => {
+            // An out-of-flow box with out-of-flow descendants: absolute in absolute, fixed in absolute.
+            let n = pick_or(rng, nodes.iter().copied().filter(|&n| n != root && has_out_of_flow_below(tree, n)), target);
+            let position = rng.pick(&[Position::Absolute, Position::Fixed, Position::Static]);
+            tree.patch_style(n, |s| {
+                s.position = position;
+                s.inset.left = lpa(rng);
+                s.inset.bottom = lpa(rng);
+            });
+            format!("patch container {n:?} to {position:?}")
+        }
+        16 => {
+            let n = pick_or(rng, nodes.iter().copied().filter(|&n| tree.style(n).position.is_out_of_flow()), target);
+            tree.patch_style(n, |s| {
+                s.align_self = rng.pick(&[None, Some(AlignItems::CENTER), Some(AlignItems::END), Some(AlignItems::SAFE_END), Some(AlignItems::UNSAFE_CENTER)]);
+                s.justify_self = rng.pick(&[None, Some(AlignItems::STRETCH), Some(AlignItems::END), Some(AlignItems::SAFE_CENTER)]);
+            });
+            format!("patch out-of-flow self-alignment {n:?}")
+        }
         _ => {
             tree.patch_style(target, |s| s.flex_grow = rng.pick(&[0.0, 1.0, 3.0]));
             format!("patch flex-grow {target:?}")
         }
     }
+}
+
+/// A random node of `candidates`, or `fallback` when there is none.
+fn pick_or(rng: &mut Rng, candidates: impl Iterator<Item = NodeId>, fallback: NodeId) -> NodeId {
+    let candidates: Vec<NodeId> = candidates.collect();
+    if candidates.is_empty() { fallback } else { rng.pick(&candidates) }
+}
+
+fn has_out_of_flow_below(tree: &Tree<Text>, node: NodeId) -> bool {
+    tree.children(node).any(|c| tree.style(c).position.is_out_of_flow() || has_out_of_flow_below(tree, c))
+}
+
+/// Whether `node`'s next sibling is out of flow.
+fn next_is_out_of_flow(tree: &Tree<Text>, node: NodeId) -> bool {
+    let Some(parent) = tree.parent(node) else { return false };
+    let mut siblings = tree.children(parent).skip_while(|&c| c != node).skip(1);
+    siblings.next().is_some_and(|n| tree.style(n).position.is_out_of_flow())
 }
 
 fn run_script(seed: u64, steps: usize) {

@@ -31,6 +31,8 @@ pub(super) struct FlowResult {
     pub last_child_bottom_margin_set: CollapsibleMarginSet,
     pub first_baseline: Option<f32>,
     pub last_baseline: Option<f32>,
+    /// Some child is out of flow, or passes out-of-flow boxes through.
+    pub has_out_of_flow: bool,
 }
 
 /// `stretch` is the only block-axis keyword that needs resolving; intrinsic keywords equal `auto`.
@@ -101,6 +103,7 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
     // Margins of a self-collapsing cleared box stay inside the parent.
     let mut active_margin_set_has_clearance = false;
     let mut has_active_floats = block_ctx.has_active_floats(committed_y_offset);
+    let mut has_out_of_flow = false;
 
     for item in items.iter_mut() {
         if item.position.is_out_of_flow() {
@@ -109,6 +112,7 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
                 Direction::Rtl => p.container_outer_width - p.resolved_content_box_inset.right,
             };
             item.static_position = Point { x, y: y_offset_for_absolute };
+            has_out_of_flow = true;
             continue;
         }
         let calc = |id, basis| tree.resolve_calc(id, basis);
@@ -155,6 +159,10 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
             let mut location = block_ctx.place_floated_box(margin_box, y_for_float, float_direction, item.clear, adjoins_unresolved_strut);
             location.y += item_non_auto_margin.top;
             location.x += item_non_auto_margin.left;
+            if item_layout.oof != 0 {
+                item.oof = item_layout.oof;
+                has_out_of_flow = true;
+            }
             item.final_layout = Some(Layout {
                 order: item.order,
                 size: item_layout.size,
@@ -296,6 +304,10 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
             super::compute_block_child(tree, item.node, inputs, None)
         };
         let final_size = item_layout.size;
+        if item_layout.oof != 0 {
+            item.oof = item_layout.oof;
+            has_out_of_flow = true;
+        }
 
         let top_margin_set = item_layout.top_margin.collapse_with_margin(item_margin.top.unwrap_or(0.0));
         let bottom_margin_set = item_layout.bottom_margin.collapse_with_margin(item_margin.bottom.unwrap_or(0.0));
@@ -512,5 +524,6 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
         last_child_bottom_margin_set,
         first_baseline,
         last_baseline,
+        has_out_of_flow,
     }
 }

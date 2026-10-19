@@ -1,6 +1,5 @@
 //! Flexbox layout (css-flexbox-1 §9, plus `flex-wrap: balance`).
 
-mod absolute;
 mod align;
 mod axis;
 mod balance;
@@ -12,10 +11,8 @@ mod fused;
 mod lines;
 mod main_size;
 
-pub use absolute::AbsoluteFlexContext;
 #[doc(hidden)]
 pub use fused::set_fused_flex;
-pub(crate) use absolute::layout_absolute_flex_child;
 use axis::{Column, FlexAxisRect, FlexAxisSize, FlexAxisSum, FlexDir, Row};
 
 use crate::compute::LayoutTreeExt;
@@ -300,9 +297,10 @@ fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized, D: FlexDir>(
     }
 
     align::align_flex_lines_per_align_content(&mut lines, &constants, total_line_cross_size);
-    let inflow_overflow_rect = final_pass::final_layout_pass(tree, &lines, &mut items, &constants);
+    let mut through = Vec::new();
+    let inflow_overflow_rect = final_pass::final_layout_pass(tree, &lines, &mut items, &mut through, &constants);
     // Absolutely positioned and hidden children were found while generating the items.
-    let absolute_overflow_rect = if has_other_children { lay_out_other_children(tree, node, &constants) } else { Rect::ZERO };
+    let (absolute_overflow_rect, oof) = finish_children(tree, node, &constants, has_other_children, through);
 
     // The container's baseline comes from its first line's first baseline-participating item.
     let first_line = if constants.is_wrap_reverse { lines.last() } else { lines.first() };
@@ -330,20 +328,131 @@ fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized, D: FlexDir>(
     });
 
     let baselines = Baselines { first: first_vertical_baseline, last: last_vertical_baseline };
-    LayoutOutput::from_sizes_and_baselines(constants.container_size, Rect::ZERO, baselines)
-        .with_overflow(inflow_overflow_rect, absolute_overflow_rect)
+    let mut output = LayoutOutput::from_sizes_and_baselines(constants.container_size, Rect::ZERO, baselines)
+        .with_overflow(inflow_overflow_rect, absolute_overflow_rect);
+    output.oof = oof;
+    output
 }
 
-/// Lays out the absolutely positioned and hidden children; returns the absolute overflow.
-fn lay_out_other_children<T: LayoutTree + CacheAccess + ?Sized, D: FlexDir>(tree: &mut T, node: NodeId, constants: &AlgoConstants<D>) -> Rect<f32> {
-    let absolute_overflow_rect = absolute::perform_absolute_layout_on_absolute_children(tree, node, constants);
-    let hidden: Scratch<(usize, NodeId)> =
-        Scratch::collect(tree.children(node).enumerate().filter(|(_, c)| tree.style(*c).generates_no_box()));
-    for &(order, child) in &hidden {
-        tree.set_unrounded_layout(child, &Layout::with_order(order as u32));
-        tree.perform_child_layout(child, Size::NONE, Size::NONE, Size::MAX_CONTENT, SizingMode::ContentSize, Line::FALSE);
+/// Lays out the hidden children, and ends the final layout's out-of-flow work (see
+/// [`crate::compute::oof`]) given the items passing candidates through, in `entries`; returns
+/// the overflow of the out-of-flow boxes laid out and the bits passed on.
+fn finish_children<T: LayoutTree + CacheAccess + ?Sized, D: FlexDir>(
+    tree: &mut T,
+    node: NodeId,
+    constants: &AlgoConstants<D>,
+    has_other_children: bool,
+    mut entries: Vec<crate::compute::oof::OofEntry>,
+) -> (Rect<f32>, u8) {
+    if has_other_children {
+        let hidden: Scratch<(usize, NodeId)> =
+            Scratch::collect(tree.children(node).enumerate().filter(|(_, c)| tree.style(*c).generates_no_box()));
+        for &(order, child) in &hidden {
+            tree.set_unrounded_layout(child, &Layout::with_order(order as u32));
+            tree.perform_child_layout(child, Size::NONE, Size::NONE, Size::MAX_CONTENT, SizingMode::ContentSize, Line::FALSE);
+        }
+        if tree.speculation() == 0 {
+            out_of_flow_seeds(tree, node, constants, &mut entries);
+        }
     }
-    absolute_overflow_rect
+    if entries.is_empty() {
+        crate::compute::oof::finish_none(tree, node);
+        return (Rect::ZERO, 0);
+    }
+    if tree.speculation() > 0 {
+        return (Rect::ZERO, 0);
+    }
+    // Items are placed in visual order; the record is in document order.
+    entries.sort_by_key(|e| e.order());
+    let c = constants;
+    let rtl = c.layout_direction == Direction::Rtl;
+    let inset = c.border
+        + Rect {
+            left: if rtl { c.scrollbar_gutter.x } else { 0.0 },
+            right: if rtl { 0.0 } else { c.scrollbar_gutter.x },
+            top: 0.0,
+            bottom: c.scrollbar_gutter.y,
+        };
+    let geometry = crate::compute::oof::OofGeometry {
+        area_size: c.container_size - inset.sum_axes(),
+        area_offset: Point { x: inset.left, y: inset.top },
+        direction: c.layout_direction,
+        overflow: tree.style(node).overflow,
+        #[cfg(feature = "grid")]
+        grid: None,
+    };
+    crate::compute::oof::finish(tree, node, entries, || geometry)
+}
+
+/// The static positions of the out-of-flow children (css-flexbox-1 §4.1): the content box in both
+/// axes, aligned per `justify-content` and the child's `align-self`.
+fn out_of_flow_seeds<T: LayoutTree + ?Sized, D: FlexDir>(
+    tree: &T,
+    node: NodeId,
+    c: &AlgoConstants<D>,
+    entries: &mut Vec<crate::compute::oof::OofEntry>,
+) {
+    use crate::compute::oof::{AxisStaticAlign, AxisStaticEdge, AxisStaticPosition, OofEntry, position_bit};
+    use crate::style::{AlignContentKeyword as C, AlignItemsKeyword as I};
+    let dir = c.dir;
+    let rtl = c.layout_direction == Direction::Rtl;
+    let main_is_rtl = c.is_row && rtl;
+    let cross_is_rtl = !c.is_row && rtl;
+    let main_reversed = dir.is_reverse() ^ main_is_rtl;
+    let cross_reversed = c.is_wrap_reverse ^ cross_is_rtl;
+    let main_area = Line { start: c.content_box_inset.main_start(dir), end: c.container_size.main(dir) - c.content_box_inset.main_end(dir) };
+    let cross_area = Line { start: c.content_box_inset.cross_start(dir), end: c.container_size.cross(dir) - c.content_box_inset.cross_end(dir) };
+    // `stretch` and `normal` justify as `flex-start`. Chrome applies no `safe` fallback here.
+    let justify = c.justify_content.map(|j| j.keyword);
+    let main_start_position = match justify {
+        Some(C::Start) => !main_is_rtl,
+        Some(C::End) => main_is_rtl,
+        _ => true,
+    };
+    let main_edge = match (justify, main_reversed) {
+        (None | Some(C::SpaceBetween | C::Stretch | C::FlexStart), false) | (Some(C::FlexEnd), true) => AxisStaticEdge::Start,
+        (Some(C::Start | C::End), _) => {
+            if main_start_position { AxisStaticEdge::Start } else { AxisStaticEdge::End }
+        }
+        (Some(C::FlexEnd), false) | (None | Some(C::FlexStart | C::Stretch | C::SpaceBetween), true) => AxisStaticEdge::End,
+        (Some(C::SpaceEvenly | C::SpaceAround | C::Center), _) => AxisStaticEdge::Center,
+    };
+    // `start`, `end` and `baseline` (whose fallback is `start`) follow the writing mode;
+    // `flex-start`, `flex-end` and `stretch` the flex lines.
+    let cross_edge_for = |keyword: I| {
+        let start_position = match keyword {
+            I::Start | I::Baseline => !cross_is_rtl,
+            I::End => cross_is_rtl,
+            _ => true,
+        };
+        match (keyword, cross_reversed) {
+            (I::Start | I::End | I::Baseline, _) => {
+                if start_position { AxisStaticEdge::Start } else { AxisStaticEdge::End }
+            }
+            (I::Stretch | I::FlexStart, false) | (I::FlexEnd, true) => AxisStaticEdge::Start,
+            (I::Stretch | I::FlexStart, true) | (I::FlexEnd, false) => AxisStaticEdge::End,
+            (I::Center, _) => AxisStaticEdge::Center,
+            (I::SelfStart | I::SelfEnd, _) => unreachable!("resolved against the directions"),
+        }
+    };
+    for (index, child) in tree.children(node).enumerate() {
+        let style = tree.style(child);
+        if style.generates_no_box() || !style.position.is_out_of_flow() {
+            continue;
+        }
+        let align_self = style.align_self.unwrap_or(c.align_items).resolve_self_relative(style.direction, c.layout_direction, c.is_column);
+        let cross = AxisStaticPosition {
+            area: cross_area,
+            align: AxisStaticAlign {
+                keyword: cross_edge_for(align_self.keyword),
+                safety: align_self.safety,
+                fallback: cross_edge_for(crate::compute::common::alignment::resolve_self_alignment_safety(align_self, true)),
+            },
+        };
+        let main = AxisStaticPosition { area: main_area, align: AxisStaticAlign::from_keyword(main_edge) };
+        let static_position = if c.is_row { Point { x: main, y: cross } } else { Point { x: cross, y: main } };
+        entries.push(OofEntry::Seed { node: child, order: index as u32, bit: position_bit(style.position), static_position });
+    }
 }
 
 fn compute_constants<T: LayoutTree + ?Sized, D: FlexDir>(

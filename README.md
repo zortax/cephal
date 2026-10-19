@@ -9,7 +9,9 @@ The engine supports:
 - flexbox, including `flex-wrap: balance`;
 - CSS grid, named lines, named areas, and auto-repeat;
 - `calc()`, sizing keywords, `box-sizing`, scroll containers, and containment;
-- absolute positioning and pixel snapping.
+- absolute and fixed positioning against the containing block (out-of-flow boxes are laid out by
+  their nearest positioned ancestor or the viewport, with static positions and self-alignment);
+- pixel snapping.
 
 Cephal runs the 6,504 Chrome-generated layout fixtures of taffy 0.15. The ones it does not pass yet
 are listed by cause in `tests/fixtures/expected_failures.txt`.
@@ -21,7 +23,7 @@ affected nodes to a dirty queue. The scheduler processes the deepest dirty nodes
 Propagation stops when a recomputed answer stays unchanged.
 
 Clipped overflow changes stay inside the clipping node. An absolute box can move after a
-position-only update. Pixel snapping processes changed nodes and subtrees whose origin moved.
+position-only update without its containing block's in-flow content being laid out again. Pixel snapping processes changed nodes and subtrees whose origin moved.
 
 This model follows *Spineless Traversal for Layout Invalidation* by Kirisame, Wang, and
 Panchekha (PLDI 2025). The test suite checks that incremental and parallel results equal a

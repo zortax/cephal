@@ -5,6 +5,7 @@ use super::axis::{FlexAxisRect, FlexAxisSize, FlexAxisSum};
 use super::{AlgoConstants, FlexItem, FlexLine, item_known_dimension_definiteness};
 use crate::compute::common::overflow::{scrollable_overflow_contribution, union};
 use crate::compute::Questions;
+use crate::compute::oof::OofEntry;
 use crate::tree::{ChildRequest, LayoutOutput};
 use crate::geometry::{AvailableSpace, Line, Point, Rect, Size};
 use crate::style::{Direction, Overflow};
@@ -37,6 +38,7 @@ fn calculate_flex_item<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     total_offset_cross: f32,
     line_offset_cross: f32,
     total_overflow_rect: &mut Rect<f32>,
+    through: &mut Vec<OofEntry>,
     c: &AlgoConstants<D>,
 ) {
     let dir = c.dir;
@@ -112,6 +114,10 @@ fn calculate_flex_item<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
         },
     );
 
+    if out.oof != 0 {
+        through.push(OofEntry::Through { node: item.node, order: item.order, bits: out.oof, location });
+    }
+
     if is_rtl_row {
         *total_offset_main -= item.offset_main + item.margin.main_axis_sum(dir) + size.main(dir);
     } else {
@@ -143,6 +149,7 @@ fn calculate_layout_line<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     outputs: &[LayoutOutput],
     total_offset_cross: &mut f32,
     overflow_rect: &mut Rect<f32>,
+    through: &mut Vec<OofEntry>,
     c: &AlgoConstants<D>,
 ) {
     let dir = c.dir;
@@ -162,11 +169,11 @@ fn calculate_layout_line<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     let line_outputs = &outputs[start..end];
     if dir.is_reverse() {
         for (item, out) in line_items.iter_mut().zip(line_outputs).rev() {
-            calculate_flex_item(tree, item, *out, &mut total_offset_main, *total_offset_cross, line_offset_cross, overflow_rect, c);
+            calculate_flex_item(tree, item, *out, &mut total_offset_main, *total_offset_cross, line_offset_cross, overflow_rect, through, c);
         }
     } else {
         for (item, out) in line_items.iter_mut().zip(line_outputs) {
-            calculate_flex_item(tree, item, *out, &mut total_offset_main, *total_offset_cross, line_offset_cross, overflow_rect, c);
+            calculate_flex_item(tree, item, *out, &mut total_offset_main, *total_offset_cross, line_offset_cross, overflow_rect, through, c);
         }
     }
     if !is_rtl_column {
@@ -174,10 +181,13 @@ fn calculate_layout_line<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     }
 }
 
+/// Places the items; returns their overflow, and records in `through` each item passing
+/// out-of-flow boxes through.
 pub(super) fn final_layout_pass<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     lines: &[FlexLine],
     items: &mut [FlexItem],
+    through: &mut Vec<OofEntry>,
     c: &AlgoConstants<D>,
 ) -> Rect<f32> {
     let dir = c.dir;
@@ -196,11 +206,11 @@ pub(super) fn final_layout_pass<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized
     let outputs = questions.answers();
     if c.is_wrap_reverse {
         for line in lines.iter().rev() {
-            calculate_layout_line(tree, line, items, outputs, &mut total_offset_cross, &mut overflow_rect, c);
+            calculate_layout_line(tree, line, items, outputs, &mut total_offset_cross, &mut overflow_rect, through, c);
         }
     } else {
         for line in lines.iter() {
-            calculate_layout_line(tree, line, items, outputs, &mut total_offset_cross, &mut overflow_rect, c);
+            calculate_layout_line(tree, line, items, outputs, &mut total_offset_cross, &mut overflow_rect, through, c);
         }
     }
     if c.is_scroll_container {

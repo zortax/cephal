@@ -1,13 +1,11 @@
 //! Block flow layout.
 
-mod absolute;
 mod context;
 pub mod floats;
 mod flow;
 mod items;
 mod width;
 
-pub(crate) use absolute::layout_absolute_block_item;
 pub use context::{BlockContext, BlockFormattingContext};
 
 use crate::compute::common::alignment::{apply_alignment_fallback, compute_alignment_offset};
@@ -267,6 +265,10 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
                 if let Some(layout) = item.final_layout.as_mut() {
                     layout.location.y += group_offset;
                 }
+                // Static positions move with the in-flow content.
+                if item.position.is_out_of_flow() {
+                    item.static_position.y += group_offset;
+                }
             }
             inflow_overflow_rect = Rect::ZERO;
             for item in items.iter() {
@@ -319,6 +321,7 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
             CollapsibleMarginSet::from_margin(raw_margin.bottom.resolve_or_zero(parent_size.width, &calc))
         },
         margins_can_collapse_through: can_be_collapsed_through,
+        oof: 0,
     };
 
     // Parents need the margin metadata even when only sizing.
@@ -332,18 +335,26 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
         }
     }
 
-    let absolute_position_inset = resolved_border + scrollbar_gutter;
-    let absolute_position_area = final_outer_size - absolute_position_inset.sum_axes();
-    let absolute_position_offset = Point { x: absolute_position_inset.left, y: absolute_position_inset.top };
-    let absolute_overflow_rect = absolute::perform_absolute_layout_on_absolute_children(
-        tree,
-        node,
-        &items,
-        absolute_position_area,
-        absolute_position_offset,
-        direction,
-        is_scroll_container,
-    );
+    let (absolute_overflow_rect, oof) =
+        if flow.has_out_of_flow && tree.speculation() == 0 {
+            let entries = out_of_flow_entries(tree, node, &items, container_outer_width, resolved_content_box_inset, direction);
+            let overflow = tree.style(node).overflow;
+            crate::compute::oof::finish(tree, node, entries, || {
+                let inset = resolved_border + scrollbar_gutter;
+                crate::compute::oof::OofGeometry {
+                    area_size: final_outer_size - inset.sum_axes(),
+                    area_offset: Point { x: inset.left, y: inset.top },
+                    direction,
+                    overflow,
+                    #[cfg(feature = "grid")]
+                    grid: None,
+                }
+            })
+        } else {
+            crate::compute::oof::finish_none(tree, node);
+            (Rect::ZERO, 0)
+        };
+    output.oof = oof;
 
     // A scroll container's own end padding is part of its scrollable overflow.
     if is_scroll_container {
@@ -362,6 +373,47 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
     }
 
     output
+}
+
+/// The block's out-of-flow record (see [`crate::compute::oof`]): a static position for each
+/// out-of-flow child, spanning the content box inline and at its hypothetical position in the
+/// block axis, aligned per its self-alignment (css-position-3 §4.6); and each in-flow child that
+/// passes candidates through.
+fn out_of_flow_entries<T: LayoutTree + ?Sized>(
+    tree: &T,
+    node: NodeId,
+    items: &[items::BlockItem],
+    container_outer_width: f32,
+    content_box_inset: Rect<f32>,
+    direction: Direction,
+) -> Vec<crate::compute::oof::OofEntry> {
+    use crate::compute::oof::{AxisStaticPosition, OofEntry, position_bit};
+    let justify_items = tree.style(node).justify_items;
+    let inline_area = Line { start: content_box_inset.left, end: container_outer_width - content_box_inset.right };
+    let mut entries = Vec::new();
+    for item in items {
+        if item.position.is_out_of_flow() {
+            let style = tree.style(item.node);
+            let justify_self = style.justify_self.or(justify_items).map(|a| a.resolve_self_relative(style.direction, direction, true));
+            // Block containers have no `align-items`: `auto` is `normal`.
+            let align_self = style.align_self.map(|a| a.resolve_self_relative(style.direction, direction, false));
+            let block_area = Line { start: item.static_position.y, end: item.static_position.y };
+            entries.push(OofEntry::Seed {
+                node: item.node,
+                order: item.order,
+                bit: position_bit(item.position),
+                static_position: Point {
+                    x: AxisStaticPosition::from_alignment(justify_self, inline_area, direction == Direction::Rtl),
+                    y: AxisStaticPosition::from_alignment(align_self, block_area, false),
+                },
+            });
+        } else if item.oof != 0
+            && let Some(layout) = item.final_layout.as_ref()
+        {
+            entries.push(OofEntry::Through { node: item.node, order: item.order, bits: item.oof, location: layout.location });
+        }
+    }
+    entries
 }
 
 /// Lays out one child inside this block's formatting context.

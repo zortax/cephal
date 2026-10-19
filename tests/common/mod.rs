@@ -115,8 +115,16 @@ pub fn random_style(rng: &mut Rng, container: bool) -> Style {
     if rng.chance(1, 8) {
         s.aspect_ratio = Some(rng.pick(&[0.5, 1.0, 2.0]));
     }
-    if rng.chance(1, 8) {
-        s.position = Position::Absolute;
+    // Out-of-flow boxes under static, relative and sticky containers, so containing blocks are
+    // parents, further ancestors, other out-of-flow boxes and the initial containing block.
+    match rng.below(16) {
+        0 | 1 => s.position = Position::Absolute,
+        2 => s.position = Position::Fixed,
+        3 | 4 if container => s.position = Position::Relative,
+        5 if container => s.position = Position::Sticky,
+        _ => {}
+    }
+    if s.position != Position::Static {
         s.inset = Rect { left: lpa(rng), right: lpa(rng), top: lpa(rng), bottom: lpa(rng) };
     }
     if rng.chance(1, 8) {

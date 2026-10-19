@@ -271,7 +271,8 @@ pub struct Log {
     /// Indices of nodes written that had no layout before the frame.
     pub(super) fresh: Vec<u32>,
     pub(super) detailed: Vec<(u32, DetailedGridInfo)>,
-    pub(super) absolute: Vec<(u32, AbsoluteContext)>,
+    /// Records set (`Some`) and cleared (`None`).
+    pub(super) absolute: Vec<(u32, Option<AbsoluteContext>)>,
     /// Outputs of the batch's requests, by request index; the caller must use these rather than
     /// ask the cache again, since a later store in the same group may have evicted them.
     /// Each with the axes its answer observed, which the asking frame inherits.
@@ -282,8 +283,9 @@ impl Log {
     fn detailed(&self, i: u32) -> Option<DetailedGridInfo> {
         self.detailed.iter().rev().find(|(n, _)| *n == i).map(|(_, d)| d.clone())
     }
-    fn absolute(&self, i: u32) -> Option<AbsoluteContext> {
-        self.absolute.iter().rev().find(|(n, _)| *n == i).map(|(_, c)| c.clone())
+    /// The record last set or cleared for `i` in this log; `None` when it holds neither.
+    fn absolute(&self, i: u32) -> Option<Option<&AbsoluteContext>> {
+        self.absolute.iter().rev().find(|(n, _)| *n == i).map(|(_, c)| c.as_ref())
     }
 
     /// Folds a nested batch's results in, as if this worker had computed them.
@@ -333,7 +335,10 @@ impl<Ctx> Tree<Ctx> {
             self.detailed_grid.insert(i, info);
         }
         for (i, ctx) in log.absolute {
-            self.absolute_contexts.insert(i, ctx);
+            match ctx {
+                Some(ctx) => self.absolute_contexts.insert(i, ctx),
+                None => self.absolute_contexts.remove(&i),
+            };
         }
     }
 

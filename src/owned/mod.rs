@@ -357,6 +357,7 @@ impl<Ctx> Tree<Ctx> {
             }
             self.styles.release(self.style_ids[i]);
             self.caches[i].clear();
+            self.absolute_contexts.remove(&(i as u32));
             self.links[i] = Links::detached();
             self.generations[i] = self.generations[i].wrapping_add(1).max(1);
             self.free.push(i as u32);
@@ -508,20 +509,26 @@ impl<Ctx> Tree<Ctx> {
         if old_style == &style {
             return;
         }
-        // An absolutely positioned box that stays absolute cannot move its siblings.
-        let absolute_only = old_style.position.is_out_of_flow()
-            && style.position.is_out_of_flow()
+        // An out-of-flow box that stays one, with the same static position, is laid out by its
+        // containing block alone: its parent never asks it anything.
+        let stays_out_of_flow = old_style.position.is_out_of_flow()
+            && style.position == old_style.position
             && !old_style.generates_no_box()
             && !style.generates_no_box()
-            && self.links[i].parent != NONE;
+            && self.links[i].parent != NONE
+            && same_static_position(old_style, &style);
         let new = self.styles.intern(style);
         self.styles.release(old);
         self.style_ids[i] = new;
         self.refresh_meta(i);
-        if absolute_only {
+        if stays_out_of_flow {
+            self.mark_dirty_index(i);
             let id = self.id_of(i);
             let mut scheduler = core::mem::take(&mut self.scheduler);
-            scheduler.mark_absolute(&mut view::Marker { tree: self }, id);
+            let mut marker = view::Marker { tree: self };
+            if let Some(cb) = crate::schedule::Incremental::containing_block(&marker, id) {
+                scheduler.mark_oof_pass(&mut marker, cb);
+            }
             self.scheduler = scheduler;
         } else {
             self.mark_dirty_with_parent(i);
@@ -566,6 +573,26 @@ impl<Ctx> Tree<Ctx> {
     pub fn invalidate(&mut self, node: NodeId) {
         let i = self.index(node);
         self.mark_dirty_index(i);
+    }
+
+    /// The containing block of the out-of-flow `node` (its layout is placed against it), or `None`
+    /// for the initial containing block or a node in flow.
+    pub fn containing_block(&self, node: NodeId) -> Option<NodeId> {
+        let out_of_flow = |n: NodeId| {
+            let style = self.style(n);
+            style.position.is_out_of_flow() && !style.generates_no_box() && self.parent(n).is_some()
+        };
+        if !out_of_flow(node) {
+            return None;
+        }
+        let bit = crate::compute::oof::position_bit(self.style(node).position);
+        let mut at = self.parent(node)?;
+        loop {
+            if crate::compute::oof::default_claims(self.style(at)) & bit != 0 {
+                return Some(at);
+            }
+            at = if out_of_flow(at) { self.containing_block(at)? } else { self.parent(at)? };
+        }
     }
 
     // --- structure ----------------------------------------------------------------------------
@@ -883,6 +910,11 @@ impl<Ctx> Tree<Ctx> {
         self.mark_dirty_index(i);
     }
 
+    /// The record `node` keeps of out-of-flow boxes below it, from its last layout.
+    pub fn absolute_context(&self, node: NodeId) -> Option<&crate::tree::AbsoluteContext> {
+        self.absolute_contexts.get(&(self.index(node) as u32))
+    }
+
     /// Cached answers of `node`, for inspection.
     pub fn cache_entries(&self, node: NodeId) -> Vec<(crate::tree::LayoutInput, crate::tree::LayoutOutput)> {
         self.caches[self.index(node)].entries()
@@ -892,4 +924,13 @@ impl<Ctx> Tree<Ctx> {
     pub fn is_dirty(&self, node: NodeId) -> bool {
         self.flags[self.index(node)] & crate::schedule::DIRTY != 0
     }
+}
+
+/// Whether a parent records the same static position for an out-of-flow child of either style.
+fn same_static_position(a: &Style, b: &Style) -> bool {
+    a.align_self == b.align_self
+        && a.justify_self == b.justify_self
+        && a.direction == b.direction
+        && a.grid_row == b.grid_row
+        && a.grid_column == b.grid_column
 }

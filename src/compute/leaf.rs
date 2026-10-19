@@ -230,6 +230,7 @@ pub fn compute_leaf_layout_with<T: LayoutTree + ?Sized>(
             top_margin: CollapsibleMarginSet::ZERO,
             bottom_margin: CollapsibleMarginSet::ZERO,
             margins_can_collapse_through: false,
+            oof: 0,
         };
     }
 
@@ -301,6 +302,7 @@ pub fn compute_leaf_layout_with<T: LayoutTree + ?Sized>(
         margins_can_collapse_through: !has_styles_preventing_being_collapsed_through
             && size.height == 0.0
             && measured_size.height == 0.0,
+        oof: 0,
     }
 }
 

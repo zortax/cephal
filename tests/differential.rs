@@ -20,7 +20,7 @@ fn run(seed: u64, relaxed: bool) -> Vec<String> {
 enum Strip {
     /// Margins and insets of the root.
     RootOffsets,
-    /// `position: absolute`.
+    /// Out-of-flow positioning: such boxes become static.
     Absolute,
     /// `align-self` / `justify-self` of absolutely positioned boxes.
     AbsoluteSelfAlignment,
@@ -57,13 +57,15 @@ fn strip(tree: &mut Tree<Text>, root: cephal::tree::NodeId, what: Strip) {
             Strip::RootOffsets if node == root => {
                 s.margin = cephal::geometry::Rect::splat(LengthPercentageAuto::ZERO);
                 s.inset = cephal::geometry::Rect::splat(LengthPercentageAuto::AUTO);
-                s.position = Position::Relative;
+                if s.position.is_out_of_flow() {
+                    s.position = Position::Static;
+                }
             }
-            Strip::Absolute if s.position != Position::Relative => {
-                s.position = Position::Relative;
+            Strip::Absolute if s.position.is_out_of_flow() => {
+                s.position = Position::Static;
                 s.inset = cephal::geometry::Rect::splat(LengthPercentageAuto::AUTO);
             }
-            Strip::AbsoluteSelfAlignment if s.position != Position::Relative => {
+            Strip::AbsoluteSelfAlignment if s.position.is_out_of_flow() => {
                 s.align_self = None;
                 s.justify_self = None;
             }
@@ -138,9 +140,9 @@ fn run_with(seed: u64, relaxed: bool, strips: &[Strip]) -> Vec<String> {
     taffy_tree.disable_rounding();
     taffy_tree.compute_layout_with_measure(taffy_root, to_taffy_space(viewport), taffy_measure).unwrap();
     let mut errors = Vec::new();
-    for (ours, theirs) in map {
+    let theirs_relative = taffy_parent_relative(&tree, &taffy_tree, &map);
+    for (&(ours, _), b) in map.iter().zip(theirs_relative) {
         let a = tree.unrounded_layout(ours);
-        let b = taffy_tree.unrounded_layout(theirs);
         let near = |x: f32, y: f32| (x - y).abs() <= 0.01 * (1.0 + x.abs().max(y.abs()));
         if !(near(a.location.x, b.location.x) && near(a.location.y, b.location.y) && near(a.size.width, b.size.width) && near(a.size.height, b.size.height)) {
             errors.push(format!(
@@ -150,6 +152,47 @@ fn run_with(seed: u64, relaxed: bool, strips: &[Strip]) -> Vec<String> {
         }
     }
     errors
+}
+
+/// Taffy's unrounded layouts with locations relative to the parent, as cephal's: taffy places an
+/// out-of-flow box relative to its containing block's border box (the root's for the initial
+/// containing block). `map` is in tree order.
+fn taffy_parent_relative(tree: &Tree<Text>, taffy_tree: &taffy::TaffyTree<Text>, map: &[(cephal::tree::NodeId, taffy::NodeId)]) -> Vec<taffy::Layout> {
+    use cephal::style::Position;
+    let mut abs: std::collections::HashMap<cephal::tree::NodeId, (f32, f32)> = Default::default();
+    let mut out = Vec::new();
+    let root = map[0].0;
+    for &(ours, theirs) in map {
+        let mut layout = *taffy_tree.unrounded_layout(theirs);
+        let hidden = std::iter::successors(Some(ours), |&n| tree.parent(n)).any(|n| tree.style(n).display == Display::None);
+        let position = tree.style(ours).position;
+        let here = match tree.parent(ours) {
+            None => (layout.location.x, layout.location.y),
+            Some(parent) => {
+                let p = abs[&parent];
+                let cb = match position {
+                    _ if hidden => None,
+                    Position::Absolute => Some(
+                        std::iter::successors(Some(parent), |&n| tree.parent(n)).find(|&n| tree.style(n).position != Position::Static).unwrap_or(root),
+                    ),
+                    Position::Fixed => Some(root),
+                    _ => None,
+                };
+                match cb {
+                    Some(cb) => {
+                        let c = abs[&cb];
+                        let here = (c.0 + layout.location.x, c.1 + layout.location.y);
+                        layout.location = taffy::Point { x: here.0 - p.0, y: here.1 - p.1 };
+                        here
+                    }
+                    None => (p.0 + layout.location.x, p.1 + layout.location.y),
+                }
+            }
+        };
+        abs.insert(ours, here);
+        out.push(layout);
+    }
+    out
 }
 
 /// Seeds where cephal and taffy 0.15 disagree even relaxed, one per line with the census category
@@ -257,14 +300,14 @@ fn debug_diff() {
     let (mut taffy_tree, taffy_root, map) = mirror_in_taffy(&tree, root);
     taffy_tree.disable_rounding();
     taffy_tree.compute_layout_with_measure(taffy_root, to_taffy_space(viewport), taffy_measure).unwrap();
-    for (ours, theirs) in map {
+    let theirs_relative = taffy_parent_relative(&tree, &taffy_tree, &map);
+    for (&(ours, _), b) in map.iter().zip(theirs_relative) {
         let s = tree.style(ours);
         let a = tree.unrounded_layout(ours);
-        let b = taffy_tree.unrounded_layout(theirs);
         let flag = if (a.size.width - b.size.width).abs() > 0.05 || (a.size.height - b.size.height).abs() > 0.05 || (a.location.x - b.location.x).abs() > 0.05 || (a.location.y - b.location.y).abs() > 0.05 { "DIFF" } else { "ok  " };
         println!(
-            "{flag} {ours:?} depth={} parent={:?} ctx={:?} display={:?} pos={:?} size={:?} min={:?} max={:?} margin={:?} padding={:?} ar={:?} ov={:?} fd={:?} fw={:?} grow={} shrink={} basis={:?} ai={:?} as={:?} jc={:?} ac={:?} grid={:?} col={:?} row={:?}",
-            tree.depth(ours), tree.parent(ours), tree.context(ours).map(|t| t.0), s.display, s.position, s.size, s.min_size, s.max_size, s.margin, s.padding, s.aspect_ratio, s.overflow, s.flex_direction, s.flex_wrap, s.flex_grow, s.flex_shrink, s.flex_basis, s.align_items, s.align_self, s.justify_content, s.align_content, s.grid, s.grid_column, s.grid_row
+            "{flag} {ours:?} depth={} parent={:?} ctx={:?} display={:?} pos={:?} inset={:?} size={:?} min={:?} max={:?} margin={:?} padding={:?} ar={:?} ov={:?} fd={:?} fw={:?} grow={} shrink={} basis={:?} ai={:?} as={:?} jc={:?} ac={:?} grid={:?} col={:?} row={:?}",
+            tree.depth(ours), tree.parent(ours), tree.context(ours).map(|t| t.0), s.display, s.position, s.inset, s.size, s.min_size, s.max_size, s.margin, s.padding, s.aspect_ratio, s.overflow, s.flex_direction, s.flex_wrap, s.flex_grow, s.flex_shrink, s.flex_basis, s.align_items, s.align_self, s.justify_content, s.align_content, s.grid, s.grid_column, s.grid_row
         );
         println!("       cephal x={} y={} w={} h={} | taffy x={} y={} w={} h={}", a.location.x, a.location.y, a.size.width, a.size.height, b.location.x, b.location.y, b.size.width, b.size.height);
     }

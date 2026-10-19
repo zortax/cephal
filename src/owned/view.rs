@@ -128,8 +128,17 @@ impl<Ctx, F: MeasureFn<Ctx>, E: Executor<Ctx>, A: TreeSlot<Ctx>> LayoutTree for 
         self.tree.get_mut().absolute_contexts.insert(i, context);
     }
 
-    fn absolute_context(&self, node: NodeId) -> Option<crate::tree::AbsoluteContext> {
-        self.tree.get().absolute_contexts.get(&(self.tree.get().index(node) as u32)).cloned()
+    #[inline]
+    fn clear_absolute_context(&mut self, node: NodeId) {
+        if self.speculation > 0 || self.tree.get().absolute_contexts.is_empty() {
+            return;
+        }
+        let i = self.tree.get().index(node) as u32;
+        self.tree.get_mut().absolute_contexts.remove(&i);
+    }
+
+    fn absolute_context(&self, node: NodeId) -> Option<&crate::tree::AbsoluteContext> {
+        self.tree.get().absolute_contexts.get(&(self.tree.get().index(node) as u32))
     }
 
     fn compute_child_layout(&mut self, node: NodeId, inputs: LayoutInput, block_ctx: Option<&mut BlockContext<'_>>) -> LayoutOutput {

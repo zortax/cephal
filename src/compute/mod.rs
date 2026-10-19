@@ -1,14 +1,13 @@
 //! Algorithm dispatch, the root entry point and hidden layout.
 
-pub mod absolute;
 pub mod block;
 pub mod common;
-pub mod reposition;
 #[cfg(feature = "flex")]
 pub mod flex;
 #[cfg(feature = "grid")]
 pub mod grid;
 pub mod leaf;
+pub mod oof;
 pub mod plan;
 pub mod scratch;
 
@@ -172,6 +171,10 @@ pub mod verify {
     }
 
     /// Recomputes `raw` speculatively and asserts it matches `answer` bit for bit.
+    ///
+    /// A final layout's overflow and out-of-flow bits are exempt: they come from out-of-flow passes
+    /// over records the subtree's last real layout stored, which speculation neither reads nor
+    /// writes (incremental-versus-cold tests cover them).
     #[cfg(feature = "verify-cache")]
     pub fn shortcut<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, node: NodeId, raw: LayoutInput, answer: &LayoutOutput, what: &str) {
         let outer = tree.take_observed();
@@ -215,14 +218,16 @@ pub mod verify {
             _ => {
                 let rect = |r: crate::geometry::Rect<f32>| [r.left, r.right, r.top, r.bottom].map(bits);
                 let opt = |v: Option<f32>| v.map(bits);
+                let final_layout = run_mode == RunMode::PerformLayout;
                 w && h
-                    && rect(a.scrollable_overflow_rect) == rect(b.scrollable_overflow_rect)
-                    && rect(a.inflow_overflow_rect) == rect(b.inflow_overflow_rect)
+                    && (final_layout || rect(a.scrollable_overflow_rect) == rect(b.scrollable_overflow_rect))
+                    && (final_layout || rect(a.inflow_overflow_rect) == rect(b.inflow_overflow_rect))
                     && opt(a.baselines.first) == opt(b.baselines.first)
                     && opt(a.baselines.last) == opt(b.baselines.last)
                     && a.top_margin == b.top_margin
                     && a.bottom_margin == b.bottom_margin
                     && a.margins_can_collapse_through == b.margins_can_collapse_through
+                    && (final_layout || a.oof == b.oof)
             }
         }
     }
@@ -349,6 +354,7 @@ fn block_observing<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, f: impl F
 /// Zeroes the subtree's layout; never cached.
 pub fn compute_hidden_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, node: NodeId) -> LayoutOutput {
     tree.cache_mut(node).clear();
+    oof::finish_none(tree, node);
     tree.set_unrounded_layout(node, &Layout::with_order(0));
     let children: scratch::Scratch<NodeId> = scratch::Scratch::collect(tree.children(node));
     for &child in &children {
@@ -358,25 +364,85 @@ pub fn compute_hidden_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T,
 }
 
 /// Lays out the root into `available_space` and stores its layout.
+///
+/// The root's containing block is the initial containing block: the viewport, at the origin. An
+/// in-flow root sits at its margins (offset by its insets when relatively positioned); an
+/// absolutely or fixed positioned root with a definite viewport is placed as any out-of-flow box
+/// (its insets, shrink-to-fit sizing and auto margins). Out-of-flow boxes no box below the root
+/// claims are then laid out against the initial containing block, their overflow going nowhere.
 pub fn compute_root_layout<T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     root: NodeId,
     available_space: Size<AvailableSpace>,
 ) {
+    use crate::geometry::Rect;
+    let style = tree.style(root);
+    let direction = style.direction;
+    let viewport = available_space.into_options();
+    let (layout, oof) = match (style.position.is_out_of_flow(), viewport.width, viewport.height) {
+        (true, Some(width), Some(height)) => {
+            let geometry = oof::OofGeometry {
+                area_size: Size { width, height },
+                area_offset: Point::ZERO,
+                direction,
+                // The initial containing block is not a scroll container.
+                overflow: Point { x: crate::style::Overflow::Visible, y: crate::style::Overflow::Visible },
+                #[cfg(feature = "grid")]
+                grid: None,
+            };
+            let output = oof::layout_root(tree, root, &geometry);
+            (tree.unrounded_layout(root), output.oof)
+        }
+        _ => compute_in_flow_root_layout(tree, root, available_space),
+    };
+    if oof == 0 {
+        return;
+    }
+    // Without a stored layout the root's offset is unknown; nothing else can be placed.
+    let Some(layout) = layout else { return };
+    // The viewport, less the root's scrollbars; where indefinite, the root's padding box.
+    let inset = layout.border + Rect { left: 0.0, right: layout.scrollbar_size.width, top: 0.0, bottom: layout.scrollbar_size.height };
+    let (area_width, area_x) = match viewport.width {
+        Some(width) => ((width - layout.scrollbar_size.width).max(0.0), -layout.location.x),
+        None => (layout.size.width - inset.horizontal_axis_sum(), inset.left),
+    };
+    let (area_height, area_y) = match viewport.height {
+        Some(height) => ((height - layout.scrollbar_size.height).max(0.0), -layout.location.y),
+        None => (layout.size.height - inset.vertical_axis_sum(), inset.top),
+    };
+    let overflow = tree.style(root).overflow;
+    let geometry = oof::OofGeometry {
+        area_size: Size { width: area_width, height: area_height },
+        area_offset: Point { x: area_x, y: area_y },
+        direction,
+        overflow,
+        #[cfg(feature = "grid")]
+        grid: None,
+    };
+    oof::initial_containing_block_pass(tree, root, oof, &geometry);
+}
+
+/// Lays out an in-flow root at its margins; returns its stored layout and the out-of-flow bits
+/// of its answer.
+fn compute_in_flow_root_layout<T: LayoutTree + CacheAccess + ?Sized>(
+    tree: &mut T,
+    root: NodeId,
+    available_space: Size<AvailableSpace>,
+) -> (Option<Layout>, u8) {
+    use crate::geometry::MaybeMath;
     let style = tree.style(root);
     let calc = |id, basis| tree.resolve_calc(id, basis);
     let parent_size = available_space.into_options();
     let padding = style.padding.map(|p| p.resolve_or_zero(parent_size.width, &calc));
     let border = style.border.map(|b| b.resolve_or_zero(parent_size.width, &calc));
-    let margin = style.margin.map(|m| m.resolve(parent_size.width, &calc));
+    // `auto` margins count as zero.
+    let margin = style.margin.map(|m| m.resolve_or_zero(parent_size.width, &calc));
     let padding_border_size = (padding + border).sum_axes();
     let box_sizing_adjustment =
         if style.box_sizing == crate::style::BoxSizing::ContentBox { padding_border_size } else { Size::ZERO };
+    // The root's border box gets the available space less its margins.
+    let root_available_space = available_space.maybe_sub(margin.sum_axes()).maybe_max(Size::ZERO);
 
-    use crate::geometry::MaybeMath;
-    // The root's border box gets the available space less its margins, `auto` ones counting as zero.
-    let resolved_margin = margin.map(|m| m.unwrap_or(0.0));
-    let root_available_space = available_space.maybe_sub(resolved_margin.sum_axes()).maybe_max(Size::ZERO);
     let mut known_dimensions = Size::NONE;
     if style.is_block() {
         let resolve = |s: Size<crate::style::Length>| block::resolve_size(s, parent_size, &calc);
@@ -430,29 +496,28 @@ pub fn compute_root_layout<T: LayoutTree + CacheAccess + ?Sized>(
     let rtl = style.direction == crate::style::Direction::Rtl;
     let mut location = Point {
         x: match (rtl, available_space.width) {
-            (true, AvailableSpace::Definite(w)) => w - output.size.width - resolved_margin.right,
-            _ => resolved_margin.left,
+            (true, AvailableSpace::Definite(w)) => w - output.size.width - margin.right,
+            _ => margin.left,
         },
-        y: resolved_margin.top,
+        y: margin.top,
     };
     if style.position.offsets_in_flow() {
         let inset = style.inset.zip_size(parent_size, |i, basis| i.resolve(basis, &calc));
         location.x += if rtl { inset.right.map(|r| -r).or(inset.left) } else { inset.left.or(inset.right.map(|r| -r)) }.unwrap_or(0.0);
         location.y += inset.top.or(inset.bottom.map(|b| -b)).unwrap_or(0.0);
     }
-    tree.set_unrounded_layout(
-        root,
-        &Layout {
-            order: 0,
-            location,
-            size: output.size,
-            scrollable_overflow_rect: output.scrollable_overflow_rect,
-            scrollbar_size,
-            border,
-            padding,
-            margin: resolved_margin,
-        },
-    );
+    let layout = Layout {
+        order: 0,
+        location,
+        size: output.size,
+        scrollable_overflow_rect: output.scrollable_overflow_rect,
+        scrollbar_size,
+        border,
+        padding,
+        margin,
+    };
+    tree.set_unrounded_layout(root, &layout);
+    (Some(layout), output.oof)
 }
 
 /// A `ComputeSize` question for one axis of a child.

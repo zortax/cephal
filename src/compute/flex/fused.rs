@@ -328,12 +328,13 @@ pub(super) fn compute<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     }
 
     super::align::align_flex_lines_per_align_content(&mut lines, c, total_line_cross_size);
-    let (inflow_overflow_rect, baselines) = final_layout_pass(tree, &lines[0], &items, c);
-    let absolute_overflow_rect = if has_other_children { super::lay_out_other_children(tree, node, c) } else { Rect::ZERO };
-    Some(
-        LayoutOutput::from_sizes_and_baselines(c.container_size, Rect::ZERO, baselines)
-            .with_overflow(inflow_overflow_rect, absolute_overflow_rect),
-    )
+    let mut through = Vec::new();
+    let (inflow_overflow_rect, baselines) = final_layout_pass(tree, &lines[0], &items, &mut through, c);
+    let (absolute_overflow_rect, oof) = super::finish_children(tree, node, c, has_other_children, through);
+    let mut output =
+        LayoutOutput::from_sizes_and_baselines(c.container_size, Rect::ZERO, baselines).with_overflow(inflow_overflow_rect, absolute_overflow_rect);
+    output.oof = oof;
+    Some(output)
 }
 
 /// See [`super::base_size::indefinite_stretch_cross`].
@@ -773,6 +774,7 @@ fn final_layout_pass<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     line: &FlexLine,
     items: &[Item],
+    through: &mut Vec<crate::compute::oof::OofEntry>,
     c: &AlgoConstants<D>,
 ) -> (Rect<f32>, Baselines) {
     let dir = c.dir;
@@ -876,6 +878,9 @@ fn final_layout_pass<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
             margin: item.margin,
         };
         tree.set_unrounded_layout(item.node, &layout);
+        if out.oof != 0 {
+            through.push(crate::compute::oof::OofEntry::Through { node: item.node, order: item.order, bits: out.oof, location });
+        }
 
         if is_rtl_row {
             total_offset_main -= item.offset_main + item.margin.main_axis_sum(dir) + size.main(dir);

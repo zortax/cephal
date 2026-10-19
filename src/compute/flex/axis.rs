@@ -20,15 +20,6 @@ pub(crate) trait FlexDir: Copy {
     fn cross_axis(self) -> AbsoluteAxis {
         if self.is_row() { AbsoluteAxis::Vertical } else { AbsoluteAxis::Horizontal }
     }
-    #[inline]
-    fn direction(self) -> FlexDirection {
-        match (self.is_row(), self.is_reverse()) {
-            (true, false) => FlexDirection::Row,
-            (true, true) => FlexDirection::RowReverse,
-            (false, false) => FlexDirection::Column,
-            (false, true) => FlexDirection::ColumnReverse,
-        }
-    }
 }
 
 impl FlexDir for FlexDirection {
@@ -39,10 +30,6 @@ impl FlexDir for FlexDirection {
     #[inline]
     fn is_reverse(self) -> bool {
         FlexDirection::is_reverse(self)
-    }
-    #[inline]
-    fn direction(self) -> FlexDirection {
-        self
     }
 }
 

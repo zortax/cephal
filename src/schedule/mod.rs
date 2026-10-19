@@ -3,6 +3,7 @@
 
 mod queue;
 
+use crate::compute::oof::{OOF_ABSOLUTE, OOF_FIXED, position_bit};
 use crate::geometry::Line;
 use crate::tree::{CacheAccess, LayoutInput, LayoutOutput, LayoutTree, NodeId, RunMode};
 use queue::DepthQueue;
@@ -11,8 +12,9 @@ pub const DIRTY: u8 = 1;
 pub const QUEUED: u8 = 2;
 /// A descendant's layout was rewritten; the rounding pass must descend here.
 pub const ROUND_PENDING: u8 = 4;
-/// Only this absolutely positioned node changed; its container need not re-run.
-pub const ABS_ONLY: u8 = 8;
+/// With [`DIRTY`]: only this containing block's out-of-flow pass re-runs (see
+/// [`crate::compute::oof`]); its own answers and its in-flow children stand.
+pub const OOF_PASS: u8 = 8;
 /// Bits above the scheduler's, owned by the tree for per-query facts.
 pub const META_MASK: u8 = 0xF0;
 
@@ -22,6 +24,32 @@ pub trait Incremental: LayoutTree + CacheAccess {
     fn depth(&self, node: NodeId) -> u32;
     fn flags(&self, node: NodeId) -> u8;
     fn set_flags(&mut self, node: NodeId, flags: u8);
+
+    /// Whether `node` is laid out by a containing block's out-of-flow pass rather than its parent.
+    #[inline]
+    fn is_out_of_flow(&self, node: NodeId) -> bool {
+        let style = self.style(node);
+        style.position.is_out_of_flow() && !style.generates_no_box() && self.parent(node).is_some()
+    }
+
+    /// The containing block of the out-of-flow `node`; `None` for the initial containing block.
+    fn containing_block(&self, node: NodeId) -> Option<NodeId> {
+        let bit = position_bit(self.style(node).position);
+        self.claiming_block(self.parent(node)?, bit)
+    }
+
+    /// The first box claiming candidates of `bit` among `from` and where candidates leaving each
+    /// box go: its parent, or for an out-of-flow box its containing block. `None` for the initial
+    /// containing block.
+    fn claiming_block(&self, from: NodeId, bit: u8) -> Option<NodeId> {
+        let mut at = from;
+        loop {
+            if self.containing_block_claims(at) & bit != 0 {
+                return Some(at);
+            }
+            at = if self.is_out_of_flow(at) { self.containing_block(at)? } else { self.parent(at)? };
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -41,11 +69,11 @@ impl Scheduler {
         if flags & QUEUED == 0 {
             self.queue.push(tree.depth(node), node);
         }
-        tree.set_flags(node, (flags | DIRTY | QUEUED) & !ABS_ONLY);
+        tree.set_flags(node, (flags | DIRTY | QUEUED) & !OOF_PASS);
     }
 
-    /// Marks an absolutely positioned `node` whose change cannot affect its siblings.
-    pub fn mark_absolute<T: Incremental + ?Sized>(&mut self, tree: &mut T, node: NodeId) {
+    /// Marks the containing block `node` to re-run only its out-of-flow pass.
+    pub fn mark_oof_pass<T: Incremental + ?Sized>(&mut self, tree: &mut T, node: NodeId) {
         let flags = tree.flags(node);
         if flags & DIRTY != 0 {
             return;
@@ -53,7 +81,20 @@ impl Scheduler {
         if flags & QUEUED == 0 {
             self.queue.push(tree.depth(node), node);
         }
-        tree.set_flags(node, flags | DIRTY | QUEUED | ABS_ONLY);
+        tree.set_flags(node, flags | DIRTY | QUEUED | OOF_PASS);
+    }
+
+    /// Marks the boxes claiming the out-of-flow candidates of `bits` that leave `node`.
+    pub fn mark_claiming_blocks<T: Incremental + ?Sized>(&mut self, tree: &mut T, node: NodeId, bits: u8) {
+        for bit in [OOF_ABSOLUTE, OOF_FIXED] {
+            if bits & bit == 0 {
+                continue;
+            }
+            let next = if tree.is_out_of_flow(node) { tree.containing_block(node) } else { tree.parent(node) };
+            if let Some(cb) = next.and_then(|n| tree.claiming_block(n, bit)) {
+                self.mark_oof_pass(tree, cb);
+            }
+        }
     }
 
     #[inline]
@@ -72,50 +113,63 @@ impl Scheduler {
                 continue;
             }
             let flags = tree.flags(node);
-            tree.set_flags(node, flags & !(DIRTY | QUEUED | ABS_ONLY));
+            tree.set_flags(node, flags & !(DIRTY | QUEUED | OOF_PASS));
             if flags & DIRTY == 0 {
                 continue;
             }
             let parent = tree.parent(node);
-            let parent_dirty = parent.map_or(root_query_changed, |p| tree.flags(p) & DIRTY != 0);
-            if parent_dirty {
-                // The parent re-runs anyway; nothing to compare against.
+            let parent_reruns = parent.map_or(root_query_changed, |p| tree.flags(p) & (DIRTY | OOF_PASS) == DIRTY);
+            if parent_reruns {
+                // The parent re-runs anyway; nothing to compare against. An out-of-flow node is
+                // laid out again by its containing block, which the parent's re-run reaches.
                 tree.cache_mut(node).clear();
                 continue;
             }
-            if flags & ABS_ONLY != 0
-                && let Some(p) = parent
+            // Laid out by its containing block last time: hidden layouts are never cached.
+            let placed_by_containing_block = tree.is_out_of_flow(node) && tree.cache(node).final_output().is_some();
+            let changed = if flags & OOF_PASS != 0 {
+                match self.oof_pass(tree, node) {
+                    Some(changed) => changed,
+                    None => self.recompute(tree, node),
+                }
+            } else {
+                self.recompute(tree, node)
+            };
+            if changed {
+                if placed_by_containing_block {
+                    // Only its containing block asks it anything.
+                    if let Some(cb) = tree.containing_block(node) {
+                        self.mark_oof_pass(tree, cb);
+                    }
+                } else {
+                    match parent {
+                        Some(p) => self.mark(tree, p),
+                        None => root_changed = true,
+                    }
+                }
+            } else if let Some(bits) = tree.cache(node).final_output().map(|o| o.oof)
+                && bits != 0
             {
-                self.recompute(tree, node);
-                if self.reposition(tree, p, node) {
-                    continue;
-                }
-                self.mark(tree, p);
-                continue;
-            }
-            if self.recompute(tree, node) {
-                match parent {
-                    Some(p) => self.mark(tree, p),
-                    None => root_changed = true,
-                }
+                // Static positions below may have moved without this answer changing.
+                self.mark_claiming_blocks(tree, node, bits);
             }
         }
         root_changed
     }
 
-    /// Re-places an absolutely positioned child; true when the container's answer is intact.
-    fn reposition<T: Incremental + ?Sized>(&mut self, tree: &mut T, parent: NodeId, node: NodeId) -> bool {
-        let Some(old) = tree.cache(parent).final_output() else { return false };
-        match crate::compute::reposition::reposition_absolute_child(tree, parent, node, &old) {
-            crate::compute::reposition::Reposition::Done(new) => {
-                if answer_changed(tree, parent, RunMode::PerformLayout, new, old) {
-                    return false;
-                }
-                tree.cache_mut(parent).set_final_output(new);
-                true
-            }
-            crate::compute::reposition::Reposition::NeedsParent => false,
-        }
+    /// Re-runs `node`'s out-of-flow pass from its record; whether its answer changed, or `None`
+    /// when nothing is recorded to run it from.
+    fn oof_pass<T: Incremental + ?Sized>(&mut self, tree: &mut T, node: NodeId) -> Option<bool> {
+        let old = tree.cache(node).final_output()?;
+        let mut context = tree.absolute_context(node)?.clone();
+        let claims = tree.containing_block_claims(node);
+        let (absolute, bits) = crate::compute::oof::run_pass(tree, node, &mut context, claims);
+        tree.set_absolute_context(node, context);
+        let mut new = old.with_overflow(old.inflow_overflow_rect, absolute);
+        new.oof = bits;
+        let changed = answer_changed(tree, node, RunMode::PerformLayout, new, old);
+        tree.cache_mut(node).set_final_output(new);
+        Some(changed)
     }
 
     /// Recomputes `node`'s cached answers in place; true when any may differ from before.

@@ -34,6 +34,8 @@ pub(super) struct BlockItem {
     pub can_be_collapsed_through: bool,
     /// Held back so `align-content` can shift it before commit.
     pub final_layout: Option<Layout>,
+    /// The out-of-flow bits of its final layout.
+    pub oof: u8,
 }
 
 impl BlockItem {
@@ -113,6 +115,7 @@ pub(super) fn generate_item_list<T: LayoutTree + ?Sized>(
             static_position: Point::ZERO,
             can_be_collapsed_through: false,
             final_layout: None,
+            oof: 0,
         });
         order += 1;
     }

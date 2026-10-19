@@ -3,7 +3,7 @@
 use super::cache::NodeCache;
 use super::{DetailedGridInfo, Layout, LayoutInput, LayoutOutput, NodeId};
 use crate::compute::block::BlockContext;
-use crate::compute::reposition::AbsoluteContext;
+use crate::compute::oof::AbsoluteContext;
 use crate::geometry::{AvailableSpace, Size};
 use crate::style::{CalcId, Ident, Style};
 
@@ -211,12 +211,28 @@ pub trait LayoutTree {
         None
     }
 
-    /// Records the geometry a container used to place its absolutely positioned children.
+    /// Records a container's out-of-flow record from its final layout (never while speculating).
+    ///
+    /// Containing blocks find out-of-flow descendants that are not their children through these
+    /// records, and the scheduler re-runs a containing block's out-of-flow pass from them; a tree
+    /// that stores none lays out only out-of-flow boxes whose parent is their containing block.
     fn set_absolute_context(&mut self, _node: NodeId, _context: AbsoluteContext) {}
 
-    /// The context stored by the last `set_absolute_context`; enables fast re-placement.
-    fn absolute_context(&self, _node: NodeId) -> Option<AbsoluteContext> {
+    /// Forgets `node`'s record: its final layout found no out-of-flow boxes, or it is hidden.
+    fn clear_absolute_context(&mut self, _node: NodeId) {}
+
+    /// The record stored by the last `set_absolute_context`, unless cleared since.
+    fn absolute_context(&self, _node: NodeId) -> Option<&AbsoluteContext> {
         None
+    }
+
+    /// Which out-of-flow descendants `node` is the containing block of, as a set of
+    /// [`crate::compute::oof::OOF_ABSOLUTE`] and [`crate::compute::oof::OOF_FIXED`]. The default is
+    /// CSS's: a positioned box contains absolutely positioned boxes, and only the initial
+    /// containing block contains fixed ones. A tree may claim more, as a `transform` would.
+    #[inline]
+    fn containing_block_claims(&self, node: NodeId) -> u8 {
+        crate::compute::oof::default_claims(self.style(node))
     }
 
     /// Lays out one child; implementations normally forward to [`crate::compute::compute_child_layout`].

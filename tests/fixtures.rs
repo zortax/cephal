@@ -270,6 +270,42 @@ fn build(input: Node, expected: Node, tree: &mut Tree<Ahem>) -> (NodeId, Expecte
     (id, exp)
 }
 
+/// Taffy and Chrome place an out-of-flow box relative to its containing block's border box (the
+/// root's for the initial containing block); cephal relative to its parent. With rounded absolute
+/// positions on both sides, the difference is exactly the rounded offsets in between.
+fn to_parent_relative(tree: &Tree<Ahem>, node: NodeId, exp: &mut Expected, ancestors: &mut Vec<(NodeId, Point<f32>)>) {
+    use cephal::style::{Display, Position};
+    let style = tree.style(node);
+    let hidden = style.display == Display::None || ancestors.iter().any(|(a, _)| tree.style(*a).display == Display::None);
+    let abs = match ancestors.last() {
+        None => exp.location,
+        Some(&(_, parent)) => {
+            let containing_block = match style.position {
+                _ if hidden => None,
+                Position::Absolute => Some(
+                    ancestors.iter().rev().find(|(a, _)| tree.style(*a).position != Position::Static).unwrap_or(&ancestors[0]).1,
+                ),
+                Position::Fixed => Some(ancestors[0].1),
+                _ => None,
+            };
+            match containing_block {
+                Some(cb) => {
+                    let abs = Point { x: cb.x + exp.location.x, y: cb.y + exp.location.y };
+                    exp.location = Point { x: abs.x - parent.x, y: abs.y - parent.y };
+                    abs
+                }
+                None => Point { x: parent.x + exp.location.x, y: parent.y + exp.location.y },
+            }
+        }
+    };
+    ancestors.push((node, abs));
+    let children: Vec<NodeId> = tree.children(node).collect();
+    for (child, cexp) in children.into_iter().zip(exp.children.iter_mut()) {
+        to_parent_relative(tree, child, cexp, ancestors);
+    }
+    ancestors.pop();
+}
+
 fn check(tree: &Tree<Ahem>, id: NodeId, exp: &Expected, path: &str, errors: &mut String) {
     let l = tree.layout(id);
     let near = |a: f32, b: f32| (a - b).abs() < 0.1;
@@ -340,7 +376,8 @@ fn run_group(group: &str) {
         } else {
             tree.disable_rounding();
         }
-        let (root, expected) = build(input.first_element_child().unwrap(), expectations.first_element_child().unwrap(), &mut tree);
+        let (root, mut expected) = build(input.first_element_child().unwrap(), expectations.first_element_child().unwrap(), &mut tree);
+        to_parent_relative(&tree, root, &mut expected, &mut Vec::new());
         tree.compute_layout_with_measure(root, available_space, measure_ahem);
         let mut errors = String::new();
         check(&tree, root, &expected, "root", &mut errors);

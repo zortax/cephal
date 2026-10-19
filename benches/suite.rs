@@ -29,7 +29,7 @@ mod common;
 mod workloads;
 
 use cephal::geometry::{AvailableSpace, Size};
-use cephal::style::{AlignItems, Display, LengthPercentageAuto, Position, Style};
+use cephal::style::{AlignItems, Display, LengthPercentageAuto, Style};
 use cephal::tree::{MeasureInput, MeasureOutput, NodeId};
 use cephal::{Parallel, Tree};
 use common::{Text, all_nodes, measure, mirror_in_taffy, taffy_measure, to_taffy_space};
@@ -704,7 +704,7 @@ fn style_fields(s: &Style) -> String {
     let align_content = |a: Option<cephal::style::AlignContent>| a.map_or("normal".to_owned(), |a| format!("{:?}", a.keyword).to_lowercase());
     let mut f = vec![
         format!("display={}", format!("{:?}", s.display).to_lowercase()),
-        format!("position={}", if s.position == Position::Relative { "relative" } else { "absolute" }),
+        format!("position={}", if s.position.is_out_of_flow() { "absolute" } else { "relative" }),
         format!("box-sizing={}", format!("{:?}", s.box_sizing).to_lowercase()),
         format!("direction={}", format!("{:?}", s.direction).to_lowercase()),
         format!("overflow={}", format!("{:?}", s.overflow.x).to_lowercase()),

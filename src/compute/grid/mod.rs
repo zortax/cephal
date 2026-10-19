@@ -11,7 +11,7 @@ mod placement;
 mod track;
 mod track_sizing;
 
-use alignment::{ContainerAlignment, ItemPrep, align_and_position_item, align_tracks, place_item, prepare_item};
+use alignment::{ContainerAlignment, ItemPrep, align_tracks, place_item, prepare_item};
 use coordinates::{MAX_GRID_TRACKS, NonNamedPlacement, PlacementLine};
 use explicit::{AutoRepeatStrategy, compute_explicit_grid_size_in_axis, initialize_grid_tracks};
 use implicit::compute_grid_size_estimate;
@@ -25,9 +25,10 @@ use track_sizing::{
 
 use crate::compute::LayoutTreeExt;
 use crate::compute::scratch::Scratch;
-use crate::compute::common::overflow::{out_of_flow_contribution, union};
+use crate::compute::common::overflow::union;
+use crate::compute::oof::{AxisStaticPosition, OofEntry, position_bit};
 use crate::geometry::{AbsoluteAxis, AbstractAxis, AvailableSpace, Line, MaybeMath, Rect, Size};
-use crate::style::{AlignContent, AlignItems, BoxSizing, Direction, JustifyContent, Overflow};
+use crate::style::{AlignContent, BoxSizing, Direction, JustifyContent, Overflow};
 use crate::tree::{
     Baselines, CacheAccess, DetailedGridInfo, DetailedGridItem, DetailedGridTracks, Layout, LayoutInput, LayoutOutput,
     LayoutTree, NodeId, RequestedAxis, RunMode, SizingMode,
@@ -362,7 +363,7 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
 
     // 9. Items.
     let mut item_overflow_rect = Rect::ZERO;
-    let mut absolute_overflow_rect = Rect::ZERO;
+    let mut through: Vec<OofEntry> = Vec::new();
     sort_order_by_key(&mut item_order, &items, |i| i.source_order as u64);
     let container_alignment = ContainerAlignment { horizontal: justify_items, vertical: align_items };
     let mut preps: Scratch<ItemPrep> = Scratch::with_capacity(items.len());
@@ -383,8 +384,13 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
     for ((index, &i), (prep, out)) in item_order.iter().enumerate().zip(preps.iter().zip(outputs.drain(..))) {
         let item = &mut items[i as usize];
         let last_baseline = out.baselines.last;
-        let (contribution, y, height) =
+        let oof = out.oof;
+        let (contribution, location, height) =
             place_item(tree, prep, out, index as u32, direction, container_border_box.width, border, is_scroll_container);
+        if oof != 0 {
+            through.push(OofEntry::Through { node: item.node, order: item.source_order as u32, bits: oof, location });
+        }
+        let y = location.y;
         item.y_position = y;
         item.height = height;
         // Scroll containers clamp their baseline to the border box, synthesising one from the bottom edge.
@@ -393,57 +399,96 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
         item_overflow_rect = union(item_overflow_rect, contribution);
     }
 
-    // Hidden and absolutely positioned children.
-    let mut absolute_ctx: Option<AbsoluteGridContext> = None;
-    let mut contributions: Vec<(NodeId, Rect<f32>)> = Vec::new();
+    // Hidden children, and the out-of-flow record: the out-of-flow children and the items passing
+    // candidates through, in document order (see `crate::compute::oof`).
+    let speculating = tree.speculation() > 0;
+    let mut entries: Vec<OofEntry> = Vec::new();
     let mut order = items.len() as u32;
     // Every child not placed as an item is hidden or out of flow; usually there is none.
-    let others: Vec<NodeId> = if items.len() < tree.child_count(node) {
-        tree.children(node)
-            .filter(|c| {
-                let s = tree.style(*c);
-                s.generates_no_box() || s.position.is_out_of_flow()
-            })
-            .collect()
-    } else {
-        Vec::new()
-    };
-    for child in others {
-        let child_style = tree.style(child);
-        if child_style.generates_no_box() {
-            tree.set_unrounded_layout(child, &Layout::with_order(order));
-            tree.perform_child_layout(child, Size::NONE, Size::NONE, Size::MAX_CONTENT, SizingMode::InherentSize, Line::FALSE);
+    if items.len() < tree.child_count(node) || !through.is_empty() {
+        let claims = tree.containing_block_claims(node);
+        let mut through = through.iter().peekable();
+        let children: Scratch<NodeId> = Scratch::collect(tree.children(node));
+        for (index, &child) in children.iter().enumerate() {
+            if let Some(entry) = through.next_if(|e| e.order() == index as u32) {
+                entries.push(*entry);
+                continue;
+            }
+            let child_style = tree.style(child);
+            if child_style.generates_no_box() {
+                tree.set_unrounded_layout(child, &Layout::with_order(order));
+                tree.perform_child_layout(child, Size::NONE, Size::NONE, Size::MAX_CONTENT, SizingMode::InherentSize, Line::FALSE);
+                order += 1;
+                continue;
+            }
+            if !child_style.position.is_out_of_flow() {
+                continue;
+            }
+            if !speculating {
+                let position = child_style.position;
+                let item_direction = child_style.direction;
+                let justify_self = child_style.justify_self.or(justify_items).map(|a| a.resolve_self_relative(item_direction, direction, true));
+                let align_self = child_style.align_self.or(align_items).map(|a| a.resolve_self_relative(item_direction, direction, false));
+                // The grid area its placement names when this grid is its containing block, else
+                // the content box, as for a sole item spanning the grid (css-grid-1 §9.3).
+                let area = if claims & position_bit(position) != 0 {
+                    let (grid_row, grid_column) = (child_style.grid_row, child_style.grid_column);
+                    static_position_grid_area(
+                        tree,
+                        &name_resolver,
+                        grid_row,
+                        grid_column,
+                        (final_col_counts, final_row_counts),
+                        (&columns, &rows),
+                        direction,
+                        border,
+                        scrollbar_gutter,
+                        container_border_box,
+                    )
+                } else {
+                    Rect {
+                        left: border.left + padding.left + if rtl { scrollbar_gutter.x } else { 0.0 },
+                        right: container_border_box.width - border.right - padding.right - if rtl { 0.0 } else { scrollbar_gutter.x },
+                        top: border.top + padding.top,
+                        bottom: container_border_box.height - border.bottom - padding.bottom - scrollbar_gutter.y,
+                    }
+                };
+                entries.push(OofEntry::Seed {
+                    node: child,
+                    order,
+                    bit: position_bit(position),
+                    static_position: crate::geometry::Point {
+                        x: AxisStaticPosition::from_alignment(justify_self, Line { start: area.left, end: area.right }, rtl),
+                        y: AxisStaticPosition::from_alignment(align_self, Line { start: area.top, end: area.bottom }, false),
+                    },
+                });
+            }
             order += 1;
-            continue;
         }
-        if !child_style.position.is_out_of_flow() {
-            continue;
-        }
-        let ctx = absolute_ctx.get_or_insert_with(|| AbsoluteGridContext {
-            col_offsets: columns.iter().map(|t| t.offset).collect(),
-            row_offsets: rows.iter().map(|t| t.offset).collect(),
-            col_counts: (final_col_counts.negative_implicit, final_col_counts.explicit, final_col_counts.positive_implicit),
-            row_counts: (final_row_counts.negative_implicit, final_row_counts.explicit, final_row_counts.positive_implicit),
-            col_auto_repetitions: col_auto_repetition_count,
-            row_auto_repetitions: row_auto_repetition_count,
-            container_border_box,
-            border,
-            scrollbar_gutter,
-            direction,
-            justify_items,
-            align_items,
-            is_scroll_container,
-        });
-        let ctx = ctx.clone();
-        let contribution = layout_absolute_grid_child(tree, child, order, &name_resolver, &ctx);
-        contributions.push((child, contribution));
-        absolute_overflow_rect = union(absolute_overflow_rect, contribution);
-        order += 1;
     }
-    if let Some(ctx) = absolute_ctx {
-        let geometry = crate::compute::reposition::AbsoluteGeometry::Grid(ctx);
-        tree.set_absolute_context(node, crate::compute::reposition::AbsoluteContext { geometry, contributions });
-    }
+    let (absolute_overflow_rect, oof) = if speculating || entries.is_empty() {
+        crate::compute::oof::finish_none(tree, node);
+        (Rect::ZERO, 0)
+    } else {
+        let overflow = tree.style(node).overflow;
+        let (columns, rows) = (&columns, &rows);
+        crate::compute::oof::finish(tree, node, entries, || {
+            let inset = border
+                + Rect { left: if rtl { scrollbar_gutter.x } else { 0.0 }, right: if rtl { 0.0 } else { scrollbar_gutter.x }, top: 0.0, bottom: scrollbar_gutter.y };
+            crate::compute::oof::OofGeometry {
+                area_size: container_border_box - inset.sum_axes(),
+                area_offset: crate::geometry::Point { x: inset.left, y: inset.top },
+                direction,
+                overflow,
+                grid: Some(std::sync::Arc::new(GridGeometry {
+                    columns: GridAxisGeometry::new(final_col_counts, columns),
+                    rows: GridAxisGeometry::new(final_row_counts, rows),
+                    column_auto_repetitions: col_auto_repetition_count,
+                    row_auto_repetitions: row_auto_repetition_count,
+                })),
+            }
+        })
+    };
 
     let positions = |tracks: &[GridTrack]| -> Vec<Line<f32>> {
         tracks
@@ -494,7 +539,9 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
         inflow_overflow_rect.bottom += padding.bottom;
     }
     if items.is_empty() {
-        return LayoutOutput::from_outer_size(container_border_box).with_overflow(inflow_overflow_rect, absolute_overflow_rect);
+        let mut output = LayoutOutput::from_outer_size(container_border_box).with_overflow(inflow_overflow_rect, absolute_overflow_rect);
+        output.oof = oof;
+        return output;
     }
 
     // The container's baseline is its first row's first baseline-aligned item's, else the first item's.
@@ -520,45 +567,140 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
             .map(|i| i.y_position + i.last_baseline);
         Baselines { first: Some(first), last }
     };
-    LayoutOutput::from_sizes_and_baselines(container_border_box, Rect::ZERO, baselines)
-        .with_overflow(inflow_overflow_rect, absolute_overflow_rect)
+    let mut output =
+        LayoutOutput::from_sizes_and_baselines(container_border_box, Rect::ZERO, baselines).with_overflow(inflow_overflow_rect, absolute_overflow_rect);
+    output.oof = oof;
+    output
 }
 
-/// Container state needed to place absolutely positioned grid children.
+/// A grid containing block's tracks, against which its out-of-flow boxes resolve their grid areas.
 #[derive(Clone, Debug, PartialEq)]
-pub struct AbsoluteGridContext {
-    /// Offsets of the interleaved gutter/track lists.
-    pub col_offsets: Vec<f32>,
-    pub row_offsets: Vec<f32>,
-    pub col_counts: (u16, u16, u16),
-    pub row_counts: (u16, u16, u16),
-    pub col_auto_repetitions: u16,
-    pub row_auto_repetitions: u16,
-    pub container_border_box: Size<f32>,
-    pub border: Rect<f32>,
-    pub scrollbar_gutter: crate::geometry::Point<f32>,
-    pub direction: Direction,
-    pub justify_items: Option<AlignItems>,
-    pub align_items: Option<AlignItems>,
-    pub is_scroll_container: bool,
+pub struct GridGeometry {
+    columns: GridAxisGeometry,
+    rows: GridAxisGeometry,
+    column_auto_repetitions: u16,
+    row_auto_repetitions: u16,
 }
 
-fn counts_of(c: (u16, u16, u16)) -> coordinates::TrackCounts {
-    coordinates::TrackCounts { negative_implicit: c.0, explicit: c.1, positive_implicit: c.2 }
+/// One axis of a [`GridGeometry`].
+#[derive(Clone, Debug, PartialEq)]
+struct GridAxisGeometry {
+    counts: coordinates::TrackCounts,
+    /// Start and end of every track (gutters excluded), from the container's border box.
+    positions: Vec<Line<f32>>,
+    /// Sorted runs of collapsed `auto-fit` tracks, as indices into `positions`.
+    collapsed: Vec<core::ops::Range<usize>>,
+    /// Where an axis without tracks has its one line.
+    empty_axis_line: Option<f32>,
 }
 
-/// Places one absolutely positioned child of a grid; returns its overflow contribution.
-fn layout_absolute_grid_child<T: LayoutTree + CacheAccess + ?Sized>(
-    tree: &mut T,
-    child: NodeId,
-    order: u32,
+impl GridAxisGeometry {
+    fn new(counts: coordinates::TrackCounts, tracks: &[GridTrack]) -> Self {
+        let mut positions = Vec::with_capacity(tracks.len() / 2);
+        let mut collapsed: Vec<core::ops::Range<usize>> = Vec::new();
+        for track in tracks.iter().filter(|t| t.kind == GridTrackKind::Track) {
+            if track.is_collapsed {
+                let index = positions.len();
+                match collapsed.last_mut() {
+                    Some(range) if range.end == index => range.end += 1,
+                    _ => collapsed.push(index..index + 1),
+                }
+            }
+            positions.push(Line { start: track.offset, end: track.offset + track.base_size });
+        }
+        let empty_axis_line = if positions.is_empty() { tracks.first().map(|t| t.offset) } else { None };
+        Self { counts, positions, collapsed, empty_axis_line }
+    }
+
+    /// The physical start and end of the area `placement` names, between the padding edges where
+    /// a line is `auto` or outside the grid.
+    fn resolve(&self, placement: Line<NonNamedPlacement>, padding_start: f32, padding_end: f32, is_reversed: bool) -> Line<f32> {
+        let counts = self.counts;
+        let min_line = -(counts.negative_implicit as i16);
+        let max_line = (counts.explicit + counts.positive_implicit) as i16;
+        // Sorted into a pair of lines first; only then does a line outside the grid become `auto`.
+        let placement = placement
+            .map(|p| p.into_origin_zero(counts.explicit))
+            .resolve_absolutely_positioned_grid_tracks()
+            .map(|line| line.filter(|l| l.0 >= min_line && l.0 <= max_line))
+            .map(|line| line.and_then(|l| counts.try_into_track_vec_index(l).map(|index| index / 2)));
+        let start = placement
+            .start
+            .and_then(|line| {
+                (line < self.positions.len())
+                    .then(|| self.track_edge(line, true, is_reversed))
+                    .or_else(|| self.positions.last().map(|t| if is_reversed { t.start } else { t.end }))
+                    .or(self.empty_axis_line)
+            })
+            .unwrap_or(if is_reversed { padding_end } else { padding_start });
+        let end = placement
+            .end
+            .and_then(|line| {
+                line.checked_sub(1)
+                    .filter(|&l| l < self.positions.len())
+                    .map(|l| self.track_edge(l, false, is_reversed))
+                    .or_else(|| self.positions.first().map(|t| if is_reversed { t.end } else { t.start }))
+                    .or(self.empty_axis_line)
+            })
+            .unwrap_or(if is_reversed { padding_start } else { padding_end });
+        // Lines all within a collapsed run name a zero-size area at its start, as in Chrome.
+        if is_reversed { Line { start: start.min(end), end: start } } else { Line { start, end: start.max(end) } }
+    }
+
+    /// A track's edge, skipping gutters that overlap across a run of collapsed tracks.
+    fn track_edge(&self, index: usize, is_start: bool, is_reversed: bool) -> f32 {
+        let run = self.collapsed.partition_point(|r| r.end <= index);
+        let track = self
+            .collapsed
+            .get(run)
+            .filter(|r| r.contains(&index))
+            .and_then(|r| {
+                let adjacent = if is_start { Some(r.end) } else { r.start.checked_sub(1) };
+                adjacent.and_then(|i| self.positions.get(i))
+            })
+            .unwrap_or(&self.positions[index]);
+        if is_start != is_reversed { track.start } else { track.end }
+    }
+}
+
+impl GridGeometry {
+    /// The grid area an out-of-flow box with these placements is placed against, from the grid
+    /// `cb`'s border box; `padding_box` stands in for `auto` lines.
+    pub(crate) fn resolve_absolute_grid_area<T: LayoutTree + ?Sized>(
+        &self,
+        tree: &T,
+        cb: NodeId,
+        grid_row: Line<crate::style::GridPlacement>,
+        grid_column: Line<crate::style::GridPlacement>,
+        direction: Direction,
+        padding_box: Rect<f32>,
+    ) -> Rect<f32> {
+        let grid_style = tree.style(cb).grid_shared();
+        let mut resolver = NamedLineResolver::new(tree, &grid_style, self.column_auto_repetitions, self.row_auto_repetitions);
+        resolver.set_explicit_column_count(self.columns.counts.explicit);
+        resolver.set_explicit_row_count(self.rows.counts.explicit);
+        let columns =
+            self.columns.resolve(resolver.resolve_column_names(tree, grid_column), padding_box.left, padding_box.right, direction == Direction::Rtl);
+        let rows = self.rows.resolve(resolver.resolve_row_names(tree, grid_row), padding_box.top, padding_box.bottom, false);
+        Rect { left: columns.start, right: columns.end, top: rows.start, bottom: rows.end }
+    }
+}
+
+/// The static-position area of an out-of-flow child whose containing block is this grid: the grid
+/// area its placement names, gutters excluded, or the padding edges where `auto`.
+#[allow(clippy::too_many_arguments)]
+fn static_position_grid_area<T: LayoutTree + ?Sized>(
+    tree: &T,
     name_resolver: &NamedLineResolver,
-    c: &AbsoluteGridContext,
+    grid_row: Line<crate::style::GridPlacement>,
+    grid_column: Line<crate::style::GridPlacement>,
+    (col_counts, row_counts): (coordinates::TrackCounts, coordinates::TrackCounts),
+    (columns, rows): (&[GridTrack], &[GridTrack]),
+    direction: Direction,
+    border: Rect<f32>,
+    scrollbar_gutter: crate::geometry::Point<f32>,
+    container_border_box: Size<f32>,
 ) -> Rect<f32> {
-    let child_style = tree.style(child);
-    let (grid_column, grid_row) = (child_style.grid_column, child_style.grid_row);
-    let rtl = c.direction == Direction::Rtl;
-    let (col_counts, row_counts) = (counts_of(c.col_counts), counts_of(c.row_counts));
     let col_indexes = name_resolver
         .resolve_column_names(tree, grid_column)
         .map(|p| p.into_origin_zero(col_counts.explicit))
@@ -569,78 +711,43 @@ fn layout_absolute_grid_child<T: LayoutTree + CacheAccess + ?Sized>(
         .map(|p| p.into_origin_zero(row_counts.explicit))
         .resolve_absolutely_positioned_grid_tracks()
         .map(|l| l.and_then(|l| row_counts.try_into_track_vec_index(l)));
-    let _ = NonNamedPlacement::Auto;
-    fn line_as_start_edge(offsets: &[f32], i: usize) -> f32 {
-        *offsets.get(i + 1).unwrap_or(&offsets[i])
+    fn line_as_start_edge(tracks: &[GridTrack], i: usize) -> f32 {
+        tracks.get(i + 1).unwrap_or(&tracks[i]).offset
     }
-    fn line_as_end_edge(offsets: &[f32], i: usize) -> f32 {
-        if i == 0 { *offsets.get(1).unwrap_or(&offsets[0]) } else { offsets[i] }
+    fn line_as_end_edge(tracks: &[GridTrack], i: usize) -> f32 {
+        if i == 0 { tracks.get(1).unwrap_or(&tracks[0]).offset } else { tracks[i].offset }
     }
-    fn rtl_line_as_start_edge(offsets: &[f32], i: usize) -> f32 {
-        if offsets.len() > i + 1 {
-            offsets[i]
+    // In RTL the tracks keep their logical order with offsets assigned right to left: a start line
+    // is the right edge of the track after it, an end line the left edge of the track before it.
+    fn rtl_line_as_start_edge(tracks: &[GridTrack], i: usize) -> f32 {
+        if tracks.len() > i + 1 {
+            tracks[i].offset
         } else if i == 0 {
-            offsets[0]
+            tracks[0].offset
         } else {
-            offsets[i - 1]
+            tracks[i - 1].offset
         }
     }
-    fn rtl_line_as_end_edge(offsets: &[f32], i: usize) -> f32 {
-        if i == 0 { offsets[0] } else { offsets[i - 1] }
+    fn rtl_line_as_end_edge(tracks: &[GridTrack], i: usize) -> f32 {
+        if i == 0 { tracks[0].offset } else { tracks[i - 1].offset }
     }
-    let (columns, rows) = (c.col_offsets.as_slice(), c.row_offsets.as_slice());
-    let (left, right) = if rtl {
+    let (left, right) = if direction == Direction::Rtl {
         (
-            col_indexes.end.map(|i| rtl_line_as_end_edge(columns, i)).unwrap_or(c.border.left + c.scrollbar_gutter.x),
-            col_indexes.start.map(|i| rtl_line_as_start_edge(columns, i)).unwrap_or(c.container_border_box.width - c.border.right),
+            col_indexes.end.map(|i| rtl_line_as_end_edge(columns, i)).unwrap_or(border.left + scrollbar_gutter.x),
+            col_indexes.start.map(|i| rtl_line_as_start_edge(columns, i)).unwrap_or(container_border_box.width - border.right),
         )
     } else {
         (
-            col_indexes.start.map(|i| line_as_start_edge(columns, i)).unwrap_or(c.border.left),
-            col_indexes
-                .end
-                .map(|i| line_as_end_edge(columns, i))
-                .unwrap_or(c.container_border_box.width - c.border.right - c.scrollbar_gutter.x),
+            col_indexes.start.map(|i| line_as_start_edge(columns, i)).unwrap_or(border.left),
+            col_indexes.end.map(|i| line_as_end_edge(columns, i)).unwrap_or(container_border_box.width - border.right - scrollbar_gutter.x),
         )
     };
-    let grid_area = Rect {
-        top: row_indexes.start.map(|i| line_as_start_edge(rows, i)).unwrap_or(c.border.top),
-        bottom: row_indexes
-            .end
-            .map(|i| line_as_end_edge(rows, i))
-            .unwrap_or(c.container_border_box.height - c.border.bottom - c.scrollbar_gutter.y),
+    Rect {
+        top: row_indexes.start.map(|i| line_as_start_edge(rows, i)).unwrap_or(border.top),
+        bottom: row_indexes.end.map(|i| line_as_end_edge(rows, i)).unwrap_or(container_border_box.height - border.bottom - scrollbar_gutter.y),
         left,
         right,
-    };
-    let container_alignment = ContainerAlignment { horizontal: c.justify_items, vertical: c.align_items };
-    let (contribution, _, _) = align_and_position_item(
-        tree,
-        child,
-        order,
-        grid_area,
-        &container_alignment,
-        0.0,
-        c.direction,
-        c.container_border_box.width,
-        c.border,
-        c.is_scroll_container,
-    );
-    out_of_flow_contribution(tree.style(child).position, contribution)
-}
-
-/// Places one absolutely positioned child of a laid-out grid from its recorded context.
-pub(crate) fn reposition_absolute_grid_child<T: LayoutTree + CacheAccess + ?Sized>(
-    tree: &mut T,
-    parent: NodeId,
-    child: NodeId,
-    order: u32,
-    c: &AbsoluteGridContext,
-) -> Rect<f32> {
-    let grid_style = tree.style(parent).grid_shared();
-    let mut resolver = NamedLineResolver::new(tree, &grid_style, c.col_auto_repetitions, c.row_auto_repetitions);
-    resolver.set_explicit_column_count(c.col_counts.1);
-    resolver.set_explicit_row_count(c.row_counts.1);
-    layout_absolute_grid_child(tree, child, order, &resolver, c)
+    }
 }
 
 /// Re-measures min-content contributions of items crossing intrinsic tracks; true when any changed.

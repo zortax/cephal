@@ -150,12 +150,24 @@ impl<Ctx: Send + Sync + 'static, F: SyncMeasureFn<Ctx>> LayoutTree for Worker<'_
 
     fn set_absolute_context(&mut self, node: NodeId, context: AbsoluteContext) {
         if self.speculation == 0 {
-            self.log.absolute.push((self.index(node) as u32, context));
+            self.log.absolute.push((self.index(node) as u32, Some(context)));
         }
     }
-    fn absolute_context(&self, node: NodeId) -> Option<AbsoluteContext> {
+    #[inline]
+    fn clear_absolute_context(&mut self, node: NodeId) {
+        if self.speculation > 0 || (self.tree.absolute_contexts.is_empty() && self.log.absolute.is_empty()) {
+            return;
+        }
+        if self.absolute_context(node).is_some() {
+            self.log.absolute.push((self.index(node) as u32, None));
+        }
+    }
+    fn absolute_context(&self, node: NodeId) -> Option<&AbsoluteContext> {
         let i = self.index(node) as u32;
-        self.log.absolute(i).or_else(|| self.tree.absolute_contexts.get(&i).cloned())
+        match self.log.absolute(i) {
+            Some(context) => context,
+            None => self.tree.absolute_contexts.get(&i),
+        }
     }
 
     fn compute_child_layout(&mut self, node: NodeId, inputs: LayoutInput, block_ctx: Option<&mut BlockContext<'_>>) -> LayoutOutput {

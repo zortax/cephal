@@ -135,6 +135,11 @@ pub struct LayoutOutput {
     pub top_margin: CollapsibleMarginSet,
     pub bottom_margin: CollapsibleMarginSet,
     pub margins_can_collapse_through: bool,
+    /// Out-of-flow boxes whose containing block is above this node exist in its subtree, as a set
+    /// of [`crate::compute::oof::OOF_ABSOLUTE`] and [`crate::compute::oof::OOF_FIXED`]; set on
+    /// final-layout answers only. The containing block finds them through recorded
+    /// [`crate::tree::AbsoluteContext`]s.
+    pub oof: u8,
 }
 
 impl LayoutOutput {
@@ -148,6 +153,7 @@ impl LayoutOutput {
             || self.top_margin != old.top_margin
             || self.bottom_margin != old.bottom_margin
             || self.margins_can_collapse_through != old.margins_can_collapse_through
+            || self.oof != old.oof
         {
             return false;
         }
@@ -174,6 +180,7 @@ impl LayoutOutput {
             top_margin: CollapsibleMarginSet::ZERO,
             bottom_margin: CollapsibleMarginSet::ZERO,
             margins_can_collapse_through: false,
+            oof: 0,
         }
     }
     #[inline]
