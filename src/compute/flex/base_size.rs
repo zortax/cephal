@@ -51,7 +51,7 @@ pub(super) fn determine_flex_base_size<D: FlexDir, T: LayoutTree + CacheAccess +
         .maybe_add(Some(box_sizing_adjustment));
 
         // A definite flex basis, or the main space a keyword measures the basis in.
-        let basis: Result<f32, Option<AvailableSpace>> = 'basis: {
+        let basis: Result<f32, Option<AvailableSpace>> = {
             let main_size = child.size.main(dir);
             let main_stretch_size = percent_resolution_main_size.maybe_sub(child.margin.main_axis_sum(dir)).maybe_max(0.0);
             if flex_basis_style.is_content() {
@@ -62,10 +62,14 @@ pub(super) fn determine_flex_base_size<D: FlexDir, T: LayoutTree + CacheAccess +
                     Some(SizingKeywordResolution::Measure(a)) => Err(Some(a)),
                     None => Err(None),
                 }
+            } else if let Some(basis) = flex_basis {
+                Ok(basis)
+            } else if flex_basis_style.uses_percentage() {
+                // A percentage basis against an indefinite main size is `content` (§7.2.3).
+                Err(None)
+            } else if let Some(size) = main_size {
+                Ok(size)
             } else {
-                if let Some(basis) = flex_basis.or(main_size) {
-                    break 'basis Ok(basis);
-                }
                 match resolve_sizing_keyword(child.size_style.main(dir).raw(), main_stretch_size, percent_resolution_main_size) {
                     Some(SizingKeywordResolution::Exact(size)) => Ok(size),
                     Some(SizingKeywordResolution::Measure(a)) => Err(Some(a)),
