@@ -419,14 +419,14 @@ impl GridItem {
         grid_area_size: Size<Option<f32>>,
         calc: &impl Fn(crate::style::CalcId, f32) -> f32,
     ) -> bool {
-        if self.explicit_minimum(axis, grid_area_size, calc).is_some() {
-            return false;
-        }
-        let item_axis_tracks = &axis_tracks[self.track_range_excluding_lines(axis)];
-        let spans_auto_min_track = axis_tracks.iter().any(|t| t.min.is_auto());
-        let only_span_one_track = item_axis_tracks.len() == 1;
-        let spans_a_flexible_track = axis_tracks.iter().any(|t| t.max.is_fr());
-        spans_auto_min_track && (only_span_one_track || !spans_a_flexible_track)
+        self.explicit_minimum(axis, grid_area_size, calc).is_none() && self.uses_content_based_minimum(axis, axis_tracks)
+    }
+
+    /// css-grid-1 §6.6: the automatic minimum is content-based when the item spans an `auto`-min
+    /// track and either spans one track or crosses no flexible one.
+    #[inline]
+    fn uses_content_based_minimum(&self, axis: AbstractAxis, axis_tracks: &[GridTrack]) -> bool {
+        (self.span(axis) == 1 || !self.crosses_flexible_track(axis)) && self.spans_track_matching(axis, axis_tracks, |t| t.min.is_auto())
     }
 
     /// Drops the "requested" markers a collect pass left in the contribution caches.
@@ -531,12 +531,7 @@ impl GridItem {
         if let Some(v) = self.explicit_minimum(axis, grid_area_size, &calc) {
             return v;
         }
-        let item_axis_tracks = &axis_tracks[self.track_range_excluding_lines(axis)];
-        let spans_auto_min_track = axis_tracks.iter().any(|t| t.min.is_auto());
-        let only_span_one_track = item_axis_tracks.len() == 1;
-        let spans_a_flexible_track = axis_tracks.iter().any(|t| t.max.is_fr());
-        let use_content_based_minimum = spans_auto_min_track && (only_span_one_track || !spans_a_flexible_track);
-        if !use_content_based_minimum {
+        if !self.uses_content_based_minimum(axis, axis_tracks) {
             return 0.0;
         }
         let mut minimum = self.min_content_contribution_cached(axis, tree, grid_area_size, grid_area_size);
