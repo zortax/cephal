@@ -297,15 +297,16 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
         let top_margin_set = item_layout.top_margin.collapse_with_margin(item_margin.top.unwrap_or(0.0));
         let bottom_margin_set = item_layout.bottom_margin.collapse_with_margin(item_margin.bottom.unwrap_or(0.0));
 
-        // Auto margins share the free inline space; vertical auto margins are zero.
+        // Auto margins share the free inline space; vertical auto margins are zero. Collapsing
+        // moves the box but leaves its own used margins alone.
         let free_x_space = (stretch_width - final_size.width).max(0.0);
         let auto_margin_count = item_margin.left.is_none() as u8 + item_margin.right.is_none() as u8;
         let x_auto_margin = if auto_margin_count > 0 { free_x_space / auto_margin_count as f32 } else { 0.0 };
         let resolved_margin = Rect {
             left: item_margin.left.unwrap_or(x_auto_margin),
             right: item_margin.right.unwrap_or(x_auto_margin),
-            top: top_margin_set.resolve(),
-            bottom: bottom_margin_set.resolve(),
+            top: item_non_auto_margin.top,
+            bottom: item_non_auto_margin.bottom,
         };
 
         let calc = |id, basis| tree.resolve_calc(id, basis);
@@ -420,6 +421,19 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
             last_baseline = Some(location.y + b);
         }
 
+        // Used auto margins reach the containing block's content edges past any floats
+        // (csswg-drafts#9174); the alignment above used the float-relative ones.
+        let mut used_margin = resolved_margin;
+        if item_avoids_floats {
+            if item_margin.left.is_none() {
+                used_margin.left += float_avoiding_position.x - p.resolved_content_box_inset.left;
+            }
+            if item_margin.right.is_none() {
+                used_margin.right +=
+                    p.container_outer_width - p.resolved_content_box_inset.right - float_avoiding_position.x - float_avoiding_width;
+            }
+        }
+
         item.final_layout = Some(Layout {
             order: item.order,
             size: final_size,
@@ -428,7 +442,7 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
             location,
             padding: item.padding,
             border: item.border,
-            margin: resolved_margin,
+            margin: used_margin,
         });
         inflow_overflow_rect = union(
             inflow_overflow_rect,
