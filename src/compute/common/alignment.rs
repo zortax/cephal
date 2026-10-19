@@ -16,10 +16,8 @@ pub fn apply_alignment_fallback(free_space: f32, num_items: usize, alignment: Al
     let mut safe = alignment.is_safe();
     if free_space <= 0.0 || num_items <= 1 {
         keyword = match keyword {
-            AlignContentKeyword::SpaceBetween => {
-                safe = true;
-                AlignContentKeyword::FlexStart
-            }
+            // `flex-start`, which overflows at the end in a reversed container (as Chrome).
+            AlignContentKeyword::SpaceBetween => AlignContentKeyword::FlexStart,
             AlignContentKeyword::SpaceAround | AlignContentKeyword::SpaceEvenly => {
                 safe = true;
                 AlignContentKeyword::Center

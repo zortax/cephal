@@ -52,6 +52,9 @@ enum Strip {
     MinContentTracks,
     /// `align-content` of block containers: taffy aligns content that overflows unsafely.
     BlockAlignContent,
+    /// `space-between`: taffy falls back to `start` instead of `flex-start` when the items
+    /// overflow a reversed flex container.
+    SpaceBetween,
     /// Multi-line flex containers: taffy puts the items of one whose main size is not definite on
     /// a single line, whatever size it is laid out at.
     FlexWrap,
@@ -78,6 +81,7 @@ const STRIPS: &[Strip] = &[
     Strip::GridItemMargins,
     Strip::GridItemPaddingBorder,
     Strip::MinContentTracks,
+    Strip::SpaceBetween,
     Strip::BlockAlignContent,
     Strip::FlexWrap,
     Strip::FlexCrossAlignment,
@@ -158,6 +162,13 @@ fn strip(tree: &mut Tree<Text>, root: cephal::tree::NodeId, what: Strip) {
                 g.auto_rows.iter_mut().for_each(fix);
             }
             Strip::GridItemMargins if parent_is_grid => s.margin = cephal::geometry::Rect::splat(LengthPercentageAuto::ZERO),
+            Strip::SpaceBetween => {
+                for a in [&mut s.justify_content, &mut s.align_content] {
+                    if a.is_some_and(|a| a.keyword == cephal::style::AlignContentKeyword::SpaceBetween) {
+                        *a = None;
+                    }
+                }
+            }
             Strip::BlockAlignContent if s.display == Display::Block => s.align_content = None,
             Strip::FlexWrap => s.flex_wrap = cephal::style::FlexWrap::NoWrap,
             Strip::FlexCrossAlignment => {
@@ -441,7 +452,7 @@ fn chrome_seeds() -> Vec<u64> {
 }
 
 /// Unrounded layouts of every node in `all_nodes` order, parent-relative: cephal's and taffy's.
-/// `chrome_text` gives text the baselines Chrome gives Ahem text.
+/// `chrome_text` measures text as Chrome sets Ahem text (see `chrome_text`).
 fn both_layouts(
     tree: &Tree<Text>,
     root: cephal::tree::NodeId,
@@ -471,36 +482,53 @@ fn both_layouts(
     (a.collect(), b.collect())
 }
 
-/// Ahem text as Chrome sets it: the first baseline 8px below the content box's top (the font's
-/// ascent), the last one a line further down per wrapped line.
-fn text_baselines(n: u32, content_width: f32) -> (f32, f32) {
-    let per_line = (content_width / 10.0).floor().max(1.0);
+/// Ahem text as Chrome sets it: `common::measure`'s glyphs, of which a line holds one more when
+/// it falls short of them by less than two layout units (Chrome lays out in 1/64px); the first
+/// baseline 8px below the content box's top (the font's ascent), the last one a line further down
+/// per wrapped line. Returns the content size and the baselines.
+fn chrome_text(n: u32, known: Size<Option<f32>>, available_width: AvailableSpace) -> (Size<f32>, f32, f32) {
+    let glyph = 10.0;
+    let total = n as f32 * glyph;
+    let width = known.width.unwrap_or(match available_width {
+        AvailableSpace::MinContent => glyph,
+        AvailableSpace::MaxContent => total,
+        AvailableSpace::Definite(w) => w.min(total).max(glyph),
+    });
+    let per_line = ((width + 2.0 / 64.0) / glyph).floor().max(1.0);
     let lines = (n as f32 / per_line).ceil().max(1.0);
-    (8.0, (lines - 1.0) * 10.0 + 8.0)
+    let height = known.height.unwrap_or(lines * glyph);
+    (Size { width, height }, 8.0, (lines - 1.0) * glyph + 8.0)
 }
 
-fn measure_chrome(ctx: &mut Text, input: cephal::tree::MeasureInput, style: &cephal::style::Style) -> cephal::tree::MeasureOutput {
-    let mut out = measure(ctx, input, style);
-    let (first, last) = text_baselines(ctx.0, out.size.width);
-    out.baselines = cephal::tree::Baselines { first: Some(first), last: Some(last) };
-    out
+fn measure_chrome(ctx: &mut Text, input: cephal::tree::MeasureInput, _: &cephal::style::Style) -> cephal::tree::MeasureOutput {
+    let (size, first, last) = chrome_text(ctx.0, input.known_dimensions, input.available_space.width);
+    cephal::tree::MeasureOutput { size, baselines: cephal::tree::Baselines { first: Some(first), last: Some(last) } }
 }
 
 fn taffy_measure_chrome(
     inputs: taffy::LayoutInput,
-    node: taffy::NodeId,
+    _node: taffy::NodeId,
     context: Option<&mut Text>,
     style: &taffy::Style,
 ) -> taffy::LayoutOutput {
     use taffy::util::ResolveOrZero;
-    let text = context.as_ref().map(|t| t.0);
-    let mut out = taffy_measure(inputs, node, context, style);
-    if let Some(n) = text {
+    let text = context.map(|t| t.0);
+    let mut baselines = None;
+    let mut out = taffy::compute_leaf_layout(inputs, style, |_, _| 0.0, |known, available| {
+        let Some(n) = text else { return known.map(|d| d.unwrap_or(0.0)) };
+        let available_width = match available.width {
+            taffy::AvailableSpace::Definite(v) => AvailableSpace::Definite(v),
+            taffy::AvailableSpace::MinContent => AvailableSpace::MinContent,
+            taffy::AvailableSpace::MaxContent => AvailableSpace::MaxContent,
+        };
+        let (size, first, last) = chrome_text(n, Size { width: known.width, height: known.height }, available_width);
+        baselines = Some((first, last));
+        taffy::Size { width: size.width, height: size.height }
+    });
+    if let Some((first, last)) = baselines {
         let basis = inputs.parent_size.width;
         let padding: taffy::Rect<f32> = style.padding.resolve_or_zero(basis, |_, _| 0.0);
         let border: taffy::Rect<f32> = style.border.resolve_or_zero(basis, |_, _| 0.0);
-        let content_width = out.size.width - padding.left - padding.right - border.left - border.right;
-        let (first, last) = text_baselines(n, content_width);
         let top = padding.top + border.top;
         out.baselines = taffy::Baselines { first: Some(top + first), last: Some(top + last) };
     }
@@ -674,7 +702,7 @@ fn adjudicate() {
                 "{name}: cephal {cephal_wrong} wrong (from {}), taffy {taffy_wrong} wrong; where they differ, Chrome agrees with: {}{}",
                 if first_wrong.is_empty() { "-".to_string() } else { first_wrong.join(" ") },
                 if verdicts.is_empty() { "-".to_string() } else { verdicts.join(", ") },
-                if baselines_matter { " (text baselines matter)" } else { "" }
+                if baselines_matter { " (Chrome's text model matters)" } else { "" }
             );
             for l in lines {
                 println!("{l}");

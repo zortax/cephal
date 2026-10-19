@@ -115,6 +115,14 @@ A block container's `align-content` (css-align-3 §5.4) without an overflow keyw
 that overflows the container at its start in Chrome, as `safe` would; `unsafe center` centers it.
 Taffy centers (or end-aligns) it, moving it above the container.
 
+## `space-between` of overflowing items in a reversed flex container
+
+Census category `SpaceBetween`. Fixture `flex_space_between_overflow_reversed`.
+
+`space-between` falls back to `flex-start` when there is no free space (css-align-3 §4.3); in a
+`row-reverse` or `column-reverse` container that is the end edge, so overflowing items stick out
+past the start edge (Chrome). Taffy falls back to `start` and lets them overflow at the end.
+
 ## The root (both engines, by design)
 
 Not a divergence between the engines, but where both differ from a browser's root element,
