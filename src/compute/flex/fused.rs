@@ -526,7 +526,8 @@ fn determine_container_main_size<D: FlexDir, T: LayoutTree + CacheAccess + ?Size
                     let style_min = item.min_size.main(dir);
                     let style_preferred = item.size.main(dir);
                     let style_max = item.max_size.main(dir);
-                    let clamping_basis = Some(item.flex_basis).maybe_max(style_preferred);
+                    let clamping_basis =
+                        if c.is_row { Some(item.flex_basis).maybe_max(style_preferred) } else { Some(item.flex_basis) };
                     let flex_basis_min = clamping_basis.filter(|_| item.flex_shrink == 0.0);
                     let flex_basis_max = clamping_basis.filter(|_| item.flex_grow == 0.0);
                     let min_main_size = style_min
