@@ -4,10 +4,11 @@ use super::BlockContext;
 use super::floats::FIT_TOLERANCE;
 use super::items::BlockItem;
 use crate::compute::LayoutTreeExt;
+use crate::compute::common::alignment::resolve_self_alignment_safety;
 use crate::compute::common::overflow::{scrollable_overflow_contribution, union};
 use crate::compute::common::sizing_keyword::{SizingKeywordResolution, resolve_sizing_keyword};
 use crate::geometry::{AbsoluteAxis, AvailableSpace, Line, MaybeMath, Point, Rect, Size};
-use crate::style::{Dimension, Direction, LengthKind, Overflow, TextAlign};
+use crate::style::{AlignItems, AlignItemsKeyword, Dimension, Direction, Length, Overflow, TextAlign};
 use crate::tree::{CacheAccess, CollapsibleMarginSet, Layout, LayoutInput, LayoutTree, RequestedAxis, RunMode, SizingMode};
 
 pub(super) struct FlowParams {
@@ -38,12 +39,23 @@ pub(super) struct FlowResult {
 /// (csswg-drafts#11044, #13260).
 #[inline]
 fn resolve_stretch_height(height: Dimension, container_inner_height: Option<f32>, margin: Rect<f32>, margins_treated_as_zero: Line<bool>) -> Option<f32> {
-    if height.raw().kind() != LengthKind::Stretch {
+    if !height.raw().is_stretch() {
         return None;
     }
     let top = if margins_treated_as_zero.start { 0.0 } else { margin.top };
     let bottom = if margins_treated_as_zero.end { 0.0 } else { margin.bottom };
     container_inner_height.map(|h| h - top - bottom)
+}
+
+/// The offset of a block-level box within its alignment container's free space.
+#[inline(never)]
+fn justify_offset(justify_self: AlignItems, free: f32, direction: Direction) -> f32 {
+    let end = match resolve_self_alignment_safety(justify_self, free < 0.0) {
+        AlignItemsKeyword::Center => return free / 2.0,
+        AlignItemsKeyword::End | AlignItemsKeyword::FlexEnd | AlignItemsKeyword::SelfEnd => true,
+        _ => false,
+    };
+    if end != (direction == Direction::Rtl) { free } else { 0.0 }
 }
 
 #[inline]
@@ -210,12 +222,23 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
             }
         };
 
-        // Tables and replaced boxes size themselves.
-        let known_dimensions = if item.is_table || item.is_replaced {
+        // `justify-self` (css-align-3 §6.1.1) other than `normal` and `stretch`, which lay the box
+        // out by the block rules (`stretch` differs only for tables and replaced boxes).
+        let non_stretch_justify_self = match item.justify_self {
+            Some(a) if a.keyword != AlignItemsKeyword::Stretch => Some(a.resolve_self_relative(tree.style(item.node).direction, p.direction, true)),
+            _ => None,
+        };
+
+        let known_dimensions = if item.sizes_itself {
             Size::NONE
         } else {
+            // Such alignment makes an auto width `fit-content` instead of `stretch`.
+            let width_style = match non_stretch_justify_self {
+                Some(_) if item.size_style.width.is_auto() => Length::FIT_CONTENT,
+                _ => item.size_style.width.raw(),
+            };
             let keyword_width =
-                resolve_sizing_keyword(item.size_style.width.raw(), Some(stretch_width), Some(container_inner_width)).map(|r| match r {
+                resolve_sizing_keyword(width_style, Some(stretch_width), Some(container_inner_width)).map(|r| match r {
                     SizingKeywordResolution::Exact(w) => w,
                     SizingKeywordResolution::Measure(avail) => tree.measure_child_size(
                         item.node,
@@ -362,8 +385,19 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
             }
         };
 
+        // `justify-self` aligns the margin box and beats `text-align`; auto margins beat `justify-self`.
         let item_outer_width = final_size.width + resolved_margin.horizontal_axis_sum();
-        if item_outer_width < container_inner_width {
+        if let Some(justify_self) = non_stretch_justify_self {
+            if item_margin.left.is_some() && item_margin.right.is_some() {
+                // Beside floats the alignment container is the slot, already inset by the margins.
+                let (container_start, free) = if item_avoids_floats {
+                    (float_avoiding_position.x - resolved_margin.left, float_avoiding_width - final_size.width)
+                } else {
+                    (p.resolved_content_box_inset.left, container_inner_width - item_outer_width)
+                };
+                location.x = container_start + resolved_margin.left + inset_offset.x + justify_offset(justify_self, free, p.direction);
+            }
+        } else if item_outer_width < container_inner_width {
             let free = container_inner_width - item_outer_width;
             match (p.text_align, p.direction) {
                 (TextAlign::Auto, _) | (TextAlign::LegacyLeft, Direction::Ltr) | (TextAlign::LegacyRight, Direction::Rtl) => {}

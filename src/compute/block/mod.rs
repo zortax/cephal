@@ -180,9 +180,10 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
         || border.bottom > 0.0;
 
     let text_align = style.text_align;
+    let justify_items = style.justify_items;
     let align_content = style.align_content;
 
-    let mut items = items::generate_item_list(tree, node, container_content_box_size);
+    let mut items = items::generate_item_list(tree, node, container_content_box_size, justify_items);
 
     let container_outer_width = known_dimensions.width.unwrap_or_else(|| {
         let available_width = available_space.width.maybe_sub(content_box_inset.horizontal_axis_sum());

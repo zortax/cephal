@@ -2,17 +2,19 @@
 
 use crate::compute::scratch::Scratch;
 use crate::geometry::{MaybeMath, Point, Rect, Size};
-use crate::style::{BoxSizing, Clear, Contain, Dimension, Float, LengthPercentageAuto, Overflow, Position};
+use crate::style::{AlignItems, AlignItemsKeyword, AlignSelf, BoxSizing, Clear, Contain, Dimension, Float, LengthPercentageAuto, Overflow, Position};
 use crate::tree::{Layout, LayoutTree, NodeId};
 
 pub(super) struct BlockItem {
     pub node: NodeId,
     pub order: u32,
-    pub is_table: bool,
-    pub is_replaced: bool,
+    /// A table or replaced box not stretched by `justify-self` resolves its own width.
+    pub sizes_itself: bool,
     pub is_in_same_bfc: bool,
     pub float: Float,
     pub clear: Clear,
+    /// `justify-self`, or the container's `justify-items` for `auto`; `None` is `normal`.
+    pub justify_self: Option<AlignSelf>,
     /// Raw size styles, kept for sizing keywords.
     pub size_style: Size<Dimension>,
     pub size: Size<Option<f32>>,
@@ -45,6 +47,7 @@ pub(super) fn generate_item_list<T: LayoutTree + ?Sized>(
     tree: &T,
     node: NodeId,
     node_inner_size: Size<Option<f32>>,
+    justify_items: Option<AlignItems>,
 ) -> Scratch<BlockItem> {
     let calc = |id, basis| tree.resolve_calc(id, basis);
     let mut items = Scratch::with_capacity(tree.child_count(node));
@@ -77,6 +80,7 @@ pub(super) fn generate_item_list<T: LayoutTree + ?Sized>(
             && float == Float::None
             && !style.is_scroll_container()
             && !contain.establishes_independent_formatting_context();
+        let justify_self = style.justify_self.or(justify_items);
         let resolve = |s: Size<crate::style::Length>| super::resolve_size(s, node_inner_size, &calc);
         let (size, min_size, max_size) = match plan {
             Some(p) => (p.size, p.min_size, p.max_size),
@@ -85,11 +89,11 @@ pub(super) fn generate_item_list<T: LayoutTree + ?Sized>(
         items.push(BlockItem {
             node: child,
             order,
-            is_table,
-            is_replaced: style.item_is_replaced,
+            sizes_itself: (is_table || style.item_is_replaced) && !justify_self.is_some_and(|a| a.keyword == AlignItemsKeyword::Stretch),
             is_in_same_bfc,
             float,
             clear: style.clear,
+            justify_self,
             size_style: style.size,
             size: size.maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment),
             min_size: min_size.maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment),
