@@ -1,6 +1,6 @@
 //! Resolving named lines and areas to line numbers.
 
-use super::coordinates::{MAX_GRID_TRACKS, NonNamedPlacement};
+use super::coordinates::{MAX_GRID_TRACKS, MAX_OZ_LINE, MIN_OZ_LINE, NonNamedPlacement};
 use crate::geometry::{AbsoluteAxis, Line};
 use crate::style::{GridContainerStyle, GridPlacement, GridTemplateComponent, Ident, RepetitionCount};
 use crate::tree::{IdentSuffix, LayoutTree};
@@ -199,71 +199,98 @@ struct Axis<'a, T: ?Sized> {
     explicit_track_count: u16,
 }
 
+/// A 1-based line from the name maps, as an origin-zero line.
+#[inline]
+fn oz_line(line: u32) -> i32 {
+    line as i32 - 1
+}
+
 impl<T: LayoutTree + ?Sized> Axis<'_, T> {
+    /// css-grid-2 §8.3: names resolve to lines; a named span counts lines from the other, definite edge.
     fn resolve(&self, line: Line<GridPlacement>) -> Line<NonNamedPlacement> {
         let start = match line.start {
-            GridPlacement::NamedLine(name, idx) => {
-                GridPlacement::Line(self.find_line_index(name, idx as i32, IdentSuffix::Start, &|l| l))
-            }
+            GridPlacement::NamedLine(name, idx) => GridPlacement::Line(self.find_named_line(name, idx, IdentSuffix::Start)),
             other => other,
         };
         let end = match line.end {
-            GridPlacement::NamedLine(name, idx) => {
-                GridPlacement::Line(self.find_line_index(name, idx as i32, IdentSuffix::End, &|l| l))
-            }
+            GridPlacement::NamedLine(name, idx) => GridPlacement::Line(self.find_named_line(name, idx, IdentSuffix::End)),
             other => other,
         };
         match (start, end) {
-            (GridPlacement::Line(start_line), GridPlacement::NamedSpan(name, idx)) => {
-                let normalized = if start_line > 0 {
-                    start_line as u32
-                } else {
-                    (self.explicit_track_count as i32 + 1 + start_line as i32).max(0) as u32
-                };
-                let end_line = self.find_line_index(name, idx as i32, IdentSuffix::End, &|lines| {
-                    let p = lines.partition_point(|l| *l <= normalized);
-                    &lines[p..]
-                });
-                Line { start: NonNamedPlacement::Line(start_line), end: NonNamedPlacement::Line(end_line) }
+            (GridPlacement::Line(start_line), GridPlacement::NamedSpan(name, idx)) if start_line != 0 => {
+                let after_start = self.into_origin_zero(start_line) + 1;
+                let end_line = self.nth_line_forwards(self.lines_named(name), after_start, idx.max(1) as i32);
+                Line { start: NonNamedPlacement::Line(start_line), end: NonNamedPlacement::Line(self.into_grid_line(end_line)) }
             }
-            (GridPlacement::NamedSpan(name, idx), GridPlacement::Line(end_line)) => {
-                let normalized = if end_line > 0 {
-                    end_line as u32
-                } else {
-                    (self.explicit_track_count as i32 + 1 + end_line as i32).max(0) as u32
-                };
-                let start_line = self.find_line_index(name, idx as i32, IdentSuffix::Start, &|lines| {
-                    let p = lines.partition_point(|l| *l < normalized);
-                    &lines[..p]
-                });
-                Line { start: NonNamedPlacement::Line(start_line), end: NonNamedPlacement::Line(end_line) }
+            (GridPlacement::NamedSpan(name, idx), GridPlacement::Line(end_line)) if end_line != 0 => {
+                let before_end = self.into_origin_zero(end_line) - 1;
+                let start_line = self.nth_line_backwards(self.lines_named(name), before_end, idx.max(1) as i32);
+                Line { start: NonNamedPlacement::Line(self.into_grid_line(start_line)), end: NonNamedPlacement::Line(end_line) }
             }
             (s, e) => Line { start: NonNamedPlacement::from_style(s), end: NonNamedPlacement::from_style(e) },
         }
     }
 
-    fn find_line_index(&self, name: Ident, idx: i32, end: IdentSuffix, filter: &dyn Fn(&[u32]) -> &[u32]) -> i16 {
-        let idx = if idx == 0 { 1 } else { idx };
-        let explicit = self.explicit_track_count as i32;
-        fn get_line(lines: &[u32], explicit: i32, idx: i32) -> i16 {
-            let abs = idx.unsigned_abs() as usize;
-            let line = if abs <= lines.len() {
-                if idx > 0 { lines[abs - 1] as i64 } else { lines[lines.len() - abs] as i64 }
-            } else {
-                let remaining = (abs - lines.len()) as i64 * idx.signum() as i64;
-                if idx > 0 { explicit as i64 + 1 + remaining } else { -(explicit as i64 + 1 + remaining) }
-            };
-            line.clamp(i16::MIN as i64, i16::MAX as i64) as i16
+    /// The line `<integer>? <custom-ident>` names; an index of 0 means none was given, in which case
+    /// the edge of a named area (`<custom-ident>-start` / `-end`) takes priority.
+    fn find_named_line(&self, name: Ident, idx: i16, edge: IdentSuffix) -> i16 {
+        if idx == 0
+            && let Some(&first) = self.lines.get(&self.edge_key(name, edge)).and_then(|lines| lines.first())
+        {
+            return self.into_grid_line(oz_line(first));
         }
-        if let Some(lines) = self.lines.get(&NameKey::plain(name)) {
-            return get_line(filter(lines), explicit, idx);
+        let lines = self.lines_named(name);
+        let line = if idx >= 0 {
+            self.nth_line_forwards(lines, 0, (idx as i32).max(1))
+        } else {
+            self.nth_line_backwards(lines, self.explicit_track_count as i32, -(idx as i32))
+        };
+        self.into_grid_line(line)
+    }
+
+    /// The key of an area's `<name>-start` / `-end` lines: those named so explicitly plus the area's own edge.
+    #[inline]
+    fn edge_key(&self, name: Ident, edge: IdentSuffix) -> NameKey {
+        self.tree.suffixed_ident(name, edge).map_or(NameKey::synthetic(name, edge), NameKey::plain)
+    }
+
+    /// The sorted 1-based lines called `name` (a `<area>-start` / `-end` name includes the area's edge).
+    #[inline]
+    fn lines_named(&self, name: Ident) -> &[u32] {
+        self.lines.get(&NameKey::plain(name)).map_or(&[], Vec::as_slice)
+    }
+
+    /// The `n`th of `lines` at or after origin-zero `first`; when too few, every implicit line after
+    /// the explicit grid counts as named.
+    fn nth_line_forwards(&self, lines: &[u32], first: i32, n: i32) -> i32 {
+        let first = first.max(0);
+        let lines = &lines[lines.partition_point(|&l| oz_line(l) < first)..];
+        match lines.get(n as usize - 1) {
+            Some(&l) => oz_line(l),
+            None => first.max(self.explicit_track_count as i32 + 1) + (n - lines.len() as i32) - 1,
         }
-        let implicit_key =
-            self.tree.suffixed_ident(name, end).map_or(NameKey::synthetic(name, end), NameKey::plain);
-        if let Some(lines) = self.lines.get(&implicit_key) {
-            return get_line(filter(lines), explicit, idx);
+    }
+
+    /// The `n`th of `lines` at or before origin-zero `last`, counting backwards; when too few, every
+    /// implicit line before the explicit grid counts as named.
+    fn nth_line_backwards(&self, lines: &[u32], last: i32, n: i32) -> i32 {
+        let last = last.min(self.explicit_track_count as i32);
+        let lines = &lines[..lines.partition_point(|&l| oz_line(l) <= last)];
+        match lines.len().checked_sub(n as usize) {
+            Some(index) => oz_line(lines[index]),
+            None => last.min(-1) - (n - lines.len() as i32) + 1,
         }
-        let line = if idx > 0 { explicit as i64 + 1 + idx as i64 } else { -(explicit as i64 + 1 + idx as i64) };
-        line.clamp(i16::MIN as i64, i16::MAX as i64) as i16
+    }
+
+    #[inline]
+    fn into_origin_zero(&self, line: i16) -> i32 {
+        super::coordinates::line_into_origin_zero(line, self.explicit_track_count).0 as i32
+    }
+
+    /// A (clamped) origin-zero line as a 1-based or negative CSS line.
+    #[inline]
+    fn into_grid_line(&self, oz: i32) -> i16 {
+        let oz = oz.clamp(MIN_OZ_LINE as i32, MAX_OZ_LINE as i32) as i16;
+        if oz >= 0 { oz + 1 } else { oz - (self.explicit_track_count as i16 + 1) }
     }
 }

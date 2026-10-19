@@ -142,20 +142,20 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
     let detailed_row_line_names = if wants_detailed { name_resolver.detailed_line_names(AbsoluteAxis::Vertical) } else { Vec::new() };
 
     // 3. Implicit grid estimate and 4. placement.
-    let in_flow_styles = tree.children(node).map(|c| tree.style(c)).filter(|s| !s.generates_no_box() && !s.position.is_out_of_flow());
-    let (est_col_counts, est_row_counts) = compute_grid_size_estimate(explicit_col_count, explicit_row_count, in_flow_styles);
-    let mut items = Scratch::with_capacity(tree.child_count(node));
+    let placements = placement::resolve_placements(tree, node, &name_resolver, explicit_col_count, explicit_row_count);
+    let (est_col_counts, est_row_counts) = compute_grid_size_estimate(explicit_col_count, explicit_row_count, placements.iter().map(|(_, _, p)| p));
+    let mut items = Scratch::with_capacity(placements.len());
     let mut matrix = CellOccupancyMatrix::with_track_counts(est_col_counts, est_row_counts);
     placement::place_grid_items(
         tree,
-        node,
         &mut matrix,
         &mut items,
+        &placements,
         grid_style.auto_flow,
         align_items.unwrap_or(AlignItems::STRETCH),
         justify_items.unwrap_or(AlignItems::STRETCH),
-        &name_resolver,
     );
+    drop(placements);
     let final_col_counts = *matrix.track_counts(AbsoluteAxis::Horizontal);
     let final_row_counts = *matrix.track_counts(AbsoluteAxis::Vertical);
 

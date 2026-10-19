@@ -266,7 +266,7 @@ pub fn parse_grid_placement(s: &str, intern: &mut impl FnMut(&str) -> Ident) -> 
         ["auto"] => Some(GridPlacement::Auto),
         [n] => match n.parse::<i16>() {
             Ok(i) => Some(GridPlacement::Line(i)),
-            Err(_) => Some(GridPlacement::NamedLine(intern(n), 1)),
+            Err(_) => Some(GridPlacement::NamedLine(intern(n), 0)),
         },
         ["span", n] => match n.parse::<u16>() {
             Ok(i) => Some(GridPlacement::Span(i)),

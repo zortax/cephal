@@ -49,6 +49,8 @@ pub enum GridPlacement {
     #[default]
     Auto,
     Line(GridLine),
+    /// The nth line with the name (counting from the end when negative); 0 when no index was given,
+    /// which also matches the edge of a grid area of that name.
     NamedLine(Ident, GridLine),
     Span(u16),
     NamedSpan(Ident, u16),

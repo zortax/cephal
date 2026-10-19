@@ -1,6 +1,6 @@
 //! css-grid-1 §8.5 auto placement.
 
-use super::coordinates::{MAX_OZ_LINE, MIN_OZ_LINE, NonNamedPlacement, OriginZeroPlacement, PlacementLine};
+use super::coordinates::{MAX_OZ_LINE, MIN_OZ_LINE, OriginZeroPlacement, PlacementLine};
 use super::item::GridItem;
 use super::named::NamedLineResolver;
 use super::occupancy::{CellOccupancyMatrix, CellOccupancyState};
@@ -20,11 +20,11 @@ fn resolve_indefinite_grid_span(position: OriginZeroLine, span: u16) -> Line<Ori
     Line { start: line(position.0 as i32), end: line(position.0 as i32 + span as i32) }
 }
 
-/// A child's placement in both axes.
+/// A child's placement in both axes, names resolved.
 #[derive(Clone, Copy)]
-struct Placement {
-    horizontal: Line<OriginZeroPlacement>,
-    vertical: Line<OriginZeroPlacement>,
+pub(super) struct Placement {
+    pub horizontal: Line<OriginZeroPlacement>,
+    pub vertical: Line<OriginZeroPlacement>,
 }
 
 impl Placement {
@@ -37,23 +37,16 @@ impl Placement {
     }
 }
 
-pub(super) fn place_grid_items<T: LayoutTree + ?Sized>(
+/// The in-flow children with their origin-zero placements, named lines resolved once for both the
+/// implicit grid estimate and placement.
+pub(super) fn resolve_placements<T: LayoutTree + ?Sized>(
     tree: &T,
     node: NodeId,
-    matrix: &mut CellOccupancyMatrix,
-    items: &mut Vec<GridItem>,
-    auto_flow: GridAutoFlow,
-    align_items: AlignItems,
-    justify_items: AlignItems,
     resolver: &NamedLineResolver,
-) {
-    let primary_axis = auto_flow.primary_axis();
-    let secondary_axis = primary_axis.other();
-    let explicit_col_count = matrix.track_counts(AbsoluteAxis::Horizontal).explicit;
-    let explicit_row_count = matrix.track_counts(AbsoluteAxis::Vertical).explicit;
-
-    // In-flow children with their origin-zero placements.
-    let children: Scratch<(usize, NodeId, Placement)> = Scratch::collect(
+    explicit_col_count: u16,
+    explicit_row_count: u16,
+) -> Scratch<(usize, NodeId, Placement)> {
+    Scratch::collect(
         tree.children(node)
         .enumerate()
         .filter(|(_, child)| {
@@ -66,8 +59,21 @@ pub(super) fn place_grid_items<T: LayoutTree + ?Sized>(
             let vertical = resolver.resolve_row_names(tree, s.grid_row).map(|p| p.into_origin_zero(explicit_row_count));
             (index, child, Placement { horizontal, vertical })
         }),
-    );
-    let _ = NonNamedPlacement::Auto;
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub(super) fn place_grid_items<T: LayoutTree + ?Sized>(
+    tree: &T,
+    matrix: &mut CellOccupancyMatrix,
+    items: &mut Vec<GridItem>,
+    children: &[(usize, NodeId, Placement)],
+    auto_flow: GridAutoFlow,
+    align_items: AlignItems,
+    justify_items: AlignItems,
+) {
+    let primary_axis = auto_flow.primary_axis();
+    let secondary_axis = primary_axis.other();
 
     let record = |matrix: &mut CellOccupancyMatrix,
                       items: &mut Vec<GridItem>,
