@@ -219,7 +219,6 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
         },
     );
     let initial_row_sum: f32 = rows.iter().map(|t| t.base_size).sum();
-    inner_node_size.height = inner_node_size.height.or(Some(initial_row_sum));
 
     let resolved_style_size = styled;
     let mut container_border_box = Size {
@@ -242,28 +241,14 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
         return LayoutOutput::from_outer_size(container_border_box);
     }
 
-    // 7. Percentage tracks against the resolved content box, and reruns when contributions moved.
-    {
-        let calc = |id, basis| tree.resolve_calc(id, basis);
-        if !available_grid_space.width.is_definite() {
-            for c in &mut columns {
-                let min = c.min.resolved_percentage_size(container_content_box.width, &calc);
-                let max = c.max.resolved_percentage_size(container_content_box.width, &calc);
-                c.base_size = c.base_size.maybe_clamp(min, max);
-            }
-        }
-        if !available_grid_space.height.is_definite() {
-            for r in &mut rows {
-                let min = r.min.resolved_percentage_size(container_content_box.height, &calc);
-                let max = r.max.resolved_percentage_size(container_content_box.height, &calc);
-                r.base_size = r.base_size.maybe_clamp(min, max);
-            }
-        }
-    }
+    // 7. With the container's size known, percentages resolve against its content box: rerun an
+    // axis whose size was indefinite and that has percentage tracks or gaps, and an axis whose
+    // items' contributions moved.
+    inner_node_size = container_content_box.map(Some);
     let has_percentage_column = columns.iter().any(|t| t.uses_percentage());
     let has_percentage_row = rows.iter().any(|t| t.uses_percentage());
     let mut intrinsic_column_contribution_changed = false;
-    let mut rerun_column_sizing = !constrained_available_space.width.is_definite() && has_percentage_column;
+    let mut rerun_column_sizing = outer_node_size.width.is_none() && has_percentage_column;
     if !rerun_column_sizing {
         intrinsic_column_contribution_changed = recheck_contributions(tree, &mut items, &item_order, AbstractAxis::Inline, &columns, &rows, inner_node_size);
         rerun_column_sizing = intrinsic_column_contribution_changed;
@@ -276,6 +261,15 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
         }
     }
     let mut intrinsic_row_contribution_changed = false;
+    let mut rerun_row_sizing = outer_node_size.height.is_none() && has_percentage_row;
+    if rerun_row_sizing {
+        for item in items.iter_mut() {
+            item.grid_area_size_cache = None;
+            item.min_content_contribution_cache.height = None;
+            item.max_content_contribution_cache.height = None;
+            item.minimum_contribution_cache.height = None;
+        }
+    }
     if rerun_column_sizing {
         track_sizing_algorithm(
             tree,
@@ -296,39 +290,32 @@ pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, n
                 run_mode,
             },
         );
-        let mut rerun_row_sizing = !constrained_available_space.height.is_definite() && has_percentage_row;
+        // The columns moved, so the items' heights may have; unless the rows rerun anyway.
         if !rerun_row_sizing {
             intrinsic_row_contribution_changed = recheck_contributions(tree, &mut items, &item_order, AbstractAxis::Block, &rows, &columns, inner_node_size);
             rerun_row_sizing = intrinsic_row_contribution_changed;
-        } else {
-            for item in items.iter_mut() {
-                item.grid_area_size_cache = None;
-                item.min_content_contribution_cache.height = None;
-                item.max_content_contribution_cache.height = None;
-                item.minimum_contribution_cache.height = None;
-            }
         }
-        if rerun_row_sizing {
-            track_sizing_algorithm(
-                tree,
-                TrackSizingParams {
-                    axis: AbstractAxis::Block,
-                    axis_min_size: inner_min_size.height,
-                    axis_max_size: inner_max_size.height,
-                    axis_alignment: align_content,
-                    other_axis_alignment: justify_content,
-                    available_grid_space,
-                    inner_node_size,
-                    axis_tracks: &mut rows,
-                    other_axis_tracks: &mut columns,
-                    items: &mut items,
-                    order: &mut item_order,
-                    get_track_size_estimate: estimate_from_base_size,
-                    has_baseline_aligned_item: false,
-                    run_mode,
-                },
-            );
-        }
+    }
+    if rerun_row_sizing {
+        track_sizing_algorithm(
+            tree,
+            TrackSizingParams {
+                axis: AbstractAxis::Block,
+                axis_min_size: inner_min_size.height,
+                axis_max_size: inner_max_size.height,
+                axis_alignment: align_content,
+                other_axis_alignment: justify_content,
+                available_grid_space,
+                inner_node_size,
+                axis_tracks: &mut rows,
+                other_axis_tracks: &mut columns,
+                items: &mut items,
+                order: &mut item_order,
+                get_track_size_estimate: estimate_from_base_size,
+                has_baseline_aligned_item: false,
+                run_mode,
+            },
+        );
     }
     if intrinsic_column_contribution_changed && !has_percentage_column {
         let sum: f32 = columns.iter().map(|t| t.base_size).sum();
