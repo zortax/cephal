@@ -1992,6 +1992,98 @@
     </node>
   </expectations>
 </test>
+<test name="grid_empty_explicit_tracks__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="ltr" position="relative" width="300px" height="100px">
+      <div display="block" direction="ltr" position="absolute">
+        <div display="grid" direction="ltr" position="relative" grid-template-columns="124px"/>
+      </div>
+      <div display="flex" direction="ltr" position="relative" align-items="start">
+        <div display="grid" direction="ltr" position="relative" row-gap="5px" column-gap="5px" grid-template-rows="10px 15px" grid-template-columns="50px 30px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="300" height="100">
+      <node x="0" y="0" width="124" height="0">
+        <node x="0" y="0" width="124" height="0" resolved-rows="none" resolved-columns="124px"/>
+      </node>
+      <node x="0" y="0" width="300" height="30">
+        <node x="0" y="0" width="85" height="30" resolved-rows="10px 15px" resolved-columns="50px 30px"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="grid_empty_explicit_tracks__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="rtl" position="relative" width="300px" height="100px">
+      <div display="block" direction="rtl" position="absolute">
+        <div display="grid" direction="rtl" position="relative" grid-template-columns="124px"/>
+      </div>
+      <div display="flex" direction="rtl" position="relative" align-items="start">
+        <div display="grid" direction="rtl" position="relative" row-gap="5px" column-gap="5px" grid-template-rows="10px 15px" grid-template-columns="50px 30px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="300" height="100">
+      <node x="176" y="0" width="124" height="0">
+        <node x="0" y="0" width="124" height="0" resolved-rows="none" resolved-columns="124px"/>
+      </node>
+      <node x="0" y="0" width="300" height="30">
+        <node x="215" y="0" width="85" height="30" resolved-rows="10px 15px" resolved-columns="50px 30px"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="grid_empty_explicit_tracks__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" position="relative" width="300px" height="100px">
+      <div display="block" box-sizing="content-box" direction="ltr" position="absolute">
+        <div display="grid" box-sizing="content-box" direction="ltr" position="relative" grid-template-columns="124px"/>
+      </div>
+      <div display="flex" box-sizing="content-box" direction="ltr" position="relative" align-items="start">
+        <div display="grid" box-sizing="content-box" direction="ltr" position="relative" row-gap="5px" column-gap="5px" grid-template-rows="10px 15px" grid-template-columns="50px 30px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="300" height="100">
+      <node x="0" y="0" width="124" height="0">
+        <node x="0" y="0" width="124" height="0" resolved-rows="none" resolved-columns="124px"/>
+      </node>
+      <node x="0" y="0" width="300" height="30">
+        <node x="0" y="0" width="85" height="30" resolved-rows="10px 15px" resolved-columns="50px 30px"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="grid_empty_explicit_tracks__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" position="relative" width="300px" height="100px">
+      <div display="block" box-sizing="content-box" direction="rtl" position="absolute">
+        <div display="grid" box-sizing="content-box" direction="rtl" position="relative" grid-template-columns="124px"/>
+      </div>
+      <div display="flex" box-sizing="content-box" direction="rtl" position="relative" align-items="start">
+        <div display="grid" box-sizing="content-box" direction="rtl" position="relative" row-gap="5px" column-gap="5px" grid-template-rows="10px 15px" grid-template-columns="50px 30px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="300" height="100">
+      <node x="176" y="0" width="124" height="0">
+        <node x="0" y="0" width="124" height="0" resolved-rows="none" resolved-columns="124px"/>
+      </node>
+      <node x="0" y="0" width="300" height="30">
+        <node x="215" y="0" width="85" height="30" resolved-rows="10px 15px" resolved-columns="50px 30px"/>
+      </node>
+    </node>
+  </expectations>
+</test>
 <test name="grid_item_size_floored_by_padding_border__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>

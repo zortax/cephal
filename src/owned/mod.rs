@@ -186,11 +186,13 @@ impl<Ctx> Tree<Ctx> {
         node
     }
 
-    /// Per-node facts kept in the upper flag bits: hidden, width/height parent dependency, has context.
+    /// Per-node facts kept in the upper flag bits: hidden, width/height parent dependency, and
+    /// whether a leaf is not cheap: it has a context, or is a grid, which sizes its tracks even empty.
     fn meta_bits(&self, style_id: u32, context_slot: u32) -> u8 {
         let style = self.styles.get(style_id);
         let dep = self.styles.parent_size_dependency(style_id);
-        (style.generates_no_box() as u8) << 4 | (dep.width as u8) << 5 | (dep.height as u8) << 6 | ((context_slot != NONE) as u8) << 7
+        let not_cheap = context_slot != NONE || style.display == crate::style::Display::Grid;
+        (style.generates_no_box() as u8) << 4 | (dep.width as u8) << 5 | (dep.height as u8) << 6 | (not_cheap as u8) << 7
     }
 
     #[inline]

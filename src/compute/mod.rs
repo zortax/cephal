@@ -347,6 +347,9 @@ pub fn compute_uncached<T: LayoutTree + CacheAccess + ?Sized>(
     let has_children = tree.child_count(node) > 0;
     match (display, has_children) {
         (Display::None, _) => compute_hidden_layout(tree, node),
+        // An empty grid still has its explicit tracks.
+        #[cfg(feature = "grid")]
+        (Display::Grid, false) => crate::compute::grid::compute_grid_layout(tree, node, inputs),
         (_, false) => tree.compute_leaf(node, inputs, block_ctx),
         (Display::Block, true) => block_observing(tree, |tree| block::compute_block_layout(tree, node, inputs, block_ctx)),
         (Display::FlowRoot, true) => block_observing(tree, |tree| block::compute_block_layout(tree, node, inputs, None)),
