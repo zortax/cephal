@@ -1044,6 +1044,114 @@
     </node>
   </expectations>
 </test>
+<test name="flex_basis_content_percentage_padding__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="ltr" position="absolute" width="445px">
+      <div display="flex" direction="ltr" position="relative">
+        <text display="block" direction="ltr" position="relative" padding-right="8%">
+          X​X
+        </text>
+      </div>
+      <div display="flex" direction="ltr" position="relative" flex-direction="column" align-items="start">
+        <text display="block" direction="ltr" position="relative" padding-left="4%" padding-bottom="2%">
+          X​X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="445" height="29">
+      <node x="0" y="0" width="445" height="10">
+        <node x="0" y="0" width="56" height="10"/>
+      </node>
+      <node x="0" y="10" width="445" height="19">
+        <node x="0" y="0" width="38" height="19"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_basis_content_percentage_padding__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="rtl" position="absolute" width="445px">
+      <div display="flex" direction="rtl" position="relative">
+        <text display="block" direction="rtl" position="relative" padding-right="8%">
+          X​X
+        </text>
+      </div>
+      <div display="flex" direction="rtl" position="relative" flex-direction="column" align-items="start">
+        <text display="block" direction="rtl" position="relative" padding-left="4%" padding-bottom="2%">
+          X​X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="445" height="29">
+      <node x="0" y="0" width="445" height="10">
+        <node x="389" y="0" width="56" height="10"/>
+      </node>
+      <node x="0" y="10" width="445" height="19">
+        <node x="407" y="0" width="38" height="19"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_basis_content_percentage_padding__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" position="absolute" width="445px">
+      <div display="flex" box-sizing="content-box" direction="ltr" position="relative">
+        <text display="block" box-sizing="content-box" direction="ltr" position="relative" padding-right="8%">
+          X​X
+        </text>
+      </div>
+      <div display="flex" box-sizing="content-box" direction="ltr" position="relative" flex-direction="column" align-items="start">
+        <text display="block" box-sizing="content-box" direction="ltr" position="relative" padding-left="4%" padding-bottom="2%">
+          X​X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="445" height="29">
+      <node x="0" y="0" width="445" height="10">
+        <node x="0" y="0" width="56" height="10"/>
+      </node>
+      <node x="0" y="10" width="445" height="19">
+        <node x="0" y="0" width="38" height="19"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_basis_content_percentage_padding__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" position="absolute" width="445px">
+      <div display="flex" box-sizing="content-box" direction="rtl" position="relative">
+        <text display="block" box-sizing="content-box" direction="rtl" position="relative" padding-right="8%">
+          X​X
+        </text>
+      </div>
+      <div display="flex" box-sizing="content-box" direction="rtl" position="relative" flex-direction="column" align-items="start">
+        <text display="block" box-sizing="content-box" direction="rtl" position="relative" padding-left="4%" padding-bottom="2%">
+          X​X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="445" height="29">
+      <node x="0" y="0" width="445" height="10">
+        <node x="389" y="0" width="56" height="10"/>
+      </node>
+      <node x="0" y="10" width="445" height="19">
+        <node x="407" y="0" width="38" height="19"/>
+      </node>
+    </node>
+  </expectations>
+</test>
 <test name="flex_column_intrinsic_height_from_flex_basis__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>

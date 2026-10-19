@@ -171,11 +171,6 @@ impl FlexAxisSum for Rect<f32> {
 }
 
 #[inline]
-pub(super) fn from_cross<T: Copy + Default>(dir: impl FlexDir, v: T) -> Size<T> {
-    Size::default().with(dir.cross_axis(), v)
-}
-
-#[inline]
 pub(super) fn abs_main(dir: impl FlexDir) -> AbsoluteAxis {
     dir.main_axis()
 }

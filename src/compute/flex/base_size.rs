@@ -1,7 +1,7 @@
 //! §9.2 flex base size, hypothetical main size and the automatic minimum size.
 
 use super::axis::FlexDir;
-use super::axis::{FlexAxisRect, FlexAxisSize, FlexAxisSum, abs_main, from_cross};
+use super::axis::{FlexAxisRect, FlexAxisSize, FlexAxisSum, abs_main};
 use super::{AlgoConstants, FlexItem};
 use crate::compute::common::sizing_keyword::{SizingKeywordResolution, resolve_sizing_keyword};
 use crate::geometry::{AvailableSpace, MaybeMath, Size};
@@ -90,7 +90,8 @@ pub(super) fn determine_flex_base_size<D: FlexDir, T: LayoutTree + CacheAccess +
         let mut min_request = None;
         if basis.is_err() || measures_min {
             let cross_axis_parent_size = c.node_inner_size.cross(dir);
-            let child_parent_size = from_cross(dir, c.percent_basis().cross(dir));
+            // The width for percentage padding and margins, the cross size for the item's own percentages.
+            let child_parent_size = Size { width: c.percent_basis().width, height: c.percent_basis().height.filter(|_| dir.is_row()) };
             let child_min_cross = transferred_min_size.cross(dir);
             let child_max_cross = transferred_max_size.cross(dir);
             // Clamping turns min-content and max-content cross space into different definite sizes.

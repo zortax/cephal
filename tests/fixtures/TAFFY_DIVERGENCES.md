@@ -98,6 +98,15 @@ The height of an absolutely positioned box found from its content is not definit
 as `none`, and a percentage row gap is zero. A height between two insets, or transferred from
 the width through `aspect-ratio`, is definite. Taffy resolves them against the height found.
 
+## Percentage padding in a content-based flex base size
+
+Census category `PercentPadding`. Fixture `flex_basis_content_percentage_padding`.
+
+Percentage padding refers to the containing block's width (CSS 2.2 §8.4), the flex container's
+width for a flex item, also while its content-based flex base size is measured. Taffy measures
+a row item's base size without the container's width, so its percentage padding counts as zero
+there and the item gets narrower than its content.
+
 ## The root (both engines, by design)
 
 Not a divergence between the engines, but where both differ from a browser's root element,

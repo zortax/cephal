@@ -9,7 +9,7 @@
 //! one difference in batching: the items of all lines are asked their cross sizes in one batch,
 //! not one per line, since each answer depends only on the item's own target main size.
 
-use super::axis::{FlexAxisRect, FlexAxisSize, FlexAxisSum, FlexDir, abs_main, from_cross, sum_axis_gaps};
+use super::axis::{FlexAxisRect, FlexAxisSize, FlexAxisSum, FlexDir, abs_main, sum_axis_gaps};
 use super::flexible::{Flexible, resolve_flexible_lengths};
 use super::{AlgoConstants, FlexLine, align, cross};
 use crate::compute::common::alignment::{apply_alignment_fallback, compute_alignment_offset};
@@ -461,7 +461,7 @@ fn determine_flex_base_size<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     let mut questions: Questions<f32> = Questions::new(tree, items.len() * 2);
     let mut observes_cross = false;
     let cross_axis_parent_size = c.node_inner_size.cross(dir);
-    let child_parent_size = from_cross(dir, c.percent_basis().cross(dir));
+    let child_parent_size = Size { width: c.percent_basis().width, height: c.percent_basis().height.filter(|_| dir.is_row()) };
     let available_cross = available_space.cross(dir);
     let main_available =
         if available_space.main(dir) == AvailableSpace::MinContent { AvailableSpace::MinContent } else { AvailableSpace::MaxContent };
