@@ -668,4 +668,80 @@
     </node>
   </expectations>
 </test>
+<test name="leaf_known_width_is_border_box__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="grid" direction="ltr" position="absolute" width="100px" grid-template-columns="25px 40px">
+      <text display="block" direction="ltr" position="relative" overflow-y="scroll" scrollbar-width="15">
+        X​X
+      </text>
+      <text display="block" direction="ltr" position="relative" padding-left="20px" border-right="5px">
+        X​X
+      </text>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="20" resolved-rows="20px" resolved-columns="25px 40px">
+      <node x="0" y="0" width="25" height="20" scroll_width="0" scroll_height="0"/>
+      <node x="25" y="0" width="40" height="20"/>
+    </node>
+  </expectations>
+</test>
+<test name="leaf_known_width_is_border_box__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="grid" direction="rtl" position="absolute" width="100px" grid-template-columns="25px 40px">
+      <text display="block" direction="rtl" position="relative" overflow-y="scroll" scrollbar-width="15">
+        X​X
+      </text>
+      <text display="block" direction="rtl" position="relative" padding-left="20px" border-right="5px">
+        X​X
+      </text>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="20" resolved-rows="20px" resolved-columns="25px 40px">
+      <node x="75" y="0" width="25" height="20" scroll_width="0" scroll_height="0"/>
+      <node x="35" y="0" width="40" height="20"/>
+    </node>
+  </expectations>
+</test>
+<test name="leaf_known_width_is_border_box__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="grid" box-sizing="content-box" direction="ltr" position="absolute" width="100px" grid-template-columns="25px 40px">
+      <text display="block" box-sizing="content-box" direction="ltr" position="relative" overflow-y="scroll" scrollbar-width="15">
+        X​X
+      </text>
+      <text display="block" box-sizing="content-box" direction="ltr" position="relative" padding-left="20px" border-right="5px">
+        X​X
+      </text>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="20" resolved-rows="20px" resolved-columns="25px 40px">
+      <node x="0" y="0" width="25" height="20" scroll_width="0" scroll_height="0"/>
+      <node x="25" y="0" width="40" height="20"/>
+    </node>
+  </expectations>
+</test>
+<test name="leaf_known_width_is_border_box__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="grid" box-sizing="content-box" direction="rtl" position="absolute" width="100px" grid-template-columns="25px 40px">
+      <text display="block" box-sizing="content-box" direction="rtl" position="relative" overflow-y="scroll" scrollbar-width="15">
+        X​X
+      </text>
+      <text display="block" box-sizing="content-box" direction="rtl" position="relative" padding-left="20px" border-right="5px">
+        X​X
+      </text>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="100" height="20" resolved-rows="20px" resolved-columns="25px 40px">
+      <node x="75" y="0" width="25" height="20" scroll_width="0" scroll_height="0"/>
+      <node x="35" y="0" width="40" height="20"/>
+    </node>
+  </expectations>
+</test>
 </tests>

@@ -19,6 +19,16 @@ its minimum size, so it is floored the same way. Taffy takes a definite preferre
 `width: 2px` with `padding-left: 10px` as a minimum contribution of 2px, and so sizes an
 `auto`-minimum track smaller than the item.
 
+## A measured leaf of known size measured at its border-box size
+
+Census category `LeafInsets`. Fixture `leaf_known_width_is_border_box`.
+
+A measure function lays out a leaf's content (text, here) in its content box; when the leaf's
+width is known, the content gets that width less the padding, border and scrollbar (CSS 2.2
+§10.1, css-overflow-3 §3 for the scrollbar gutter). Taffy hands the measure function the known
+border-box size, so text in a 25px grid column with a 15px scrollbar is laid out 25px wide
+instead of 10px, and wraps less.
+
 ## The root (both engines, by design)
 
 Not a divergence between the engines, but where both differ from a browser's root element,

@@ -250,8 +250,12 @@ pub fn compute_leaf_layout_with<T: LayoutTree + ?Sized>(
             .map_definite(|h| h.maybe_clamp(node_min_size.height, node_max_size.height) - content_box_inset_sum.height),
     };
 
+    // The measure function sees content-box sizes.
     let measure_known = match run_mode {
-        RunMode::ComputeSize => known_dimensions,
+        RunMode::ComputeSize => Size {
+            width: known_dimensions.width.map(|w| (w - content_box_inset_sum.width).max(0.0)),
+            height: known_dimensions.height.map(|h| (h - content_box_inset_sum.height).max(0.0)),
+        },
         RunMode::PerformLayout => Size::NONE,
         RunMode::PerformHiddenLayout => unreachable!("hidden layout never measures"),
     };

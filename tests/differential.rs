@@ -44,6 +44,9 @@ enum Strip {
     GridItemPaddingBorder,
     /// `min-content` grid tracks.
     MinContentTracks,
+    /// Padding, borders and scrollbars of measured leaves: taffy measures a leaf of known size at
+    /// its border-box size instead of its content-box size.
+    LeafInsets,
 }
 
 const STRIPS: &[Strip] = &[
@@ -59,6 +62,7 @@ const STRIPS: &[Strip] = &[
     Strip::GridItemMargins,
     Strip::GridItemPaddingBorder,
     Strip::MinContentTracks,
+    Strip::LeafInsets,
 ];
 
 fn strip(tree: &mut Tree<Text>, root: cephal::tree::NodeId, what: Strip) {
@@ -69,6 +73,7 @@ fn strip(tree: &mut Tree<Text>, root: cephal::tree::NodeId, what: Strip) {
     for node in nodes {
         let parent_is_grid = tree.parent(node).is_some_and(|p| tree.style(p).display == Display::Grid);
         let initial_containing_block = tree.containing_block(node).is_none();
+        let is_text = tree.context(node).is_some();
         tree.patch_style(node, |s| match what {
             Strip::RootOffsets if node == root => {
                 s.margin = cephal::geometry::Rect::splat(LengthPercentageAuto::ZERO);
@@ -119,6 +124,11 @@ fn strip(tree: &mut Tree<Text>, root: cephal::tree::NodeId, what: Strip) {
                 g.auto_rows.iter_mut().for_each(fix);
             }
             Strip::GridItemMargins if parent_is_grid => s.margin = cephal::geometry::Rect::splat(LengthPercentageAuto::ZERO),
+            Strip::LeafInsets if is_text => {
+                s.padding = cephal::geometry::Rect::splat(LengthPercentage::ZERO);
+                s.border = cephal::geometry::Rect::splat(LengthPercentage::ZERO);
+                s.overflow = cephal::geometry::Point { x: cephal::style::Overflow::Visible, y: cephal::style::Overflow::Visible };
+            }
             Strip::GridItemPaddingBorder if parent_is_grid => {
                 s.padding = cephal::geometry::Rect::splat(LengthPercentage::ZERO);
                 s.border = cephal::geometry::Rect::splat(LengthPercentage::ZERO);
@@ -763,6 +773,9 @@ enum Keep {
 
 /// Renders `trees` in Chrome; per tree, whether the disagreement `keep` is there.
 fn chrome_check(dir: &str, trees: &[Tree<Text>], root: cephal::tree::NodeId, viewport: Size<AvailableSpace>, keep: Keep, max_caveats: usize) -> Vec<bool> {
+    if trees.is_empty() {
+        return Vec::new();
+    }
     let html = format!("{dir}/html");
     let _ = std::fs::remove_dir_all(&html);
     std::fs::create_dir_all(&html).unwrap();

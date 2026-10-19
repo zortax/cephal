@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    A measured leaf whose width is known measures its content at that width less its padding,
+    border and scrollbar: the text in the 25px grid column wraps in its 10px content box
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: grid; grid-template-columns: 25px 40px; width: 100px;">
+  <div style="display: block; overflow-y: scroll;">X&#8203;X</div>
+  <div style="display: block; padding-left: 20px; border-right: 5px solid;">X&#8203;X</div>
+</div>
+
+</body>
+</html>
