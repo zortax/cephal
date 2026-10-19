@@ -2,7 +2,7 @@
 
 `tests/differential.rs` compares cephal with taffy 0.15 on random trees. Seeds where they still
 differ are listed in `tests/differential_known.txt`, each with the census category that explains
-it (the `Strip` whose removal makes the engines agree). Chrome adjudicates such seeds
+it (the `Strip`s whose removal makes the engines agree, see `census`). Chrome adjudicates such seeds
 (`scripts/chrome_seeds.sh <seeds>`, see `tests/differential.rs`); the behaviours below are those
 where Chrome sides with cephal. Each has a small fixture in `tests/fixtures/html`, rendered into
 `tests/fixtures/cephal.xml` by `scripts/gen_fixtures.sh`; `CEPHAL_FIXTURE_TAFFY=1 cargo test
@@ -106,6 +106,14 @@ Percentage padding refers to the containing block's width (CSS 2.2 §8.4), the f
 width for a flex item, also while its content-based flex base size is measured. Taffy measures
 a row item's base size without the container's width, so its percentage padding counts as zero
 there and the item gets narrower than its content.
+
+## `align-content` of a block container whose content overflows
+
+Census category `BlockAlignContent`. Fixture `block_align_content_overflow_safe`.
+
+A block container's `align-content` (css-align-3 §5.4) without an overflow keyword keeps content
+that overflows the container at its start in Chrome, as `safe` would; `unsafe center` centers it.
+Taffy centers (or end-aligns) it, moving it above the container.
 
 ## The root (both engines, by design)
 

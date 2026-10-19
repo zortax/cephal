@@ -876,6 +876,146 @@
     </node>
   </expectations>
 </test>
+<test name="block_align_content_overflow_safe__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="ltr" position="absolute" width="300px">
+      <div display="block" direction="ltr" position="relative" align-content="center" height="20px">
+        <div display="block" direction="ltr" position="relative" height="40px"/>
+      </div>
+      <div display="block" direction="ltr" position="relative" align-content="end" height="20px">
+        <div display="block" direction="ltr" position="relative" height="40px"/>
+      </div>
+      <div display="block" direction="ltr" position="relative" align-content="unsafe center" height="20px">
+        <div display="block" direction="ltr" position="relative" height="40px"/>
+      </div>
+      <div display="block" direction="ltr" position="relative" align-content="center" height="60px">
+        <div display="block" direction="ltr" position="relative" height="40px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="300" height="120">
+      <node x="0" y="0" width="300" height="20">
+        <node x="0" y="0" width="300" height="40"/>
+      </node>
+      <node x="0" y="20" width="300" height="20">
+        <node x="0" y="0" width="300" height="40"/>
+      </node>
+      <node x="0" y="40" width="300" height="20">
+        <node x="0" y="-10" width="300" height="40"/>
+      </node>
+      <node x="0" y="60" width="300" height="60">
+        <node x="0" y="10" width="300" height="40"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="block_align_content_overflow_safe__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="rtl" position="absolute" width="300px">
+      <div display="block" direction="rtl" position="relative" align-content="center" height="20px">
+        <div display="block" direction="rtl" position="relative" height="40px"/>
+      </div>
+      <div display="block" direction="rtl" position="relative" align-content="end" height="20px">
+        <div display="block" direction="rtl" position="relative" height="40px"/>
+      </div>
+      <div display="block" direction="rtl" position="relative" align-content="unsafe center" height="20px">
+        <div display="block" direction="rtl" position="relative" height="40px"/>
+      </div>
+      <div display="block" direction="rtl" position="relative" align-content="center" height="60px">
+        <div display="block" direction="rtl" position="relative" height="40px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="300" height="120">
+      <node x="0" y="0" width="300" height="20">
+        <node x="0" y="0" width="300" height="40"/>
+      </node>
+      <node x="0" y="20" width="300" height="20">
+        <node x="0" y="0" width="300" height="40"/>
+      </node>
+      <node x="0" y="40" width="300" height="20">
+        <node x="0" y="-10" width="300" height="40"/>
+      </node>
+      <node x="0" y="60" width="300" height="60">
+        <node x="0" y="10" width="300" height="40"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="block_align_content_overflow_safe__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" position="absolute" width="300px">
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" align-content="center" height="20px">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="40px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" align-content="end" height="20px">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="40px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" align-content="unsafe center" height="20px">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="40px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" align-content="center" height="60px">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="40px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="300" height="120">
+      <node x="0" y="0" width="300" height="20">
+        <node x="0" y="0" width="300" height="40"/>
+      </node>
+      <node x="0" y="20" width="300" height="20">
+        <node x="0" y="0" width="300" height="40"/>
+      </node>
+      <node x="0" y="40" width="300" height="20">
+        <node x="0" y="-10" width="300" height="40"/>
+      </node>
+      <node x="0" y="60" width="300" height="60">
+        <node x="0" y="10" width="300" height="40"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="block_align_content_overflow_safe__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" position="absolute" width="300px">
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" align-content="center" height="20px">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="40px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" align-content="end" height="20px">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="40px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" align-content="unsafe center" height="20px">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="40px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" align-content="center" height="60px">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="40px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="300" height="120">
+      <node x="0" y="0" width="300" height="20">
+        <node x="0" y="0" width="300" height="40"/>
+      </node>
+      <node x="0" y="20" width="300" height="20">
+        <node x="0" y="0" width="300" height="40"/>
+      </node>
+      <node x="0" y="40" width="300" height="20">
+        <node x="0" y="-10" width="300" height="40"/>
+      </node>
+      <node x="0" y="60" width="300" height="60">
+        <node x="0" y="10" width="300" height="40"/>
+      </node>
+    </node>
+  </expectations>
+</test>
 <test name="block_intrinsic_width_percentage_margins__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>

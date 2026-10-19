@@ -50,6 +50,8 @@ enum Strip {
     GridItemPaddingBorder,
     /// `min-content` grid tracks.
     MinContentTracks,
+    /// `align-content` of block containers: taffy aligns content that overflows unsafely.
+    BlockAlignContent,
     /// Multi-line flex containers: taffy puts the items of one whose main size is not definite on
     /// a single line, whatever size it is laid out at.
     FlexWrap,
@@ -76,6 +78,7 @@ const STRIPS: &[Strip] = &[
     Strip::GridItemMargins,
     Strip::GridItemPaddingBorder,
     Strip::MinContentTracks,
+    Strip::BlockAlignContent,
     Strip::FlexWrap,
     Strip::FlexCrossAlignment,
     Strip::LeafInsets,
@@ -155,6 +158,7 @@ fn strip(tree: &mut Tree<Text>, root: cephal::tree::NodeId, what: Strip) {
                 g.auto_rows.iter_mut().for_each(fix);
             }
             Strip::GridItemMargins if parent_is_grid => s.margin = cephal::geometry::Rect::splat(LengthPercentageAuto::ZERO),
+            Strip::BlockAlignContent if s.display == Display::Block => s.align_content = None,
             Strip::FlexWrap => s.flex_wrap = cephal::style::FlexWrap::NoWrap,
             Strip::FlexCrossAlignment => {
                 if s.display == Display::Flex {
@@ -286,8 +290,9 @@ fn taffy_parent_relative(tree: &Tree<Text>, taffy_tree: &taffy::TaffyTree<Text>,
 }
 
 /// Seeds where cephal and taffy 0.15 disagree even relaxed, one per line with the census category
-/// (see [`census`]): the single feature whose removal makes them agree, `combination` when only
-/// removing all of them does, `unexplained` otherwise. Regenerate with
+/// (see [`census`]): the features each of whose removal makes them agree (`[A,B]`), else the
+/// features that must all go together (`A+B`), or `unexplained` when removing all is not enough.
+/// Regenerate with
 /// `CEPHAL_SEEDS=1000 CEPHAL_CENSUS_WRITE=tests/differential_known.txt cargo test --release --test differential census -- --ignored`.
 const KNOWN_DIVERGENT: &str = include_str!("differential_known.txt");
 
@@ -336,7 +341,7 @@ fn matches_taffy_on_random_trees() {
     assert!(agreeing.is_empty(), "now agree with taffy; remove from differential_known.txt: {agreeing:?}");
 }
 
-/// Attributes every differing seed to the single feature whose removal makes the engines agree.
+/// Attributes every differing seed to the features whose removal makes the engines agree.
 ///
 /// `CEPHAL_SEEDS=1000 cargo test --release --test differential census -- --ignored --nocapture`
 #[test]
@@ -352,7 +357,15 @@ fn census() {
         let key = if !single.is_empty() {
             format!("{single:?}")
         } else if run_with(seed, true, STRIPS).is_empty() {
-            "combination".to_string()
+            // The features that must all go: drop every strip the engines agree without.
+            let mut needed = STRIPS.to_vec();
+            for &w in STRIPS {
+                let without: Vec<Strip> = needed.iter().copied().filter(|&n| n != w).collect();
+                if run_with(seed, true, &without).is_empty() {
+                    needed = without;
+                }
+            }
+            format!("{}", needed.iter().map(|s| format!("{s:?}")).collect::<Vec<_>>().join("+"))
         } else {
             "unexplained".to_string()
         };

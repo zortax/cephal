@@ -259,6 +259,10 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
         let inflow_content_height = intrinsic_outer_height - resolved_content_box_inset.vertical_axis_sum();
         let free_space = container_inner_height - inflow_content_height;
         let group_offset = || {
+            // Overflowing content stays at the start unless `unsafe` says otherwise (as Chrome).
+            use crate::style::AlignmentSafety;
+            let safety = if align_content.safety == AlignmentSafety::Default { AlignmentSafety::Safe } else { align_content.safety };
+            let align_content = crate::style::AlignContent { safety, ..align_content };
             let keyword = apply_alignment_fallback(free_space, 1, align_content);
             compute_alignment_offset(free_space, 1, 0.0, keyword, true, false)
         };
