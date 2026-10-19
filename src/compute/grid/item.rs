@@ -587,6 +587,8 @@ impl GridItem {
     ) -> f32 {
         let known_dimensions = self.known_dimensions(tree, grid_area_size);
         let known = self.known_contribution(axis, tree, known_dimensions, grid_area_size);
+        #[cfg(feature = "stats")]
+        crate::compute::stats::bump(if known.is_some() { &crate::compute::stats::GRID_MEASURE_ELIDED } else { &crate::compute::stats::GRID_MEASURED });
         #[cfg(not(feature = "verify-cache"))]
         if let Some(size) = known {
             return size;
