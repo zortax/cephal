@@ -783,7 +783,7 @@ impl<Ctx> Tree<Ctx> {
             let y = origin.y + u.location.y;
             let moved = self.abs_origin[i].x != x || self.abs_origin[i].y != y;
             self.abs_origin[i] = Point { x, y };
-            self.rounded[i] = crate::round::round_one(&u, x, y);
+            self.rounded[i] = crate::round::round_one(&u, x, y, origin.x, origin.y);
             if moved {
                 let mut c = self.links[i].first_child;
                 while c != NONE {
@@ -817,7 +817,7 @@ impl<Ctx> Tree<Ctx> {
                 continue;
             }
             self.abs_origin[i] = Point { x, y };
-            self.rounded[i] = crate::round::round_one(u, x, y);
+            self.rounded[i] = crate::round::round_one(u, x, y, px, py);
             rounded += 1;
             let mut c = self.links[i].first_child;
             while c != NONE {
