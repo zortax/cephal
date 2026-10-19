@@ -14,8 +14,8 @@
 //! - `CEPHAL_BENCH_READ=1`: also read every node's layout inside the timed region;
 //! - `CEPHAL_NO_ROUNDING=1`: no pixel snapping, in either engine;
 //! - `CEPHAL_BENCH_CSV=path`: the CSV (default `target/bench/suite.csv`), with `meta.json` beside it;
-//! - `CEPHAL_BENCH_ITERS=n`: run n cold cephal layouts per workload and print nothing else, for
-//!   `scripts/instructions.sh`;
+//! - `CEPHAL_BENCH_ITERS=n`: run n cold cephal layouts per workload (each followed by the reads,
+//!   under `CEPHAL_BENCH_READ`) and print nothing else, for `scripts/instructions.sh`;
 //! - `CEPHAL_BENCH_DUMP=dir`: write each workload's tree, cephal's layout and the incremental edits
 //!   for the external engines (`benches/external`), without timing anything.
 //!
@@ -231,9 +231,19 @@ fn main() {
                 tree.set_measure_ignores_available_height(true);
                 let root = (w.build)(&mut tree, size);
                 let vp = viewport(w);
+                // Under `CEPHAL_BENCH_READ`, every node's layout is read after each layout too.
+                let mut order = Vec::new();
+                if o.read {
+                    all_nodes(&tree, root, &mut order);
+                }
                 for _ in 0..iters {
                     tree.clear_layout();
                     tree.compute_layout_with_measure(root, vp, measure);
+                    let mut sum = 0.0;
+                    for &n in &order {
+                        sum += tree.layout(n).location.x;
+                    }
+                    std::hint::black_box(sum);
                 }
                 println!("{}@{size} {}", w.name, tree.node_count());
             }
