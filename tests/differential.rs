@@ -1,4 +1,4 @@
-//! Random trees laid out by cephal and taffy 0.14 must agree.
+//! Random trees laid out by cephal and taffy 0.15 must agree, apart from recorded divergences.
 
 mod common;
 
@@ -12,9 +12,98 @@ use common::*;
 /// `relaxed` first removes what the engines treat differently by design: `aspect-ratio` on flex and
 /// grid containers, and sizing keywords on the cross size of flex items.
 fn run(seed: u64, relaxed: bool) -> Vec<String> {
+    run_with(seed, relaxed, &[])
+}
+
+/// Removes one feature from every node before both engines see the tree, to attribute a difference.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Strip {
+    /// Margins and insets of the root.
+    RootOffsets,
+    /// `position: absolute`.
+    Absolute,
+    /// `align-self` / `justify-self` of absolutely positioned boxes.
+    AbsoluteSelfAlignment,
+    /// Percentage `flex-basis`.
+    PercentBasis,
+    /// Percentage padding.
+    PercentPadding,
+    /// Percentage grid tracks.
+    PercentTracks,
+    /// Margins of grid items.
+    GridItemMargins,
+    /// `min-content` grid tracks.
+    MinContentTracks,
+}
+
+const STRIPS: &[Strip] = &[
+    Strip::RootOffsets,
+    Strip::Absolute,
+    Strip::AbsoluteSelfAlignment,
+    Strip::PercentBasis,
+    Strip::PercentPadding,
+    Strip::PercentTracks,
+    Strip::GridItemMargins,
+    Strip::MinContentTracks,
+];
+
+fn strip(tree: &mut Tree<Text>, root: cephal::tree::NodeId, what: Strip) {
+    use cephal::style::{GridTemplateComponent, LengthPercentage, LengthPercentageAuto, Position, TrackSizingFunction};
+    let mut nodes = Vec::new();
+    all_nodes(tree, root, &mut nodes);
+    for node in nodes {
+        let parent_is_grid = tree.parent(node).is_some_and(|p| tree.style(p).display == Display::Grid);
+        tree.patch_style(node, |s| match what {
+            Strip::RootOffsets if node == root => {
+                s.margin = cephal::geometry::Rect::splat(LengthPercentageAuto::ZERO);
+                s.inset = cephal::geometry::Rect::splat(LengthPercentageAuto::AUTO);
+                s.position = Position::Relative;
+            }
+            Strip::Absolute if s.position != Position::Relative => {
+                s.position = Position::Relative;
+                s.inset = cephal::geometry::Rect::splat(LengthPercentageAuto::AUTO);
+            }
+            Strip::AbsoluteSelfAlignment if s.position != Position::Relative => {
+                s.align_self = None;
+                s.justify_self = None;
+            }
+            Strip::PercentBasis if s.flex_basis.0.uses_percentage() => s.flex_basis = Dimension::AUTO,
+            Strip::PercentPadding => {
+                for side in [&mut s.padding.left, &mut s.padding.right, &mut s.padding.top, &mut s.padding.bottom] {
+                    if side.0.uses_percentage() {
+                        *side = LengthPercentage::ZERO;
+                    }
+                }
+            }
+            Strip::PercentTracks | Strip::MinContentTracks if s.display == Display::Grid => {
+                let percent = what == Strip::PercentTracks;
+                let fix = |t: &mut TrackSizingFunction| {
+                    let hit = if percent { t.min.0.uses_percentage() || t.max.0.uses_percentage() } else { *t == TrackSizingFunction::MIN_CONTENT };
+                    if hit {
+                        *t = TrackSizingFunction::AUTO;
+                    }
+                };
+                let g = s.grid_mut();
+                for c in g.template_columns.iter_mut().chain(g.template_rows.iter_mut()) {
+                    if let GridTemplateComponent::Single(t) = c {
+                        fix(t);
+                    }
+                }
+                g.auto_rows.iter_mut().for_each(fix);
+            }
+            Strip::GridItemMargins if parent_is_grid => s.margin = cephal::geometry::Rect::splat(LengthPercentageAuto::ZERO),
+            _ => {}
+        });
+    }
+}
+
+fn run_with(seed: u64, relaxed: bool, strips: &[Strip]) -> Vec<String> {
     let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
     let mut tree: Tree<Text> = Tree::new();
     let root = build_subtree(&mut rng, &mut tree, 0);
+    for &what in strips {
+        strip(&mut tree, root, what);
+    }
     if relaxed {
         let mut nodes = Vec::new();
         all_nodes(&tree, root, &mut nodes);
@@ -63,43 +152,91 @@ fn run(seed: u64, relaxed: bool) -> Vec<String> {
     errors
 }
 
-/// Seeds whose divergence is recorded but not yet resolved.
-///
-/// 106: a grid item with `width: fit-content(114px)`, `height: 72%`, `aspect-ratio: 2` and
-/// `margin-left: auto` inside a `min-content` row; both engines keep the ratio but pick
-/// different heights.
-/// The others are grids with percentage `grid-auto-rows` in indefinite-height containers.
-///
-/// 188, 236 and 299: a grid measured under a min-content height. Cephal sizes it as under a
-/// max-content height (CSS Sizing 3 §5.1). Taffy gets no free space for the rows there, so its
-/// answer is smaller than the height the grid takes when it is laid out.
-///
-/// 2 and 168: a stretched item in a column container whose width is indefinite. Cephal measures
-/// the item's height at the container's fit-content width, which the item gets in the end. Taffy
-/// measures it at the whole available width.
-const KNOWN_DIVERGENT: &[u64] = &[2, 106, 168, 188, 236, 299, 306, 563, 603, 1000, 1210, 1384, 1490];
+/// Seeds where cephal and taffy 0.15 disagree even relaxed, one per line with the census category
+/// (see [`census`]): the single feature whose removal makes them agree, `combination` when only
+/// removing all of them does, `unexplained` otherwise. Regenerate with
+/// `CEPHAL_SEEDS=1000 CEPHAL_CENSUS_WRITE=tests/differential_known.txt cargo test --release --test differential census -- --ignored`.
+const KNOWN_DIVERGENT: &str = include_str!("differential_known.txt");
+
+fn known_divergent() -> std::collections::BTreeMap<u64, &'static str> {
+    KNOWN_DIVERGENT
+        .lines()
+        .filter(|l| !l.starts_with('#') && !l.trim().is_empty())
+        .map(|l| {
+            let (seed, category) = l.split_once(' ').unwrap_or((l, ""));
+            (seed.parse().unwrap(), category)
+        })
+        .collect()
+}
 
 /// A tree that differs is compared again relaxed (see [`run`]):
 ///
 /// - A flex or grid container transfers a known axis through `aspect-ratio`, as a block container
-///   does and as browsers do. Taffy 0.14 applies the ratio to style sizes only.
+///   does and as browsers do. Taffy applies the ratio to style sizes only.
 /// - A flex item with a sizing keyword on its cross size has its main size measured at that size.
-///   Taffy 0.14 measures it stretched, and then lays it out at the keyword's size.
+///   Taffy measures it stretched, and then lays it out at the keyword's size.
+///
+/// Every other difference must be listed in `differential_known.txt`, and every listed seed must
+/// still differ, so the list only shrinks on purpose.
 #[test]
 fn matches_taffy_on_random_trees() {
     let seeds: u64 = std::env::var("CEPHAL_SEEDS").ok().and_then(|v| v.parse().ok()).unwrap_or(300);
+    let known = known_divergent();
     let mut failing = Vec::new();
-    for seed in (1..=seeds).filter(|s| !KNOWN_DIVERGENT.contains(s)) {
-        if run(seed, false).is_empty() {
-            continue;
-        }
-        let errors = run(seed, true);
-        if !errors.is_empty() {
-            failing.push(errors);
+    let mut agreeing = Vec::new();
+    for seed in 1..=seeds {
+        let differs = !run(seed, false).is_empty() && {
+            let errors = run(seed, true);
+            let differs = !errors.is_empty();
+            if differs && !known.contains_key(&seed) {
+                failing.push(errors);
+            }
+            differs
+        };
+        if !differs && known.contains_key(&seed) {
+            agreeing.push(seed);
         }
     }
     let shown: Vec<String> = failing.iter().take(10).map(|e| e.join("\n")).collect();
     assert!(failing.is_empty(), "{} of {seeds} trees differ from taffy\n{}", failing.len(), shown.join("\n\n"));
+    assert!(agreeing.is_empty(), "now agree with taffy; remove from differential_known.txt: {agreeing:?}");
+}
+
+/// Attributes every differing seed to the single feature whose removal makes the engines agree.
+///
+/// `CEPHAL_SEEDS=1000 cargo test --release --test differential census -- --ignored --nocapture`
+#[test]
+#[ignore]
+fn census() {
+    let seeds: u64 = std::env::var("CEPHAL_SEEDS").ok().and_then(|v| v.parse().ok()).unwrap_or(300);
+    let mut by_strip: std::collections::BTreeMap<String, Vec<u64>> = Default::default();
+    for seed in 1..=seeds {
+        if run(seed, false).is_empty() || run(seed, true).is_empty() {
+            continue;
+        }
+        let single: Vec<Strip> = STRIPS.iter().copied().filter(|&w| run_with(seed, true, &[w]).is_empty()).collect();
+        let key = if !single.is_empty() {
+            format!("{single:?}")
+        } else if run_with(seed, true, STRIPS).is_empty() {
+            "combination".to_string()
+        } else {
+            "unexplained".to_string()
+        };
+        by_strip.entry(key).or_default().push(seed);
+    }
+    let mut lines: Vec<(u64, String)> = Vec::new();
+    for (key, seeds) in &by_strip {
+        println!("{:4} {key}: {:?}", seeds.len(), &seeds[..seeds.len().min(40)]);
+        lines.extend(seeds.iter().map(|&s| (s, key.replace(' ', ""))));
+    }
+    if let Ok(path) = std::env::var("CEPHAL_CENSUS_WRITE") {
+        lines.sort();
+        let mut out = String::from("# seed census-category (generated by the `census` test; see differential.rs)\n");
+        for (seed, key) in lines {
+            out += &format!("{seed} {key}\n");
+        }
+        std::fs::write(path, out).unwrap();
+    }
 }
 
 /// `CEPHAL_SEED=106 cargo test --test differential debug_diff -- --ignored --nocapture`

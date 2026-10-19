@@ -49,8 +49,13 @@ fn align_items(a: crate::style::AlignItems) -> taffy::AlignItems {
     };
     taffy::AlignItems {
         keyword: base.keyword,
-        safety: if a.safety == AlignmentSafety::Safe { taffy::AlignmentSafety::Safe } else { taffy::AlignmentSafety::Unsafe },
+        safety: safety(a.safety),
     }
+}
+
+/// Cephal's `Unsafe` is also what a bare keyword means, which is taffy's `Default`.
+fn safety(s: AlignmentSafety) -> taffy::AlignmentSafety {
+    if s == AlignmentSafety::Safe { taffy::AlignmentSafety::Safe } else { taffy::AlignmentSafety::Default }
 }
 
 fn align_content(a: crate::style::AlignContent) -> taffy::AlignContent {
@@ -67,7 +72,7 @@ fn align_content(a: crate::style::AlignContent) -> taffy::AlignContent {
     };
     taffy::AlignContent {
         keyword: base.keyword,
-        safety: if a.safety == AlignmentSafety::Safe { taffy::AlignmentSafety::Safe } else { taffy::AlignmentSafety::Unsafe },
+        safety: safety(a.safety),
     }
 }
 
@@ -147,12 +152,12 @@ pub fn to_taffy(s: &Style, name: &impl Fn(Ident) -> String) -> taffy::Style {
     t.margin = taffy::Rect { left: lpa(s.margin.left.0), right: lpa(s.margin.right.0), top: lpa(s.margin.top.0), bottom: lpa(s.margin.bottom.0) };
     t.padding = taffy::Rect { left: lp(s.padding.left.0), right: lp(s.padding.right.0), top: lp(s.padding.top.0), bottom: lp(s.padding.bottom.0) };
     t.border = taffy::Rect { left: lp(s.border.left.0), right: lp(s.border.right.0), top: lp(s.border.top.0), bottom: lp(s.border.bottom.0) };
-    t.align_items = s.align_items.map(align_items);
+    t.align_items = s.align_items.map_or(taffy::AlignItems::NORMAL, align_items);
     t.align_self = s.align_self.map(align_items);
-    t.justify_items = s.justify_items.map(align_items);
+    t.justify_items = s.justify_items.map_or(taffy::AlignItems::NORMAL, align_items);
     t.justify_self = s.justify_self.map(align_items);
-    t.align_content = s.align_content.map(align_content);
-    t.justify_content = s.justify_content.map(align_content);
+    t.align_content = s.align_content.map_or(taffy::AlignContent::NORMAL, align_content);
+    t.justify_content = s.justify_content.map_or(taffy::AlignContent::NORMAL, align_content);
     t.gap = taffy::Size { width: lp(s.gap.width.0), height: lp(s.gap.height.0) };
     t.text_align = match s.text_align {
         TextAlign::Auto => taffy::TextAlign::Auto,
