@@ -51,17 +51,20 @@ impl CollapsibleMarginSet {
     pub fn from_margin(margin: f32) -> Self {
         if margin >= 0.0 { Self { positive: margin, negative: 0.0 } } else { Self { positive: 0.0, negative: margin } }
     }
+    // Margins are never NaN, so plain comparisons replace `f32::max`/`min` and their NaN handling.
     #[inline]
     pub fn collapse_with_margin(self, margin: f32) -> Self {
-        if margin >= 0.0 {
-            Self { positive: self.positive.max(margin), negative: self.negative }
-        } else {
-            Self { positive: self.positive, negative: self.negative.min(margin) }
+        Self {
+            positive: if margin > self.positive { margin } else { self.positive },
+            negative: if margin < self.negative { margin } else { self.negative },
         }
     }
     #[inline]
     pub fn collapse_with_set(self, other: Self) -> Self {
-        Self { positive: self.positive.max(other.positive), negative: self.negative.min(other.negative) }
+        Self {
+            positive: if other.positive > self.positive { other.positive } else { self.positive },
+            negative: if other.negative < self.negative { other.negative } else { self.negative },
+        }
     }
     #[inline]
     pub fn resolve(self) -> f32 {
