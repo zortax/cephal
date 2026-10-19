@@ -669,7 +669,7 @@ fn recheck_contributions<T: LayoutTree + CacheAccess + ?Sized>(
     let mut changed = false;
     for &i in order {
         let item = &mut items[i as usize];
-        if !item.crosses_intrinsic_column {
+        if !item.crosses_intrinsic_track(axis) {
             continue;
         }
         let calc = |id, basis| tree.resolve_calc(id, basis);
