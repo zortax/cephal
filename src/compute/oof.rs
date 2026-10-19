@@ -272,7 +272,8 @@ pub(crate) fn run_pass<T: LayoutTree + CacheAccess + ?Sized>(
     let mut work: Scratch<Candidate> = Scratch::take();
     collect(tree, &context.entries, claims, Point::ZERO, &mut work);
     let outer = tree.take_observed();
-    let overflow = lay_out(tree, Some(cb), &mut work, claims, geometry, &mut bits, Some(&mut context.surfaced));
+    let adds_overflow = tree.out_of_flow_overflow(cb);
+    let overflow = lay_out(tree, Some(cb), &mut work, claims, adds_overflow, geometry, &mut bits, Some(&mut context.surfaced));
     tree.take_observed();
     tree.note_observed(outer);
     (overflow, bits)
@@ -286,6 +287,7 @@ fn lay_out<T: LayoutTree + CacheAccess + ?Sized>(
     cb: Option<NodeId>,
     work: &mut Scratch<Candidate>,
     claims: u8,
+    adds_overflow: u8,
     geometry: &OofGeometry,
     bits: &mut u8,
     mut surfaced: Option<&mut Vec<OofEntry>>,
@@ -305,10 +307,12 @@ fn lay_out<T: LayoutTree + CacheAccess + ?Sized>(
         } else {
             Point { x: location.x - geometry.area_offset.x, y: location.y - geometry.area_offset.y }
         };
-        overflow = union(
-            overflow,
-            scrollable_overflow_contribution(relative, size, placed.output.scrollable_overflow_rect, placed.overflow, placed.contain, is_scroll_container),
-        );
+        if candidate.bit & adds_overflow != 0 {
+            overflow = union(
+                overflow,
+                scrollable_overflow_contribution(relative, size, placed.output.scrollable_overflow_rect, placed.overflow, placed.contain, is_scroll_container),
+            );
+        }
         let inner = placed.output.oof;
         if inner & !claims != 0 {
             *bits |= inner & !claims;
@@ -341,7 +345,7 @@ pub(crate) fn initial_containing_block_pass<T: LayoutTree + CacheAccess + ?Sized
         collect(tree, &context.surfaced, bits, Point::ZERO, &mut work);
     }
     let mut rest = 0;
-    lay_out(tree, None, &mut work, OOF_ALL, geometry, &mut rest, None);
+    lay_out(tree, None, &mut work, OOF_ALL, 0, geometry, &mut rest, None);
 }
 
 /// Lays out the root itself when it is out of flow: against the initial containing block, with its

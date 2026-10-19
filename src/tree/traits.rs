@@ -235,6 +235,14 @@ pub trait LayoutTree {
         crate::compute::oof::default_claims(self.style(node))
     }
 
+    /// Which of the out-of-flow boxes `node` lays out add to its scrollable overflow, as the same
+    /// bits. CSS says all it contains do. A tree whose boxes only stand in for the viewport as the
+    /// containing block of fixed boxes, which scroll with nothing, can leave those out.
+    #[inline]
+    fn out_of_flow_overflow(&self, node: NodeId) -> u8 {
+        self.containing_block_claims(node)
+    }
+
     /// Lays out one child; implementations normally forward to [`crate::compute::compute_child_layout`].
     fn compute_child_layout(&mut self, node: NodeId, inputs: LayoutInput, block_ctx: Option<&mut BlockContext<'_>>) -> LayoutOutput;
 
