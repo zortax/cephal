@@ -80,10 +80,21 @@ impl CellOccupancyMatrix {
         let rows = self.rows.oz_line_range_to_track_range(row_span);
         let cols = self.columns.oz_line_range_to_track_range(column_span);
         let width = self.columns.len();
+        // An auto-placed item counts as placed "in" its first secondary track only (§8.5 step 2's
+        // sparse cursor, read by `last_of_type`); its other cells are merely occupied.
+        let first_secondary = match primary_axis {
+            AbsoluteAxis::Horizontal => rows.start,
+            AbsoluteAxis::Vertical => cols.start,
+        };
+        let rest = if value == CellOccupancyState::AutoPlaced { CellOccupancyState::DefinitelyPlaced } else { value };
         for r in rows {
             let base = r as usize * width;
             for c in cols.clone() {
-                self.cells[base + c as usize] = value;
+                let secondary = match primary_axis {
+                    AbsoluteAxis::Horizontal => r,
+                    AbsoluteAxis::Vertical => c,
+                };
+                self.cells[base + c as usize] = if secondary == first_secondary { value } else { rest };
             }
         }
     }
