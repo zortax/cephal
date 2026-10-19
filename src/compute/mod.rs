@@ -481,7 +481,7 @@ fn compute_in_flow_root_layout<T: LayoutTree + CacheAccess + ?Sized>(
     let root_available_space = available_space.maybe_sub(margin.sum_axes()).maybe_max(Size::ZERO);
 
     let mut known_dimensions = Size::NONE;
-    if style.is_block() {
+    if matches!(style.display, crate::style::Display::Block | crate::style::Display::FlowRoot) {
         let resolve = |s: Size<crate::style::Length>| block::resolve_size(s, parent_size, &calc);
         let min_size = resolve(style.min_size.map(|v| v.raw()))
             .maybe_apply_aspect_ratio(style.aspect_ratio)

@@ -1208,4 +1208,56 @@
     </node>
   </expectations>
 </test>
+<test name="root_flow_root_fills_viewport__border_box_ltr" use-rounding="true">
+  <viewport width="200px" height="100px"/>
+  <input>
+    <div display="flow-root" direction="ltr" position="relative" padding-top="5px" padding-left="5px" padding-bottom="5px" padding-right="5px">
+      <div display="block" direction="ltr" position="relative" height="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="200" height="20">
+      <node x="5" y="5" width="190" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="root_flow_root_fills_viewport__border_box_rtl" use-rounding="true">
+  <viewport width="200px" height="100px"/>
+  <input>
+    <div display="flow-root" direction="rtl" position="relative" padding-top="5px" padding-left="5px" padding-bottom="5px" padding-right="5px">
+      <div display="block" direction="rtl" position="relative" height="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="200" height="20">
+      <node x="5" y="5" width="190" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="root_flow_root_fills_viewport__content_box_ltr" use-rounding="true">
+  <viewport width="200px" height="100px"/>
+  <input>
+    <div display="flow-root" box-sizing="content-box" direction="ltr" position="relative" padding-top="5px" padding-left="5px" padding-bottom="5px" padding-right="5px">
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="200" height="20">
+      <node x="5" y="5" width="190" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="root_flow_root_fills_viewport__content_box_rtl" use-rounding="true">
+  <viewport width="200px" height="100px"/>
+  <input>
+    <div display="flow-root" box-sizing="content-box" direction="rtl" position="relative" padding-top="5px" padding-left="5px" padding-bottom="5px" padding-right="5px">
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="200" height="20">
+      <node x="5" y="5" width="190" height="10"/>
+    </node>
+  </expectations>
+</test>
 </tests>
