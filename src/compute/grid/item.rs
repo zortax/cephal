@@ -9,7 +9,7 @@ use crate::style::{
     AlignItems, AlignItemsKeyword, AlignSelf, BoxSizing, CalcId, Dimension, LengthPercentage, LengthPercentageAuto,
     OriginZeroLine, Overflow, Style,
 };
-use crate::tree::{CacheAccess, LayoutTree, NodeId, SizingMode};
+use crate::tree::{CacheAccess, LayoutTree, NodeId, NodeKind, SizingMode};
 use core::ops::Range;
 
 /// `size`, `min-size` and `max-size` against a grid area, with aspect ratio and box sizing applied.
@@ -433,7 +433,8 @@ impl GridItem {
         adjusted
     }
 
-    /// The question [`Self::content_contribution`] would ask, for batching ahead of time.
+    /// The question [`Self::content_contribution`] would ask, for batching ahead of time; `None`
+    /// when it asks none.
     pub fn contribution_request<T: LayoutTree + ?Sized>(
         &self,
         axis: AbstractAxis,
@@ -441,14 +442,57 @@ impl GridItem {
         grid_area_size: Size<Option<f32>>,
         available_space: Size<Option<f32>>,
         fallback: AvailableSpace,
-    ) -> crate::tree::ChildRequest {
+    ) -> Option<crate::tree::ChildRequest> {
         let known_dimensions = self.known_dimensions(tree, grid_area_size);
+        if self.known_contribution(axis, tree, known_dimensions, grid_area_size).is_some() {
+            return None;
+        }
         let available = self.keyword_adjusted_available_space(
             grid_area_size,
             self.available_space_minus_margins(grid_area_size, available_space, tree).map(|o| o.map_or(fallback, AvailableSpace::Definite)),
             tree,
         );
-        crate::compute::size_request(self.node, known_dimensions, grid_area_size, available, SizingMode::InherentSize, axis.as_abs().into())
+        Some(crate::compute::size_request(self.node, known_dimensions, grid_area_size, available, SizingMode::InherentSize, axis.as_abs().into()))
+    }
+
+    /// The contribution in `axis` when the item's size there is known, which needs no question.
+    ///
+    /// Every algorithm answers a known size with it clamped by the node's min and max sizes, which
+    /// [`Self::known_dimensions`] already clamped it by, then floored by padding and border: a known
+    /// size above that floor is the answer as is. Not so with an aspect ratio, which a leaf does not
+    /// transfer to its max size; nor for a flex container's height with its width unknown, which
+    /// its algorithm computes back from the inner size; and a leaf of a tree that may override
+    /// `compute_leaf` could answer anything.
+    #[inline(always)]
+    fn known_contribution<T: LayoutTree + ?Sized>(
+        &self,
+        axis: AbstractAxis,
+        tree: &T,
+        known_dimensions: Size<Option<f32>>,
+        grid_area_size: Size<Option<f32>>,
+    ) -> Option<f32> {
+        let size = known_dimensions.get_abstract(axis)?;
+        self.known_size_is_contribution(axis, tree, size, known_dimensions, grid_area_size).then_some(size)
+    }
+
+    #[inline(never)]
+    fn known_size_is_contribution<T: LayoutTree + ?Sized>(
+        &self,
+        axis: AbstractAxis,
+        tree: &T,
+        size: f32,
+        known_dimensions: Size<Option<f32>>,
+        grid_area_size: Size<Option<f32>>,
+    ) -> bool {
+        if self.aspect_ratio.is_some() {
+            return false;
+        }
+        let meta = tree.query_meta(self.node);
+        if meta.hidden || meta.kind == NodeKind::Opaque || (meta.kind.is_flex() && axis == AbstractAxis::Block && known_dimensions.width.is_none()) {
+            return false;
+        }
+        let calc = |id, basis| tree.resolve_calc(id, basis);
+        size > self.padding_border(grid_area_size.width, &calc).get_abstract(axis).max(0.0)
     }
 
     /// What the style makes of the minimum contribution (css-grid-1 §11.5, css-sizing-3 §5.2):
@@ -542,20 +586,40 @@ impl GridItem {
         fallback: AvailableSpace,
     ) -> f32 {
         let known_dimensions = self.known_dimensions(tree, grid_area_size);
+        let known = self.known_contribution(axis, tree, known_dimensions, grid_area_size);
+        #[cfg(not(feature = "verify-cache"))]
+        if let Some(size) = known {
+            return size;
+        }
+        let measured = self.measure_contribution(axis, tree, known_dimensions, grid_area_size, available_space, fallback);
+        #[cfg(feature = "verify-cache")]
+        if let Some(size) = known {
+            assert!(
+                measured.to_bits() == size.to_bits(),
+                "known grid contribution differs for {:?} on {axis:?}: {size:?}, measured {measured:?}\n known: {known_dimensions:?}",
+                self.node
+            );
+        }
+        measured
+    }
+
+    /// Asks the item for its contribution.
+    #[inline(never)]
+    fn measure_contribution<T: LayoutTree + CacheAccess + ?Sized>(
+        &self,
+        axis: AbstractAxis,
+        tree: &mut T,
+        known_dimensions: Size<Option<f32>>,
+        grid_area_size: Size<Option<f32>>,
+        available_space: Size<Option<f32>>,
+        fallback: AvailableSpace,
+    ) -> f32 {
         let available = self.keyword_adjusted_available_space(
             grid_area_size,
             self.available_space_minus_margins(grid_area_size, available_space, tree).map(|o| o.map_or(fallback, AvailableSpace::Definite)),
             tree,
         );
-        tree.measure_child_size(
-            self.node,
-            known_dimensions,
-            grid_area_size,
-            available,
-            SizingMode::InherentSize,
-            axis.as_abs(),
-            Line::FALSE,
-        )
+        tree.measure_child_size(self.node, known_dimensions, grid_area_size, available, SizingMode::InherentSize, axis.as_abs(), Line::FALSE)
     }
 
     pub fn min_content_contribution<T: LayoutTree + CacheAccess + ?Sized>(

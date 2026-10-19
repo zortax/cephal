@@ -93,8 +93,9 @@ impl<'a, T: LayoutTree + CacheAccess + ?Sized> Measurer<'a, T> {
             let available = area.with_abstract(self.axis, None);
             if item.min_content_contribution_cache.get_abstract(self.axis).is_none() {
                 item.min_content_contribution_cache.set_abstract(self.axis, Some(f32::NAN));
-                let request = item.contribution_request(self.axis, self.tree, area, available, AvailableSpace::MinContent);
-                self.collect(request);
+                if let Some(request) = item.contribution_request(self.axis, self.tree, area, available, AvailableSpace::MinContent) {
+                    self.collect(request);
+                }
             }
             return 0.0;
         }
@@ -112,8 +113,9 @@ impl<'a, T: LayoutTree + CacheAccess + ?Sized> Measurer<'a, T> {
             let available = area.with_abstract(self.axis, None);
             if item.max_content_contribution_cache.get_abstract(self.axis).is_none() {
                 item.max_content_contribution_cache.set_abstract(self.axis, Some(f32::NAN));
-                let request = item.contribution_request(self.axis, self.tree, area, available, AvailableSpace::MaxContent);
-                self.collect(request);
+                if let Some(request) = item.contribution_request(self.axis, self.tree, area, available, AvailableSpace::MaxContent) {
+                    self.collect(request);
+                }
             }
             return 0.0;
         }
@@ -136,8 +138,9 @@ impl<'a, T: LayoutTree + CacheAccess + ?Sized> Measurer<'a, T> {
             };
             if needs {
                 item.min_content_contribution_cache.set_abstract(self.axis, Some(f32::NAN));
-                let request = item.contribution_request(self.axis, self.tree, area, area, AvailableSpace::MinContent);
-                self.collect(request);
+                if let Some(request) = item.contribution_request(self.axis, self.tree, area, area, AvailableSpace::MinContent) {
+                    self.collect(request);
+                }
             }
             return 0.0;
         }
