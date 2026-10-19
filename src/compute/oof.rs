@@ -739,6 +739,13 @@ fn layout_oof_box<T: LayoutTree + CacheAccess + ?Sized>(
         }
     }
 
+    // A height found from the content is not definite for the percentages inside (CSS 2.2
+    // §10.5), nor a content-based sizing keyword's; one transferred from the width through the
+    // aspect ratio is.
+    let height_is_definite = match known_dimensions.height {
+        Some(_) => !(size_style.height.is_sizing_keyword() && !size_style.height.is_stretch()),
+        None => aspect_ratio.is_some(),
+    };
     let final_size = match (known_dimensions.width, known_dimensions.height) {
         (Some(width), Some(height)) => Size { width, height },
         // The width first (CSS 2.2 §10.3.7), then the height at that width (§10.6.4), which
@@ -780,7 +787,7 @@ fn layout_oof_box<T: LayoutTree + CacheAccess + ?Sized>(
             sizing_mode: SizingMode::ContentSize,
             axis: RequestedAxis::Both,
             known_dimensions: final_size.map(Some),
-            known_dimensions_are_definite: Size::TRUE,
+            known_dimensions_are_definite: Size { width: true, height: height_is_definite },
             parent_size: area,
             available_space,
             vertical_margins_are_collapsible: Line::FALSE,

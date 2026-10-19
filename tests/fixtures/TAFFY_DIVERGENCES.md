@@ -89,6 +89,15 @@ their flex base sizes clamped (Chrome; css-flexbox-1 §9.9.1 describes contribut
 flex basis overrides the item's `height`. Taffy lets the `height` raise the item's contribution
 past its flex base size, and the container grows by it.
 
+## Percentages inside an absolutely positioned box of content height
+
+Census category `Absolute` (with others). Fixture `abspos_content_height_indefinite`.
+
+The height of an absolutely positioned box found from its content is not definite (CSS 2.2
+§10.5, css-sizing-3 §2.1): percentage heights inside behave as `auto`, percentage maximum heights
+as `none`, and a percentage row gap is zero. A height between two insets, or transferred from
+the width through `aspect-ratio`, is definite. Taffy resolves them against the height found.
+
 ## The root (both engines, by design)
 
 Not a divergence between the engines, but where both differ from a browser's root element,
