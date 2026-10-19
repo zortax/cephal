@@ -38,21 +38,10 @@ pub(super) fn determine_flex_base_size<D: FlexDir, T: LayoutTree + CacheAccess +
         let transferred_max_size = child.max_size.maybe_apply_aspect_ratio(child.aspect_ratio);
 
         let plan = tree.style_plan(child.node);
-        let container_main = c.node_inner_size.main(dir);
-        let box_sizing_adjustment = if style.box_sizing == BoxSizing::ContentBox {
-            match plan {
-                // The item's own padding and border, resolved against nothing.
-                Some(_) => (child.padding + child.border).sum_axes(),
-                None => {
-                    let padding = style.padding.map(|p| p.resolve_or_zero(container_main, &calc));
-                    let border = style.border.map(|b| b.resolve_or_zero(container_main, &calc));
-                    (padding + border).sum_axes()
-                }
-            }
-        } else {
-            Size::ZERO
-        }
-        .main(dir);
+        // The item's padding and border resolve against the container's inline size on all four
+        // sides, as they did when the item was generated.
+        let box_sizing_adjustment =
+            if style.box_sizing == BoxSizing::ContentBox { (child.padding + child.border).main_axis_sum(dir) } else { 0.0 };
         let percent_resolution_main_size = if c.known_main_size_is_definite { c.node_inner_size.main(dir) } else { None };
         let flex_basis_style = style.flex_basis;
         let flex_basis = match plan {
