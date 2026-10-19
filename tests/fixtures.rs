@@ -347,7 +347,10 @@ fn check(tree: &Tree<Ahem>, id: NodeId, exp: &Expected, path: &str, errors: &mut
 }
 
 fn run_group(group: &str) {
-    let path = format!("{}/tests/fixtures/{group}.xml", env!("CARGO_MANIFEST_DIR"));
+    run_file(group, &format!("{}/tests/fixtures/{group}.xml", env!("CARGO_MANIFEST_DIR")));
+}
+
+fn run_file(group: &str, path: &str) {
     let raw = std::fs::read_to_string(&path).expect("fixture file");
     let doc = Document::parse(&raw).unwrap();
     let filter = std::env::var("CEPHAL_FIXTURE").ok();
@@ -460,4 +463,14 @@ fn gridflex() {
 #[test]
 fn cephal() {
     run_group("cephal");
+}
+/// Fixtures rendered elsewhere, to try new ones out before they join `cephal`:
+/// `scripts/gen_fixtures.sh DIR target/scratch.xml`, then
+/// `CEPHAL_FIXTURE_XML=target/scratch.xml cargo test --test fixtures scratch -- --ignored`.
+#[test]
+#[ignore]
+fn scratch() {
+    let path = std::env::var("CEPHAL_FIXTURE_XML").expect("CEPHAL_FIXTURE_XML");
+    let path = if path.starts_with('/') { path } else { format!("{}/{path}", env!("CARGO_MANIFEST_DIR")) };
+    run_file("scratch", &path);
 }

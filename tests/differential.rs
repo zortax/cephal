@@ -120,7 +120,8 @@ fn strip(tree: &mut Tree<Text>, root: cephal::tree::NodeId, what: Strip) {
     }
 }
 
-fn run_with(seed: u64, relaxed: bool, strips: &[Strip]) -> Vec<String> {
+/// The tree of `seed` and its viewport, as [`run_with`] lays them out.
+fn seed_tree(seed: u64, relaxed: bool, strips: &[Strip]) -> (Tree<Text>, cephal::tree::NodeId, Size<AvailableSpace>) {
     let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
     let mut tree: Tree<Text> = Tree::new();
     let root = build_subtree(&mut rng, &mut tree, 0);
@@ -156,6 +157,11 @@ fn run_with(seed: u64, relaxed: bool, strips: &[Strip]) -> Vec<String> {
         width: AvailableSpace::Definite(rng.below(600) as f32 + 50.0),
         height: rng.pick(&[AvailableSpace::MaxContent, AvailableSpace::Definite(300.0)]),
     };
+    (tree, root, viewport)
+}
+
+fn run_with(seed: u64, relaxed: bool, strips: &[Strip]) -> Vec<String> {
+    let (mut tree, root, viewport) = seed_tree(seed, relaxed, strips);
     tree.compute_layout_with_measure(root, viewport, measure);
     let (mut taffy_tree, taffy_root, map) = mirror_in_taffy(&tree, root);
     taffy_tree.disable_rounding();
@@ -253,7 +259,7 @@ fn matches_taffy_on_random_trees() {
             let errors = run(seed, true);
             let differs = !errors.is_empty();
             if differs && !known.contains_key(&seed) {
-                failing.push(errors);
+                failing.push((seed, errors));
             }
             differs
         };
@@ -261,8 +267,9 @@ fn matches_taffy_on_random_trees() {
             agreeing.push(seed);
         }
     }
-    let shown: Vec<String> = failing.iter().take(10).map(|e| e.join("\n")).collect();
-    assert!(failing.is_empty(), "{} of {seeds} trees differ from taffy\n{}", failing.len(), shown.join("\n\n"));
+    let shown: Vec<String> = failing.iter().take(10).map(|(_, e)| e.join("\n")).collect();
+    let listed: Vec<u64> = failing.iter().map(|(s, _)| *s).collect();
+    assert!(failing.is_empty(), "{} of {seeds} trees differ from taffy: {listed:?}\n{}", failing.len(), shown.join("\n\n"));
     assert!(agreeing.is_empty(), "now agree with taffy; remove from differential_known.txt: {agreeing:?}");
 }
 
@@ -303,19 +310,13 @@ fn census() {
     }
 }
 
-/// `CEPHAL_SEED=106 cargo test --test differential debug_diff -- --ignored --nocapture`
+/// `CEPHAL_SEED=106 cargo test --test differential debug_diff -- --ignored --nocapture`; the relaxed
+/// tree with `CEPHAL_RELAXED=1`.
 #[test]
 #[ignore]
 fn debug_diff() {
     let seed: u64 = std::env::var("CEPHAL_SEED").unwrap().parse().unwrap();
-    let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
-    let mut tree: Tree<Text> = Tree::new();
-    let root = build_subtree(&mut rng, &mut tree, 0);
-    tree.disable_rounding();
-    let viewport = Size {
-        width: AvailableSpace::Definite(rng.below(600) as f32 + 50.0),
-        height: rng.pick(&[AvailableSpace::MaxContent, AvailableSpace::Definite(300.0)]),
-    };
+    let (mut tree, root, viewport) = seed_tree(seed, std::env::var_os("CEPHAL_RELAXED").is_some(), &[]);
     println!("viewport {viewport:?}");
     tree.compute_layout_with_measure(root, viewport, measure);
     let (mut taffy_tree, taffy_root, map) = mirror_in_taffy(&tree, root);
@@ -332,4 +333,514 @@ fn debug_diff() {
         );
         println!("       cephal x={} y={} w={} h={} | taffy x={} y={} w={} h={}", a.location.x, a.location.y, a.size.width, a.size.height, b.location.x, b.location.y, b.size.width, b.size.height);
     }
+}
+
+// --- Chrome adjudication ------------------------------------------------------------------------
+//
+//   CEPHAL_SEEDS=721,940 cargo test --release --test differential to_html -- --ignored --nocapture
+//   scripts/gen_fixtures.sh target/diff_seeds/html target/diff_seeds/chrome.xml
+//   CEPHAL_SEEDS=721,940 cargo test --release --test differential adjudicate -- --ignored --nocapture
+//
+// `CEPHAL_SEEDS` is a list of seeds and ranges (`1-300,721`); all seeds of differential_known.txt
+// by default. `to_html` writes `diff_seed_<n>.html` (the tree `run` compares unrelaxed) and
+// `diff_seed_<n>_relaxed.html` into `CEPHAL_HTML_DIR` (default target/diff_seeds/html); gentest
+// renders them in Chrome; `adjudicate` lays the same trees out in cephal and taffy and compares
+// both with Chrome (`CEPHAL_CHROME_XML`, default target/diff_seeds/chrome.xml). `CEPHAL_VERBOSE=1`
+// lists agreeing boxes too.
+
+#[path = "common/chrome.rs"]
+mod chrome;
+
+fn chrome_seeds() -> Vec<u64> {
+    match std::env::var("CEPHAL_SEEDS") {
+        Ok(v) => v
+            .split(',')
+            .flat_map(|part| match part.split_once('-') {
+                Some((a, b)) => (a.trim().parse::<u64>().unwrap()..=b.trim().parse().unwrap()).collect::<Vec<_>>(),
+                None => vec![part.trim().parse().unwrap()],
+            })
+            .collect(),
+        Err(_) => known_divergent().keys().copied().collect(),
+    }
+}
+
+/// Unrounded layouts of every node in `all_nodes` order, parent-relative: cephal's and taffy's.
+/// `chrome_text` gives text the baselines Chrome gives Ahem text.
+fn both_layouts(
+    tree: &Tree<Text>,
+    root: cephal::tree::NodeId,
+    viewport: Size<AvailableSpace>,
+    chrome_text: bool,
+) -> (Vec<chrome::Rect4>, Vec<chrome::Rect4>) {
+    let mut ours = tree.clone_cold();
+    ours.disable_rounding();
+    if chrome_text {
+        ours.compute_layout_with_measure(root, viewport, measure_chrome);
+    } else {
+        ours.compute_layout_with_measure(root, viewport, measure);
+    }
+    let (mut taffy_tree, taffy_root, map) = mirror_in_taffy(&ours, root);
+    taffy_tree.disable_rounding();
+    if chrome_text {
+        taffy_tree.compute_layout_with_measure(taffy_root, to_taffy_space(viewport), taffy_measure_chrome).unwrap();
+    } else {
+        taffy_tree.compute_layout_with_measure(taffy_root, to_taffy_space(viewport), taffy_measure).unwrap();
+    }
+    let theirs = taffy_parent_relative(&ours, &taffy_tree, &map);
+    let a = map.iter().map(|&(n, _)| {
+        let l = ours.unrounded_layout(n);
+        chrome::Rect4 { x: l.location.x, y: l.location.y, w: l.size.width, h: l.size.height }
+    });
+    let b = theirs.iter().map(|l| chrome::Rect4 { x: l.location.x, y: l.location.y, w: l.size.width, h: l.size.height });
+    (a.collect(), b.collect())
+}
+
+/// Ahem text as Chrome sets it: the first baseline 8px below the content box's top (the font's
+/// ascent), the last one a line further down per wrapped line.
+fn text_baselines(n: u32, content_width: f32) -> (f32, f32) {
+    let per_line = (content_width / 10.0).floor().max(1.0);
+    let lines = (n as f32 / per_line).ceil().max(1.0);
+    (8.0, (lines - 1.0) * 10.0 + 8.0)
+}
+
+fn measure_chrome(ctx: &mut Text, input: cephal::tree::MeasureInput, style: &cephal::style::Style) -> cephal::tree::MeasureOutput {
+    let mut out = measure(ctx, input, style);
+    let (first, last) = text_baselines(ctx.0, out.size.width);
+    out.baselines = cephal::tree::Baselines { first: Some(first), last: Some(last) };
+    out
+}
+
+fn taffy_measure_chrome(
+    inputs: taffy::LayoutInput,
+    node: taffy::NodeId,
+    context: Option<&mut Text>,
+    style: &taffy::Style,
+) -> taffy::LayoutOutput {
+    use taffy::util::ResolveOrZero;
+    let text = context.as_ref().map(|t| t.0);
+    let mut out = taffy_measure(inputs, node, context, style);
+    if let Some(n) = text {
+        let basis = inputs.parent_size.width;
+        let padding: taffy::Rect<f32> = style.padding.resolve_or_zero(basis, |_, _| 0.0);
+        let border: taffy::Rect<f32> = style.border.resolve_or_zero(basis, |_, _| 0.0);
+        let content_width = out.size.width - padding.left - padding.right - border.left - border.right;
+        let (first, last) = text_baselines(n, content_width);
+        let top = padding.top + border.top;
+        out.baselines = taffy::Baselines { first: Some(top + first), last: Some(top + last) };
+    }
+    out
+}
+
+fn near(a: chrome::Rect4, b: chrome::Rect4, tolerance: f32) -> bool {
+    (a.x - b.x).abs() <= tolerance && (a.y - b.y).abs() <= tolerance && (a.w - b.w).abs() <= tolerance && (a.h - b.h).abs() <= tolerance
+}
+
+/// The tree of `seed` with the sizes Chrome cannot express (`fit-content(<length>)`) replaced by
+/// values under which cephal and taffy each lay the tree out exactly as before; sizes with no such
+/// replacement stay, and `chrome::caveats` reports them. Returns the substitutions made.
+fn expressible(seed: u64, relaxed: bool) -> (Tree<Text>, cephal::tree::NodeId, Size<AvailableSpace>, Vec<String>) {
+    use cephal::style::LengthKind;
+    let (mut tree, root, viewport) = seed_tree(seed, relaxed, &[]);
+    let reference = both_layouts(&tree, root, viewport, false);
+    let same = |t: &Tree<Text>| {
+        let (a, b) = both_layouts(t, root, viewport, false);
+        a.iter().zip(&reference.0).all(|(x, y)| near(*x, *y, 0.001)) && b.iter().zip(&reference.1).all(|(x, y)| near(*x, *y, 0.001))
+    };
+    let mut nodes = Vec::new();
+    all_nodes(&tree, root, &mut nodes);
+    let mut done = Vec::new();
+    let names = ["width", "height", "flex-basis"];
+    let ix = |n: cephal::tree::NodeId| nodes.iter().position(|&m| m == n).unwrap();
+    let set = |s: &mut cephal::style::Style, field: usize, v: Dimension| *[&mut s.size.width, &mut s.size.height, &mut s.flex_basis][field] = v;
+    for &n in &nodes {
+        for field in 0..3 {
+            let value = [tree.style(n).size.width, tree.style(n).size.height, tree.style(n).flex_basis][field];
+            if !matches!(value.raw().kind(), LengthKind::FitContentPx(_) | LengthKind::FitContentPercent(_)) {
+                continue;
+            }
+            let i = nodes.iter().position(|&m| m == n).unwrap();
+            let size = reference.0[i];
+            let mut candidates = vec![Dimension::FIT_CONTENT, Dimension::MAX_CONTENT, Dimension::MIN_CONTENT, Dimension::AUTO];
+            if field < 2 {
+                candidates.push(Dimension::length(if field == 0 { size.w } else { size.h }));
+            }
+            let found = candidates.into_iter().find(|&c| {
+                let mut t = tree.clone_cold();
+                t.patch_style(n, |s| set(s, field, c));
+                same(&t)
+            });
+            if let Some(c) = found {
+                tree.patch_style(n, |s| set(s, field, c));
+                done.push(format!("#{} {}: {value:?} as {c:?}", ix(n), names[field]));
+            }
+        }
+    }
+    // The root model of both engines (see TAFFY_DIVERGENCES.md): an in-flow root's `auto` margins
+    // count as zero, and an in-flow flex or grid root of `auto` width takes the width its algorithm
+    // gives it rather than filling the viewport as CSS's block-level root box does. Pin both, so
+    // Chrome judges the rest of the tree.
+    let style = tree.style(root).clone();
+    if !(style.position.is_out_of_flow() && matches!(viewport.height, AvailableSpace::Definite(_))) {
+        let mut t = tree.clone_cold();
+        t.patch_style(root, |s| {
+            for m in [&mut s.margin.left, &mut s.margin.right, &mut s.margin.top, &mut s.margin.bottom] {
+                if m.is_auto() {
+                    *m = cephal::style::LengthPercentageAuto::ZERO;
+                }
+            }
+        });
+        if style.margin != t.style(root).margin && same(&t) {
+            tree = t;
+            done.push("#0 auto margins as 0".into());
+        }
+        if matches!(style.display, Display::Flex | Display::Grid) && style.size.width.is_auto() && (reference.0[0].w - reference.1[0].w).abs() < 0.001 {
+            let width = Dimension::length(reference.0[0].w);
+            let mut t = tree.clone_cold();
+            t.patch_style(root, |s| s.size.width = width);
+            if same(&t) {
+                tree = t;
+                done.push(format!("#0 width: auto as {width:?}"));
+            }
+        }
+    }
+    (tree, root, viewport, done)
+}
+
+/// Writes the fixtures of `chrome_seeds()` for gentest (see above).
+#[test]
+#[ignore]
+fn to_html() {
+    let dir = std::env::var("CEPHAL_HTML_DIR").unwrap_or_else(|_| format!("{}/target/diff_seeds/html", env!("CARGO_MANIFEST_DIR")));
+    std::fs::create_dir_all(&dir).unwrap();
+    for seed in chrome_seeds() {
+        for relaxed in [false, true] {
+            let (tree, root, viewport, substituted) = expressible(seed, relaxed);
+            let caveats = chrome::caveats(&tree, root, viewport);
+            let name = if relaxed { format!("diff_seed_{seed}_relaxed") } else { format!("diff_seed_{seed}") };
+            let mut title = format!("Random tree {seed}{} of tests/differential.rs, viewport {viewport:?}", if relaxed { ", relaxed" } else { "" });
+            if !substituted.is_empty() {
+                title += &format!(". Substituted, leaving cephal and taffy unchanged: {}", substituted.join("; "));
+            }
+            if !caveats.is_empty() {
+                title += &format!(". Not expressible exactly: {}", caveats.join("; "));
+            }
+            std::fs::write(format!("{dir}/{name}.html"), chrome::to_html(&tree, root, viewport, &title)).unwrap();
+            println!("{name}: {} substituted, {} caveats{}", substituted.len(), caveats.len(), caveats.iter().map(|c| format!("\n    {c}")).collect::<String>());
+        }
+    }
+}
+
+/// Compares cephal and taffy with Chrome on the fixtures `to_html` wrote (see above).
+#[test]
+#[ignore]
+fn adjudicate() {
+    let path = std::env::var("CEPHAL_CHROME_XML").unwrap_or_else(|_| format!("{}/target/diff_seeds/chrome.xml", env!("CARGO_MANIFEST_DIR")));
+    let xml = std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+    let verbose = std::env::var_os("CEPHAL_VERBOSE").is_some();
+    for seed in chrome_seeds() {
+        for relaxed in [false, true] {
+            let (tree, root, viewport, _) = expressible(seed, relaxed);
+            let name = if relaxed { format!("diff_seed_{seed}_relaxed") } else { format!("diff_seed_{seed}") };
+            let Some(expected) = chrome::expectations(&xml, &format!("{name}__border_box_ltr"), &tree, root, viewport) else {
+                println!("{name}: not rendered");
+                continue;
+            };
+            let (ours, theirs) = both_layouts(&tree, root, viewport, true);
+            let (plain_ours, plain_theirs) = both_layouts(&tree, root, viewport, false);
+            let baselines_matter = ours.iter().zip(&plain_ours).any(|(a, b)| !near(*a, *b, 0.001))
+                || theirs.iter().zip(&plain_theirs).any(|(a, b)| !near(*a, *b, 0.001));
+            let mut nodes = Vec::new();
+            all_nodes(&tree, root, &mut nodes);
+            let tolerance = 0.1;
+            let mut lines = Vec::new();
+            let (mut cephal_wrong, mut taffy_wrong) = (0, 0);
+            // Where the engines differ: which one Chrome agrees with.
+            let mut verdicts = Vec::new();
+            // Wrong boxes whose parent cephal gets right: where its mistakes start.
+            let mut first_wrong = Vec::new();
+            for (i, &n) in nodes.iter().enumerate() {
+                let Some(c) = expected[i] else { continue };
+                let (a, b) = (ours[i], theirs[i]);
+                let (ca, tb, ab) = (near(a, c, tolerance), near(b, c, tolerance), near(a, b, 0.01));
+                let parent_right = tree.parent(n).is_none_or(|p| {
+                    let j = nodes.iter().position(|&m| m == p).unwrap();
+                    expected[j].is_none_or(|e| near(ours[j], e, tolerance))
+                });
+                if !ca && parent_right {
+                    first_wrong.push(format!("#{i}"));
+                }
+                cephal_wrong += !ca as usize;
+                taffy_wrong += !tb as usize;
+                if !ab {
+                    verdicts.push(format!("#{i} {}", match (ca, tb) {
+                        (true, false) => "cephal",
+                        (false, true) => "taffy",
+                        (false, false) => "neither",
+                        (true, true) => "both",
+                    }));
+                }
+                if verbose || !ca || !tb {
+                    let s = tree.style(n);
+                    let mark = match (ca, tb) {
+                        (true, true) => "ok    ",
+                        (false, true) => "CEPHAL",
+                        (true, false) => "TAFFY ",
+                        (false, false) => "BOTH  ",
+                    };
+                    let parent = tree.parent(n).map_or("-".to_string(), |p| format!("#{}", nodes.iter().position(|&m| m == p).unwrap()));
+                    lines.push(format!(
+                        "  {mark} #{i} depth={} parent={parent} {:?} {:?}\n         chrome {:>9.3} {:>9.3} {:>9.3} {:>9.3}\n         cephal {:>9.3} {:>9.3} {:>9.3} {:>9.3}\n         taffy  {:>9.3} {:>9.3} {:>9.3} {:>9.3}",
+                        tree.depth(n), s.display, s.position, c.x, c.y, c.w, c.h, a.x, a.y, a.w, a.h, b.x, b.y, b.w, b.h
+                    ));
+                }
+            }
+            println!(
+                "{name}: cephal {cephal_wrong} wrong (from {}), taffy {taffy_wrong} wrong; where they differ, Chrome agrees with: {}{}",
+                if first_wrong.is_empty() { "-".to_string() } else { first_wrong.join(" ") },
+                if verdicts.is_empty() { "-".to_string() } else { verdicts.join(", ") },
+                if baselines_matter { " (text baselines matter)" } else { "" }
+            );
+            for l in lines {
+                println!("{l}");
+            }
+        }
+    }
+}
+
+/// One edit the reducer tries.
+#[derive(Clone, Copy, Debug)]
+enum Edit {
+    /// Removes the box and its subtree.
+    Remove(usize),
+    /// Replaces the box by its children.
+    Hoist(usize),
+    /// Removes or shortens the text.
+    Text(usize, Option<u32>),
+    /// Resets one property (see `reset`) to its initial value.
+    Reset(usize, usize),
+}
+
+const RESETS: &[&str] = &[
+    "display", "width", "height", "min-width", "min-height", "max-width", "max-height", "margin-left", "margin-right", "margin-top",
+    "margin-bottom", "padding-left", "padding-right", "padding-top", "padding-bottom", "border", "gap", "aspect-ratio", "position",
+    "left", "right", "top", "bottom", "overflow", "flex-direction", "flex-wrap", "flex-grow", "flex-shrink", "flex-basis",
+    "align-items", "align-self", "justify-content", "align-content", "grid-template-columns", "grid-template-rows", "grid-auto-rows",
+    "grid-row", "grid-column",
+];
+
+/// Resets property `which` of `RESETS`; false when it already has its initial value.
+fn reset(s: &mut cephal::style::Style, which: usize) -> bool {
+    use cephal::style::{LengthPercentage, LengthPercentageAuto, Position, Style};
+    let d = Style::DEFAULT;
+    let before = s.clone();
+    match RESETS[which] {
+        "display" => s.display = Display::Block,
+        "width" => s.size.width = d.size.width,
+        "height" => s.size.height = d.size.height,
+        "min-width" => s.min_size.width = d.min_size.width,
+        "min-height" => s.min_size.height = d.min_size.height,
+        "max-width" => s.max_size.width = d.max_size.width,
+        "max-height" => s.max_size.height = d.max_size.height,
+        "margin-left" => s.margin.left = LengthPercentageAuto::ZERO,
+        "margin-right" => s.margin.right = LengthPercentageAuto::ZERO,
+        "margin-top" => s.margin.top = LengthPercentageAuto::ZERO,
+        "margin-bottom" => s.margin.bottom = LengthPercentageAuto::ZERO,
+        "padding-left" => s.padding.left = LengthPercentage::ZERO,
+        "padding-right" => s.padding.right = LengthPercentage::ZERO,
+        "padding-top" => s.padding.top = LengthPercentage::ZERO,
+        "padding-bottom" => s.padding.bottom = LengthPercentage::ZERO,
+        "border" => s.border = d.border,
+        "gap" => s.gap = d.gap,
+        "aspect-ratio" => s.aspect_ratio = None,
+        "position" => {
+            s.position = Position::Static;
+            s.inset = d.inset;
+        }
+        "left" => s.inset.left = LengthPercentageAuto::AUTO,
+        "right" => s.inset.right = LengthPercentageAuto::AUTO,
+        "top" => s.inset.top = LengthPercentageAuto::AUTO,
+        "bottom" => s.inset.bottom = LengthPercentageAuto::AUTO,
+        "overflow" => {
+            s.overflow = d.overflow;
+            s.scrollbar_width = d.scrollbar_width;
+        }
+        "flex-direction" => s.flex_direction = d.flex_direction,
+        "flex-wrap" => s.flex_wrap = d.flex_wrap,
+        "flex-grow" => s.flex_grow = d.flex_grow,
+        "flex-shrink" => s.flex_shrink = d.flex_shrink,
+        "flex-basis" => s.flex_basis = d.flex_basis,
+        "align-items" => s.align_items = None,
+        "align-self" => s.align_self = None,
+        "justify-content" => s.justify_content = None,
+        "align-content" => s.align_content = None,
+        "grid-template-columns" if s.grid.is_some() => s.grid_mut().template_columns.clear(),
+        "grid-template-rows" if s.grid.is_some() => s.grid_mut().template_rows.clear(),
+        "grid-auto-rows" if s.grid.is_some() => s.grid_mut().auto_rows.clear(),
+        "grid-row" => s.grid_row = d.grid_row,
+        "grid-column" => s.grid_column = d.grid_column,
+        _ => {}
+    }
+    *s != before
+}
+
+/// Applies `edits` in order to a copy of `tree`, skipping those whose box is gone.
+fn apply_edits(tree: &Tree<Text>, root: cephal::tree::NodeId, edits: &[Edit]) -> Tree<Text> {
+    let mut nodes = Vec::new();
+    all_nodes(tree, root, &mut nodes);
+    let mut t = tree.clone_cold();
+    let alive = |t: &Tree<Text>, n: cephal::tree::NodeId| std::iter::successors(Some(n), |&a| t.parent(a)).last() == Some(root);
+    for &e in edits {
+        match e {
+            Edit::Remove(i) if alive(&t, nodes[i]) && i != 0 => t.remove(nodes[i]),
+            Edit::Hoist(i) if alive(&t, nodes[i]) && i != 0 => {
+                let n = nodes[i];
+                let parent = t.parent(n).unwrap();
+                let children: Vec<_> = t.children(n).collect();
+                for c in children {
+                    t.detach(c);
+                    t.insert_child_before(parent, c, Some(n));
+                }
+                t.remove(n);
+            }
+            Edit::Text(i, text) if alive(&t, nodes[i]) => t.set_context(nodes[i], text.map(Text)),
+            Edit::Reset(i, which) if alive(&t, nodes[i]) => t.patch_style(nodes[i], |s| {
+                reset(s, which);
+            }),
+            _ => {}
+        }
+    }
+    t
+}
+
+/// The single edits worth trying on `tree`, biggest first.
+fn candidate_edits(tree: &Tree<Text>, root: cephal::tree::NodeId) -> Vec<Edit> {
+    let mut nodes = Vec::new();
+    all_nodes(tree, root, &mut nodes);
+    let mut edits = Vec::new();
+    for i in 1..nodes.len() {
+        edits.push(Edit::Remove(i));
+    }
+    for (i, &n) in nodes.iter().enumerate().skip(1) {
+        if tree.children(n).next().is_some() {
+            edits.push(Edit::Hoist(i));
+        }
+    }
+    for (i, &n) in nodes.iter().enumerate() {
+        if let Some(t) = tree.context(n) {
+            edits.push(Edit::Text(i, None));
+            if t.0 > 1 {
+                edits.push(Edit::Text(i, Some(t.0 / 2)));
+            }
+        }
+        for which in 0..RESETS.len() {
+            let mut s = tree.style(n).clone();
+            if reset(&mut s, which) {
+                edits.push(Edit::Reset(i, which));
+            }
+        }
+    }
+    edits
+}
+
+/// Which disagreement the reducer keeps.
+#[derive(Clone, Copy, PartialEq)]
+enum Keep {
+    /// cephal differs from Chrome somewhere.
+    Cephal,
+    /// cephal differs from Chrome where taffy agrees with it.
+    TaffyRight,
+    /// taffy differs from Chrome where cephal agrees with it.
+    TaffyWrong,
+}
+
+/// Renders `trees` in Chrome; per tree, whether the disagreement `keep` is there.
+fn chrome_check(dir: &str, trees: &[Tree<Text>], root: cephal::tree::NodeId, viewport: Size<AvailableSpace>, keep: Keep, max_caveats: usize) -> Vec<bool> {
+    let html = format!("{dir}/html");
+    let _ = std::fs::remove_dir_all(&html);
+    std::fs::create_dir_all(&html).unwrap();
+    for (i, t) in trees.iter().enumerate() {
+        std::fs::write(format!("{html}/c{i}.html"), chrome::to_html(t, root, viewport, &format!("candidate {i}"))).unwrap();
+    }
+    let xml = format!("{dir}/chrome.xml");
+    let status = std::process::Command::new(format!("{}/scripts/gen_fixtures.sh", env!("CARGO_MANIFEST_DIR")))
+        .args([&html, &xml])
+        .stdout(std::process::Stdio::null())
+        .status()
+        .unwrap();
+    assert!(status.success());
+    let xml = std::fs::read_to_string(&xml).unwrap();
+    trees
+        .iter()
+        .enumerate()
+        .map(|(i, t)| {
+            if chrome::caveats(t, root, viewport).len() > max_caveats {
+                return false;
+            }
+            let Some(expected) = chrome::expectations(&xml, &format!("c{i}__border_box_ltr"), t, root, viewport) else { return false };
+            let (ours, theirs) = both_layouts(t, root, viewport, true);
+            expected.iter().zip(ours.iter().zip(&theirs)).any(|(e, (a, b))| {
+                let Some(e) = *e else { return false };
+                let (ca, tb) = (near(*a, e, 0.1), near(*b, e, 0.1));
+                match keep {
+                    Keep::Cephal => !ca,
+                    Keep::TaffyRight => !ca && tb,
+                    Keep::TaffyWrong => ca && !tb,
+                }
+            })
+        })
+        .collect()
+}
+
+/// Shrinks the tree of a seed while Chrome still disagrees with cephal (`CEPHAL_KEEP=cephal`, the
+/// default), with cephal where taffy agrees with Chrome (`taffy-right`), or with taffy where cephal
+/// agrees (`taffy-wrong`); writes the result to target/reduce/<seed>/reduced.html.
+///
+/// `CEPHAL_SEED=990 cargo test --release --test differential reduce -- --ignored --nocapture`
+/// (`CEPHAL_RELAXED=1` for the relaxed tree).
+#[test]
+#[ignore]
+fn reduce() {
+    let seed: u64 = std::env::var("CEPHAL_SEED").unwrap().parse().unwrap();
+    let relaxed = std::env::var_os("CEPHAL_RELAXED").is_some();
+    let keep = match std::env::var("CEPHAL_KEEP").as_deref() {
+        Ok("taffy-right") => Keep::TaffyRight,
+        Ok("taffy-wrong") => Keep::TaffyWrong,
+        _ => Keep::Cephal,
+    };
+    let dir = format!("{}/target/reduce/{seed}", env!("CARGO_MANIFEST_DIR"));
+    let (mut tree, root, viewport, _) = expressible(seed, relaxed);
+    let max_caveats = chrome::caveats(&tree, root, viewport).len();
+    assert!(chrome_check(&dir, &[tree.clone_cold()], root, viewport, keep, max_caveats)[0], "Chrome does not show the disagreement");
+    loop {
+        let edits = candidate_edits(&tree, root);
+        let trees: Vec<Tree<Text>> = edits.iter().map(|&e| apply_edits(&tree, root, &[e])).collect();
+        let ok = chrome_check(&dir, &trees, root, viewport, keep, max_caveats);
+        let passing: Vec<Edit> = edits.iter().zip(&ok).filter(|(_, ok)| **ok).map(|(e, _)| *e).collect();
+        if passing.is_empty() {
+            break;
+        }
+        // Try ever shorter prefixes of all passing edits together; the single first one passes.
+        let mut prefixes = Vec::new();
+        let mut n = passing.len();
+        while n > 1 {
+            prefixes.push(n);
+            n /= 2;
+        }
+        let combined: Vec<Tree<Text>> = prefixes.iter().map(|&n| apply_edits(&tree, root, &passing[..n])).collect();
+        let ok = chrome_check(&dir, &combined, root, viewport, keep, max_caveats);
+        let n = prefixes.iter().zip(&ok).find(|(_, ok)| **ok).map_or(1, |(n, _)| *n);
+        tree = apply_edits(&tree, root, &passing[..n]);
+        let mut nodes = Vec::new();
+        all_nodes(&tree, root, &mut nodes);
+        println!("applied {n} of {} passing edits; {} boxes left", passing.len(), nodes.len());
+    }
+    let path = format!("{dir}/reduced.html");
+    std::fs::write(&path, chrome::to_html(&tree, root, viewport, &format!("Reduced from random tree {seed}"))).unwrap();
+    let (ours, theirs) = both_layouts(&tree, root, viewport, true);
+    let mut nodes = Vec::new();
+    all_nodes(&tree, root, &mut nodes);
+    for (i, (a, b)) in ours.iter().zip(&theirs).enumerate() {
+        println!("#{i} {:?}: cephal {a:?} taffy {b:?}", tree.style(nodes[i]).display);
+    }
+    println!("{path}");
 }
