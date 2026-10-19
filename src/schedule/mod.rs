@@ -56,6 +56,8 @@ pub trait Incremental: LayoutTree + CacheAccess {
 pub struct Scheduler {
     queue: DepthQueue,
     scratch: Vec<(LayoutInput, LayoutOutput, u8)>,
+    /// The initial containing block's pass must re-run (see [`Self::take_initial_containing_block`]).
+    initial_containing_block: bool,
 }
 
 impl Scheduler {
@@ -84,16 +86,31 @@ impl Scheduler {
         tree.set_flags(node, flags | DIRTY | QUEUED | OOF_PASS);
     }
 
+    /// Marks the containing block `cb` to re-run only its out-of-flow pass; `None` is the initial
+    /// containing block.
+    pub fn mark_containing_block<T: Incremental + ?Sized>(&mut self, tree: &mut T, cb: Option<NodeId>) {
+        match cb {
+            Some(cb) => self.mark_oof_pass(tree, cb),
+            None => self.initial_containing_block = true,
+        }
+    }
+
+    /// Whether the initial containing block's pass must re-run, and forgets it: pass it to
+    /// [`crate::compute::compute_root_layout_incremental`] after [`Self::run`].
+    pub fn take_initial_containing_block(&mut self) -> bool {
+        core::mem::take(&mut self.initial_containing_block)
+    }
+
     /// Marks the boxes claiming the out-of-flow candidates of `bits` that leave `node`.
     pub fn mark_claiming_blocks<T: Incremental + ?Sized>(&mut self, tree: &mut T, node: NodeId, bits: u8) {
         for bit in [OOF_ABSOLUTE, OOF_FIXED] {
             if bits & bit == 0 {
                 continue;
             }
+            // Out-of-flow boxes leave for their containing block, others for their parent.
             let next = if tree.is_out_of_flow(node) { tree.containing_block(node) } else { tree.parent(node) };
-            if let Some(cb) = next.and_then(|n| tree.claiming_block(n, bit)) {
-                self.mark_oof_pass(tree, cb);
-            }
+            let cb = next.and_then(|n| tree.claiming_block(n, bit));
+            self.mark_containing_block(tree, cb);
         }
     }
 
@@ -125,8 +142,7 @@ impl Scheduler {
                 tree.cache_mut(node).clear();
                 continue;
             }
-            // Laid out by its containing block last time: hidden layouts are never cached.
-            let placed_by_containing_block = tree.is_out_of_flow(node) && tree.cache(node).final_output().is_some();
+            let placed_by_containing_block = tree.is_out_of_flow(node) && !in_hidden_subtree(tree, node);
             let changed = if flags & OOF_PASS != 0 {
                 match self.oof_pass(tree, node) {
                     Some(changed) => changed,
@@ -138,13 +154,16 @@ impl Scheduler {
             if changed {
                 if placed_by_containing_block {
                     // Only its containing block asks it anything.
-                    if let Some(cb) = tree.containing_block(node) {
-                        self.mark_oof_pass(tree, cb);
-                    }
+                    let cb = tree.containing_block(node);
+                    self.mark_containing_block(tree, cb);
                 } else {
                     match parent {
                         Some(p) => self.mark(tree, p),
-                        None => root_changed = true,
+                        None => {
+                            // What the root passes on may have moved with it.
+                            root_changed = true;
+                            self.initial_containing_block = true;
+                        }
                     }
                 }
             } else if let Some(bits) = tree.cache(node).final_output().map(|o| o.oof)
@@ -207,6 +226,18 @@ impl Scheduler {
         self.scratch.clear();
         changed
     }
+}
+
+/// Whether an ancestor of `node` generates no box, so `node` is laid out hidden by its parent.
+fn in_hidden_subtree<T: Incremental + ?Sized>(tree: &T, node: NodeId) -> bool {
+    let mut at = tree.parent(node);
+    while let Some(n) = at {
+        if tree.style(n).generates_no_box() {
+            return true;
+        }
+        at = tree.parent(n);
+    }
+    false
 }
 
 /// Whether the parent could observe `new` differing from `old`.

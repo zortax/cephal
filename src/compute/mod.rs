@@ -375,11 +375,23 @@ pub fn compute_root_layout<T: LayoutTree + CacheAccess + ?Sized>(
     root: NodeId,
     available_space: Size<AvailableSpace>,
 ) {
+    compute_root_layout_incremental(tree, root, available_space, true);
+}
+
+/// [`compute_root_layout`] for a tree driven by [`crate::schedule::Scheduler`]: the initial
+/// containing block's pass re-runs only when the root's layout was recomputed or
+/// `initial_containing_block_dirty`, from [`crate::schedule::Scheduler::take_initial_containing_block`].
+pub fn compute_root_layout_incremental<T: LayoutTree + CacheAccess + ?Sized>(
+    tree: &mut T,
+    root: NodeId,
+    available_space: Size<AvailableSpace>,
+    initial_containing_block_dirty: bool,
+) {
     use crate::geometry::Rect;
     let style = tree.style(root);
     let direction = style.direction;
     let viewport = available_space.into_options();
-    let (layout, oof) = match (style.position.is_out_of_flow(), viewport.width, viewport.height) {
+    let (layout, oof, recomputed) = match (style.position.is_out_of_flow(), viewport.width, viewport.height) {
         (true, Some(width), Some(height)) => {
             let geometry = oof::OofGeometry {
                 area_size: Size { width, height },
@@ -391,11 +403,11 @@ pub fn compute_root_layout<T: LayoutTree + CacheAccess + ?Sized>(
                 grid: None,
             };
             let output = oof::layout_root(tree, root, &geometry);
-            (tree.unrounded_layout(root), output.oof)
+            (tree.unrounded_layout(root), output.oof, true)
         }
         _ => compute_in_flow_root_layout(tree, root, available_space),
     };
-    if oof == 0 {
+    if oof == 0 || !(recomputed || initial_containing_block_dirty) {
         return;
     }
     // Without a stored layout the root's offset is unknown; nothing else can be placed.
@@ -428,7 +440,7 @@ fn compute_in_flow_root_layout<T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     root: NodeId,
     available_space: Size<AvailableSpace>,
-) -> (Option<Layout>, u8) {
+) -> (Option<Layout>, u8, bool) {
     use crate::geometry::MaybeMath;
     let style = tree.style(root);
     let calc = |id, basis| tree.resolve_calc(id, basis);
@@ -468,22 +480,19 @@ fn compute_in_flow_root_layout<T: LayoutTree + CacheAccess + ?Sized>(
             .maybe_max(padding_border_size.map(Some));
     }
 
-    let output = compute_child_layout(
-        tree,
-        root,
-        LayoutInput {
-            run_mode: RunMode::PerformLayout,
-            sizing_mode: SizingMode::InherentSize,
-            axis: RequestedAxis::Both,
-            known_dimensions,
-            known_dimensions_are_definite: Size::TRUE,
-            parent_size,
-            available_space: root_available_space,
-            vertical_margins_are_collapsible: Line::FALSE,
-            context_key: 0,
-        },
-        None,
-    );
+    let input = LayoutInput {
+        run_mode: RunMode::PerformLayout,
+        sizing_mode: SizingMode::InherentSize,
+        axis: RequestedAxis::Both,
+        known_dimensions,
+        known_dimensions_are_definite: Size::TRUE,
+        parent_size,
+        available_space: root_available_space,
+        vertical_margins_are_collapsible: Line::FALSE,
+        context_key: 0,
+    };
+    let recomputed = !is_cached(tree, &ChildRequest { node: root, input });
+    let output = compute_child_layout(tree, root, input, None);
 
     let style = tree.style(root);
     let scrollbar_size = Size {
@@ -517,7 +526,7 @@ fn compute_in_flow_root_layout<T: LayoutTree + CacheAccess + ?Sized>(
         margin,
     };
     tree.set_unrounded_layout(root, &layout);
-    (Some(layout), output.oof)
+    (Some(layout), output.oof, recomputed)
 }
 
 /// A `ComputeSize` question for one axis of a child.

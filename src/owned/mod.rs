@@ -526,9 +526,8 @@ impl<Ctx> Tree<Ctx> {
             let id = self.id_of(i);
             let mut scheduler = core::mem::take(&mut self.scheduler);
             let mut marker = view::Marker { tree: self };
-            if let Some(cb) = crate::schedule::Incremental::containing_block(&marker, id) {
-                scheduler.mark_oof_pass(&mut marker, cb);
-            }
+            let cb = crate::schedule::Incremental::containing_block(&marker, id);
+            scheduler.mark_containing_block(&mut marker, cb);
             self.scheduler = scheduler;
         } else {
             self.mark_dirty_with_parent(i);
@@ -701,7 +700,8 @@ impl<Ctx> Tree<Ctx> {
                 let i = tree.index(root);
                 tree.caches[i].clear();
             }
-            crate::compute::compute_root_layout(&mut view, root, available_space);
+            let initial_containing_block = scheduler.take_initial_containing_block();
+            crate::compute::compute_root_layout_incremental(&mut view, root, available_space, initial_containing_block);
         }
         let this = slot.get_mut();
         this.scheduler = scheduler;
