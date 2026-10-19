@@ -7,7 +7,7 @@
     The height of an absolutely positioned box found from its content is not definite for the
     percentages inside (CSS 2.2 §10.5): percentage heights behave as auto and a percentage row
     gap is zero; a height between two insets, or transferred from the width through the aspect
-    ratio, is definite
+    ratio (also for a `fit-content` height, which behaves as auto then), is definite
   </title>
 </head>
 <body>
@@ -31,6 +31,11 @@
   </div>
   <div style="display: block; position: absolute; left: 200px; aspect-ratio: 1;">
     <div style="display: block; width: 50px; max-height: 50%;">
+      <div style="display: block; height: 40px;"></div>
+    </div>
+  </div>
+  <div style="display: block; position: absolute; left: 250px; height: fit-content; aspect-ratio: 1;">
+    <div style="display: block; width: 40px; max-height: 50%;">
       <div style="display: block; height: 40px;"></div>
     </div>
   </div>

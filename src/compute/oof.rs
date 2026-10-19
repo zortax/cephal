@@ -743,7 +743,7 @@ fn layout_oof_box<T: LayoutTree + CacheAccess + ?Sized>(
     // §10.5), nor a content-based sizing keyword's; one transferred from the width through the
     // aspect ratio is.
     let height_is_definite = match known_dimensions.height {
-        Some(_) => !(size_style.height.is_sizing_keyword() && !size_style.height.is_stretch()),
+        Some(_) => !(size_style.height.is_sizing_keyword() && !size_style.height.is_stretch()) || aspect_ratio.is_some(),
         None => aspect_ratio.is_some(),
     };
     let final_size = match (known_dimensions.width, known_dimensions.height) {

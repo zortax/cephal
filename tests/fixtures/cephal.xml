@@ -25,6 +25,11 @@
           <div display="block" direction="ltr" position="relative" height="40px"/>
         </div>
       </div>
+      <div display="block" direction="ltr" position="absolute" height="fit-content" aspect-ratio="1" left="250px">
+        <div display="block" direction="ltr" position="relative" width="40px" max-height="50%">
+          <div display="block" direction="ltr" position="relative" height="40px"/>
+        </div>
+      </div>
     </div>
   </input>
   <expectations>
@@ -48,6 +53,11 @@
       <node x="200" y="0" width="50" height="50">
         <node x="0" y="0" width="50" height="25">
           <node x="0" y="0" width="50" height="40"/>
+        </node>
+      </node>
+      <node x="250" y="0" width="40" height="40">
+        <node x="0" y="0" width="40" height="20">
+          <node x="0" y="0" width="40" height="40"/>
         </node>
       </node>
     </node>
@@ -78,6 +88,11 @@
           <div display="block" direction="rtl" position="relative" height="40px"/>
         </div>
       </div>
+      <div display="block" direction="rtl" position="absolute" height="fit-content" aspect-ratio="1" left="250px">
+        <div display="block" direction="rtl" position="relative" width="40px" max-height="50%">
+          <div display="block" direction="rtl" position="relative" height="40px"/>
+        </div>
+      </div>
     </div>
   </input>
   <expectations>
@@ -101,6 +116,11 @@
       <node x="200" y="0" width="50" height="50">
         <node x="0" y="0" width="50" height="25">
           <node x="0" y="0" width="50" height="40"/>
+        </node>
+      </node>
+      <node x="250" y="0" width="40" height="40">
+        <node x="0" y="0" width="40" height="20">
+          <node x="0" y="0" width="40" height="40"/>
         </node>
       </node>
     </node>
@@ -131,6 +151,11 @@
           <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="40px"/>
         </div>
       </div>
+      <div display="block" box-sizing="content-box" direction="ltr" position="absolute" height="fit-content" aspect-ratio="1" left="250px">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" width="40px" max-height="50%">
+          <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="40px"/>
+        </div>
+      </div>
     </div>
   </input>
   <expectations>
@@ -154,6 +179,11 @@
       <node x="200" y="0" width="50" height="50">
         <node x="0" y="0" width="50" height="25">
           <node x="0" y="0" width="50" height="40"/>
+        </node>
+      </node>
+      <node x="250" y="0" width="40" height="40">
+        <node x="0" y="0" width="40" height="20">
+          <node x="0" y="0" width="40" height="40"/>
         </node>
       </node>
     </node>
@@ -184,6 +214,11 @@
           <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="40px"/>
         </div>
       </div>
+      <div display="block" box-sizing="content-box" direction="rtl" position="absolute" height="fit-content" aspect-ratio="1" left="250px">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" width="40px" max-height="50%">
+          <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="40px"/>
+        </div>
+      </div>
     </div>
   </input>
   <expectations>
@@ -207,6 +242,11 @@
       <node x="200" y="0" width="50" height="50">
         <node x="0" y="0" width="50" height="25">
           <node x="0" y="0" width="50" height="40"/>
+        </node>
+      </node>
+      <node x="250" y="0" width="40" height="40">
+        <node x="0" y="0" width="40" height="20">
+          <node x="0" y="0" width="40" height="40"/>
         </node>
       </node>
     </node>
