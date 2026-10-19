@@ -236,9 +236,11 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
     let mut intrinsic_outer_height = flow.content_height;
     let mut first_baseline = flow.first_baseline;
     let mut last_baseline = flow.last_baseline;
-    // A BFC root contains its floats.
+    // A BFC root's content box contains its floats (CSS 2.2 §10.6.7); their contribution is measured
+    // from the border-box top, so the bottom padding, border and gutter come after it.
     if block_ctx.is_bfc_root() || establishes_new_bfc {
-        intrinsic_outer_height = intrinsic_outer_height.max(block_ctx.floated_content_height_contribution());
+        intrinsic_outer_height =
+            intrinsic_outer_height.max(block_ctx.floated_content_height_contribution() + resolved_content_box_inset.bottom);
     }
 
     let container_outer_height = known_dimensions

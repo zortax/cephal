@@ -1,9 +1,1 @@
 # group/fixture category -- fixtures from taffy v0.15.0 that cephal does not pass yet (Phase 1 shrinks this)
-cephal/abspos_static_after_float__border_box_ltr hoisting
-cephal/abspos_static_after_float__border_box_rtl hoisting
-cephal/abspos_static_after_float__content_box_ltr hoisting
-cephal/abspos_static_after_float__content_box_rtl hoisting
-cephal/abspos_sticky_containing_block__border_box_ltr hoisting
-cephal/abspos_sticky_containing_block__border_box_rtl hoisting
-cephal/abspos_sticky_containing_block__content_box_ltr hoisting
-cephal/abspos_sticky_containing_block__content_box_rtl hoisting

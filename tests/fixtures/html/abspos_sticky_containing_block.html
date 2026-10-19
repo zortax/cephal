@@ -4,14 +4,15 @@
   <script src="../../scripts/gentest/test_helper.js"></script>
   <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
   <title>
-    A sticky box is the containing block of its absolutely positioned descendants, and is laid out in flow without offsets
+    A sticky box is the containing block of its absolutely positioned descendants. Its own sticky
+    offsets need scroll positions, which a host applies, so it has none here
   </title>
 </head>
 <body>
 
 <div id="test-root" style="display: block; width: 200px; height: 160px; padding: 10px;">
   <div style="display: block; height: 30px;"></div>
-  <div style="display: block; position: sticky; top: 50px; left: 20px; height: 60px; padding: 5px;">
+  <div style="display: block; position: sticky; height: 60px; padding: 5px;">
     <div style="display: block; position: static;">
       <div style="position: absolute; right: 0; bottom: 0; width: 12px; height: 8px;"></div>
     </div>
