@@ -1,12 +1,20 @@
 #!/usr/bin/env python3
-"""Plots the scaling CSV written by `cargo run --release --example scaling`.
+"""Plots benchmark results.
+
+The comparative suite (`cargo bench --bench suite`, plus `scripts/external.sh` for Yoga and Clay):
+
+    python3 scripts/plot_bench.py suite target/bench/suite.csv [more.csv ...] \
+        [--instructions target/bench/instructions.csv] [--stats target/bench/stats.csv] \
+        [--baseline earlier.csv] --out target/bench/plots
+
+The scaling CSV written by `cargo run --release --example scaling`:
 
     python3 scripts/plot_bench.py target/bench/scaling.csv --out target/bench/plots
 
-With `pangui`, plots the CSV written by `CEPHAL_BENCH_CSV=... cargo bench --bench pangui` against
+With `pangui`, plots the PanGui workloads of a suite CSV against
 the numbers published with PanGui's layout benchmarks (see `PUBLISHED`):
 
-    python3 scripts/plot_bench.py pangui target/bench/pangui.csv [more.csv ...] \
+    python3 scripts/plot_bench.py pangui target/bench/suite.csv [more.csv ...] \
         [--baseline target/bench/pangui-main.csv] --out target/bench/plots
 """
 
@@ -207,6 +215,8 @@ STYLE = {
     "Clay": ("#eda100", "P"),
     "Taffy": ("#e34948", "^"),
     "Yoga": ("#4a3aa7", "X"),
+    "yoga": ("#4a3aa7", "X"),
+    "clay": ("#eda100", "P"),
 }
 FASTER, SLOWER = "#2a78d6", "#e34948"
 HERE = "measured here"
@@ -214,11 +224,13 @@ THERE = f"published, {PUBLISHED_MACHINE}"
 
 
 def load_pangui(paths):
-    """rows[(workload, engine)] -> (nodes, ns_per_node); later files override earlier ones."""
+    """rows[(workload, engine)] -> (nodes, ns_per_node) of cold layouts; later files override earlier ones."""
     rows = {}
     for path in paths:
         with open(path) as f:
             for r in csv.DictReader(f):
+                if r.get("mode", "cold") != "cold" or r["engine"] == "cephal_parallel":
+                    continue
                 rows[(r["workload"], r["engine"])] = (int(r["nodes"]), float(r["ns_per_node"]))
     return rows
 
@@ -449,7 +461,7 @@ def pangui_table(rows, engines, base):
 
 def pangui_main(argv):
     p = argparse.ArgumentParser(prog="plot_bench.py pangui")
-    p.add_argument("csv", nargs="*", default=["target/bench/pangui.csv"],
+    p.add_argument("csv", nargs="*", default=["target/bench/suite.csv"],
                    help="CSVs written by CEPHAL_BENCH_CSV; later files override rows of earlier ones")
     p.add_argument("--baseline", help="a CSV of an earlier run to compare cephal against")
     p.add_argument("--out", default="target/bench/plots")
@@ -473,6 +485,10 @@ def pangui_main(argv):
 def main():
     if sys.argv[1:2] == ["pangui"]:
         return pangui_main(sys.argv[2:])
+    if sys.argv[1:2] == ["suite"]:
+        import plot_suite  # noqa: PLC0415
+
+        return plot_suite.main(sys.argv[2:])
     p = argparse.ArgumentParser()
     p.add_argument("csv", nargs="?", default="target/bench/scaling.csv")
     p.add_argument("--out", default="target/bench/plots")

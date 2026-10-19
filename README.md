@@ -88,22 +88,32 @@ These results use an Intel Core i9-13900K and 24 threads. Measurements come from
 Run `cargo run --release --example scaling` to measure trees from 1,000 to 100,000 nodes.
 Use `scripts/plot_bench.py` to plot the results.
 
-`benches/pangui.rs` ports the cold-layout benchmarks from
-[PanGui's layout post](https://www.pangui.io/blog/05-layout-rework-and-benchmarks/) to CSS and
-adds grid, block, text, and random workloads. It prints the median time per node:
+`benches/suite.rs` is a comparative suite of about 60 workloads in `benches/workloads`, each
+written as CSS and tagged by what it exercises: PanGui's published workloads
+([PanGui's layout post](https://www.pangui.io/blog/05-layout-rework-and-benchmarks/)), flex, grid
+and block shapes, mixed documents, shapes expected to favour cephal or taffy, and pairs of
+workloads that take one of cephal's fast paths or miss it by one property. It times cold layouts,
+incremental frames (edits such as typing, hover, `display` toggles, inserted rows, resizes) and
+one-shot builds, for cephal, cephal in parallel, and taffy, and checks every engine's layout
+against cephal's:
 
 ```sh
-taskset -c 2 cargo bench --bench pangui [-- <filter>]
-CEPHAL_BENCH_TAFFY=1 CEPHAL_BENCH_CSV=target/bench/pangui.csv taskset -c 2 cargo bench --bench pangui
-python3 scripts/plot_bench.py pangui target/bench/pangui.csv --out target/bench/plots
+taskset -c 2 cargo bench --bench suite [-- <filter>...] [--tag grid] [--modes cold,incremental,build]
+scripts/external.sh [<filter>...]          # Yoga and Clay on the same trees, same machine
+scripts/instructions.sh --csv target/bench/instructions.csv
+python3 scripts/plot_bench.py suite target/bench/suite.csv \
+    --instructions target/bench/instructions.csv --out target/bench/plots
 ```
 
-`CEPHAL_BENCH_TAFFY=1` also times taffy on the same tree. `CEPHAL_BENCH_CSV` writes one row per
-workload and engine. The `pangui` plot mode compares these with the numbers PanGui published for
-PanGui, Clay, Taffy, and Yoga on a Ryzen 7 7800X3D. It also plots each engine's speed-up over
-taffy on the same machine. `--baseline other.csv` adds a before-and-after chart.
-`CEPHAL_NO_ROUNDING=1` disables pixel snapping in both engines, and `CEPHAL_BENCH_SECS` sets the
-sampling time.
+`scripts/external.sh` builds pinned releases of Yoga and Clay and lays out the trees the suite
+dumps. Every property is mapped to its CSS meaning, and a workload an engine cannot express is
+skipped. Where an engine's layout still differs from cephal's, for example because Yoga has no
+automatic minimum size or Clay does not shrink fixed sizes, the plots mark it as not comparable.
+The plots include a heatmap of every workload and engine, per-category comparisons, scaling
+curves, what each fast path is worth, incremental frame times against frame budgets, measure-call
+counts, instructions against time, measurement noise, and engine agreement. `report.md` holds
+the same numbers as tables. The `pangui` plot mode also compares the PanGui workloads with the
+numbers PanGui published on a Ryzen 7 7800X3D. `scripts/perf.md` lists the options.
 
 A few rows, in nanoseconds per node on one pinned core, with PanGui's published numbers from a
 different machine (Ryzen 7 7800X3D) for orientation:
