@@ -3,14 +3,15 @@
 use super::axis::FlexDir;
 use crate::compute::scratch::Scratch;
 use super::axis::FlexAxisSize;
+use super::flexible::Flexible;
 use super::{AlgoConstants, FlexItem, FlexLine};
 use crate::geometry::{AvailableSpace, MaybeMath, Size};
 
-fn single_line(items: &[FlexItem]) -> Scratch<FlexLine> {
+fn single_line<I>(items: &[I]) -> Scratch<FlexLine> {
     Scratch::collect([FlexLine { start: 0, end: items.len(), cross_size: 0.0, offset_cross: 0.0 }])
 }
 
-fn one_item_per_line(items: &[FlexItem]) -> Scratch<FlexLine> {
+fn one_item_per_line<I>(items: &[I]) -> Scratch<FlexLine> {
     Scratch::collect((0..items.len()).map(|i| FlexLine { start: i, end: i + 1, cross_size: 0.0, offset_cross: 0.0 }))
 }
 
@@ -30,7 +31,7 @@ fn main_axis_available_space<D: FlexDir>(c: &AlgoConstants<D>, available_space: 
     }
 }
 
-pub(super) fn collect_flex_lines<D: FlexDir>(c: &AlgoConstants<D>, available_space: Size<AvailableSpace>, items: &[FlexItem]) -> Scratch<FlexLine> {
+pub(super) fn collect_flex_lines<D: FlexDir, I: Flexible>(c: &AlgoConstants<D>, available_space: Size<AvailableSpace>, items: &[I]) -> Scratch<FlexLine> {
     if !c.is_wrap || !c.known_main_size_is_definite {
         return single_line(items);
     }
@@ -45,7 +46,7 @@ pub(super) fn collect_flex_lines<D: FlexDir>(c: &AlgoConstants<D>, available_spa
                 let mut line_length = 0.0;
                 let mut end = items.len();
                 for (idx, child) in items[start..].iter().enumerate() {
-                    line_length += child.hypothetical_outer_size.main(c.dir) + if idx == 0 { 0.0 } else { gap };
+                    line_length += child.hypothetical_outer_main(c.dir) + if idx == 0 { 0.0 } else { gap };
                     if line_length > limit && idx != 0 {
                         end = start + idx;
                         break;

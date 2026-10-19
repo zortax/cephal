@@ -1,11 +1,13 @@
-//! The flex algorithm for a single line of plain items, fused into a few passes over a compact
-//! item record.
+//! The flex algorithm for plain items in one line or in lines that wrap forwards (not
+//! `wrap-reverse` or `balance`), fused into a few passes over a compact item record.
 //!
 //! An item is plain when its lengths resolve without a parent size (it has a
 //! [`StylePlan`](crate::compute::plan::StylePlan)) and it has no `aspect-ratio`, auto margin,
 //! baseline alignment, sizing keyword, `content` basis or percentage basis. Each step below is the
 //! general algorithm's with the branches such items cannot take removed: the same questions are
-//! asked in the same order and batches, and every float is computed by the same expression.
+//! asked in the same order and batches, and every float is computed by the same expression. The
+//! one difference in batching: the items of all lines are asked their cross sizes in one batch,
+//! not one per line, since each answer depends only on the item's own target main size.
 
 use super::axis::{FlexAxisRect, FlexAxisSize, FlexAxisSum, FlexDir, abs_main, from_cross, sum_axis_gaps};
 use super::flexible::{Flexible, resolve_flexible_lengths};
@@ -290,19 +292,52 @@ pub(super) fn compute<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     inputs: LayoutInput,
     c: &mut AlgoConstants<D>,
 ) -> Result<LayoutOutput, Miss> {
-    let LayoutInput { known_dimensions, run_mode, .. } = inputs;
     let (mut items, has_other_children) = generate_items(tree, node, c)?;
     let dir = c.dir;
-    let available_space = super::determine_available_space(known_dimensions, inputs.available_space, c);
+    let available_space = super::determine_available_space(inputs.known_dimensions, inputs.available_space, c);
+    if c.is_wrap && !available_space.main(dir).is_definite() {
+        tree.note_observed(crate::compute::observed_bit(dir.main_axis()));
+    }
     c.indefinite_stretch_cross = indefinite_stretch_cross(tree, c, available_space, &items);
     determine_flex_base_size(tree, c, available_space, &mut items);
+    // An instance per kind, so that a single line's loops over its lines fold away.
+    if c.is_wrap {
+        lay_out::<true, D, T>(tree, node, inputs, c, available_space, items, has_other_children)
+    } else {
+        lay_out::<false, D, T>(tree, node, inputs, c, available_space, items, has_other_children)
+    }
+}
+
+/// [`compute`] from the hypothetical main sizes on, for a single line or, with `WRAP`, lines
+/// that wrap.
+#[inline(always)]
+fn lay_out<const WRAP: bool, D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
+    tree: &mut T,
+    node: NodeId,
+    inputs: LayoutInput,
+    c: &mut AlgoConstants<D>,
+    available_space: Size<AvailableSpace>,
+    mut items: Scratch<Item>,
+    has_other_children: bool,
+) -> Result<LayoutOutput, Miss> {
+    let LayoutInput { known_dimensions, run_mode, .. } = inputs;
+    let dir = c.dir;
+    let mut single;
+    let mut multi;
+    let lines: &mut [FlexLine] = if WRAP {
+        multi = super::lines::collect_flex_lines(c, available_space, &items);
+        &mut multi
+    } else {
+        single = [FlexLine { start: 0, end: items.len(), cross_size: 0.0, offset_cross: 0.0 }];
+        &mut single
+    };
 
     if let Some(inner_main_size) = c.node_inner_size.main(dir) {
         let outer_main_size = inner_main_size + c.content_box_inset.main_axis_sum(dir);
         c.inner_container_size.set_main(dir, inner_main_size);
         c.container_size.set_main(dir, outer_main_size);
     } else {
-        determine_container_main_size(tree, available_space, &mut items, c);
+        determine_container_main_size::<WRAP, _, _>(tree, available_space, lines, &items, c);
         c.node_inner_size.set_main(dir, Some(c.inner_container_size.main(dir)));
         c.node_outer_size.set_main(dir, Some(c.container_size.main(dir)));
         let style = tree.style(node);
@@ -316,38 +351,43 @@ pub(super) fn compute<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
         return Ok(LayoutOutput::from_outer_size(c.container_size));
     }
 
-    resolve_flexible_lengths(&mut items, c);
-    // A single line of known cross size has that size whatever its items measure.
-    let fixed_line_cross = known_dimensions.cross(dir);
+    for line in lines.iter() {
+        resolve_flexible_lengths(&mut items[line.start..line.end], c);
+    }
+    // A single line of known cross size has that size whatever its items measure. An item's
+    // cross size depends only on its own target main size, so all lines ask in one batch.
+    let fixed_line_cross = if WRAP { None } else { known_dimensions.cross(dir) };
     determine_hypothetical_cross_size(tree, &mut items, c, available_space, fixed_line_cross);
-    let cross_size = calculate_cross_size(&items, known_dimensions, c);
-    let mut lines = [FlexLine { start: 0, end: items.len(), cross_size, offset_cross: 0.0 }];
-    cross::handle_align_content_stretch(&mut lines, known_dimensions, c);
-    let line_cross_size = lines[0].cross_size;
-    for item in items.iter_mut() {
-        let target_cross = if item.stretched {
-            let (min, max) = (item.min_size.cross(dir), item.max_size.cross(dir));
-            (line_cross_size - item.margin.cross_axis_sum(dir)).max(0.0).maybe_clamp(min, max)
-        } else {
-            item.hypothetical_inner_size.cross(dir)
-        };
-        item.target_size.set_cross(dir, target_cross);
+    calculate_cross_size::<WRAP, _>(lines, &items, known_dimensions, c);
+    cross::handle_align_content_stretch(lines, known_dimensions, c);
+    for line in lines.iter() {
+        let line_cross_size = line.cross_size;
+        let line_items = &mut items[line.start..line.end];
+        for item in line_items.iter_mut() {
+            let target_cross = if item.stretched {
+                let (min, max) = (item.min_size.cross(dir), item.max_size.cross(dir));
+                (line_cross_size - item.margin.cross_axis_sum(dir)).max(0.0).maybe_clamp(min, max)
+            } else {
+                item.hypothetical_inner_size.cross(dir)
+            };
+            item.target_size.set_cross(dir, target_cross);
+        }
+        distribute_remaining_free_space(line_items, c);
+        for item in line_items.iter_mut() {
+            let outer_target_cross = item.target_size.cross(dir) + item.margin.cross_axis_sum(dir);
+            let free_space = line_cross_size - outer_target_cross;
+            item.offset_cross = align::cross_axis_offset(item.align_self, free_space, c, || unreachable!("no baseline alignment"));
+        }
     }
-    distribute_remaining_free_space(&mut items, c);
-    for item in items.iter_mut() {
-        let outer_target_cross = item.target_size.cross(dir) + item.margin.cross_axis_sum(dir);
-        let free_space = line_cross_size - outer_target_cross;
-        item.offset_cross = align::cross_axis_offset(item.align_self, free_space, c, || unreachable!("no baseline alignment"));
-    }
-    let total_line_cross_size = cross::determine_container_cross_size(&lines, known_dimensions, c);
+    let total_line_cross_size = cross::determine_container_cross_size(lines, known_dimensions, c);
 
     if run_mode == RunMode::ComputeSize {
         return Ok(LayoutOutput::from_outer_size(c.container_size));
     }
 
-    super::align::align_flex_lines_per_align_content(&mut lines, c, total_line_cross_size);
+    super::align::align_flex_lines_per_align_content(lines, c, total_line_cross_size);
     let mut through = Vec::new();
-    let (inflow_overflow_rect, baselines) = final_layout_pass(tree, &lines[0], &items, &mut through, c);
+    let (inflow_overflow_rect, baselines) = final_layout_pass::<WRAP, _, _>(tree, lines, &items, &mut through, c);
     let (absolute_overflow_rect, oof) = super::finish_children(tree, node, c, has_other_children, through);
     let mut output =
         LayoutOutput::from_sizes_and_baselines(c.container_size, Rect::ZERO, baselines).with_overflow(inflow_overflow_rect, absolute_overflow_rect);
@@ -363,7 +403,7 @@ fn indefinite_stretch_cross<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     items: &[Item],
 ) -> Option<f32> {
     let dir = c.dir;
-    if !c.is_column || c.node_inner_size.cross(dir).is_some() {
+    if !c.is_column || c.is_wrap || c.node_inner_size.cross(dir).is_some() {
         return None;
     }
     if !items.iter().any(|item| item.size.cross(dir).is_none() && item.align_self.keyword == AlignItemsKeyword::Stretch) {
@@ -515,130 +555,145 @@ fn determine_flex_base_size<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     }
 }
 
-/// See [`super::main_size::determine_container_main_size`]; one line.
-fn determine_container_main_size<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
+/// See [`super::main_size::determine_container_main_size`]; not balanced.
+fn determine_container_main_size<const WRAP: bool, D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     available_space: Size<AvailableSpace>,
-    items: &mut [Item],
+    lines: &[FlexLine],
+    items: &[Item],
     c: &mut AlgoConstants<D>,
 ) {
+    // A single line's loops fold away.
+    let lines = if WRAP { lines } else { &lines[..1] };
     let dir = c.dir;
     let main_content_box_inset = c.content_box_inset.main_axis_sum(dir);
-    let outer_main_size: f32 = match c.node_outer_size.main(dir) {
-        Some(v) => v,
-        None => match available_space.main(dir) {
-            AvailableSpace::Definite(_) => {
-                let gap = c.gap.main(dir);
-                let line_length = items
+    let longest_line_length = |gap: f32| {
+        lines
+            .iter()
+            .map(|line| {
+                let line_items = &items[line.start..line.end];
+                line_items
                     .iter()
                     .map(|ch| {
                         (ch.flex_basis.maybe_max(ch.min_size.main(dir)) + ch.margin.main_axis_sum(dir)).max(ch.padding_border.main(dir))
                     })
                     .sum::<f32>()
-                    + sum_axis_gaps(gap, items.len());
-                let longest_line_length = f32::max(f32::NEG_INFINITY, line_length).max(0.0);
-                longest_line_length + main_content_box_inset
+                    + sum_axis_gaps(gap, line_items.len())
+            })
+            .fold(f32::NEG_INFINITY, f32::max)
+            .max(0.0)
+    };
+    let outer_main_size: f32 = match c.node_outer_size.main(dir) {
+        Some(v) => v,
+        None => match available_space.main(dir) {
+            AvailableSpace::Definite(main_axis_available_space) => {
+                let size = longest_line_length(c.gap.main(dir)) + main_content_box_inset;
+                if lines.len() > 1 { size.max(main_axis_available_space) } else { size }
             }
+            AvailableSpace::MinContent if WRAP => longest_line_length(c.gap.main(dir)) + main_content_box_inset,
             AvailableSpace::MinContent | AvailableSpace::MaxContent => {
                 let mut main_size = 0.0f32;
-                // Summed as `sum` would: from -0.0, in item order.
-                let mut item_main_size_sum = -0.0f32;
-                for item in items.iter() {
-                    let style_min = item.min_size.main(dir);
-                    let style_preferred = item.size.main(dir);
-                    let style_max = item.max_size.main(dir);
-                    let clamping_basis =
-                        if c.is_row { Some(item.flex_basis).maybe_max(style_preferred) } else { Some(item.flex_basis) };
-                    let flex_basis_min = clamping_basis.filter(|_| item.flex_shrink == 0.0);
-                    let flex_basis_max = clamping_basis.filter(|_| item.flex_grow == 0.0);
-                    let min_main_size = style_min
-                        .maybe_max(flex_basis_min)
-                        .or(flex_basis_min)
-                        .unwrap_or(item.resolved_minimum_main_size)
-                        .max(item.resolved_minimum_main_size);
-                    let max_main_size = style_max.maybe_min(flex_basis_max).or(flex_basis_max).unwrap_or(f32::INFINITY);
-                    let content_contribution = match (min_main_size, style_preferred, max_main_size) {
-                        (min, Some(pref), max) if max <= min || max <= pref => {
-                            pref.min(max).max(min) + item.margin.main_axis_sum(dir)
-                        }
-                        (min, _, max) if max <= min => min + item.margin.main_axis_sum(dir),
-                        _ if item.overflow.x.is_scroll_container() || item.overflow.y.is_scroll_container() => {
-                            item.flex_basis + item.margin.main_axis_sum(dir)
-                        }
-                        (_, Some(pref), _) => {
-                            let inner_main_size = pref.max(item.padding_border_main);
-                            if c.is_row {
-                                (inner_main_size + item.margin.main_axis_sum(dir)).maybe_clamp(style_min, style_max)
+                for line in lines {
+                    let line_items = &items[line.start..line.end];
+                    // Summed as `sum` would: from -0.0, in item order.
+                    let mut item_main_size_sum = -0.0f32;
+                    for item in line_items.iter() {
+                        let style_min = item.min_size.main(dir);
+                        let style_preferred = item.size.main(dir);
+                        let style_max = item.max_size.main(dir);
+                        let clamping_basis =
+                            if c.is_row { Some(item.flex_basis).maybe_max(style_preferred) } else { Some(item.flex_basis) };
+                        let flex_basis_min = clamping_basis.filter(|_| item.flex_shrink == 0.0);
+                        let flex_basis_max = clamping_basis.filter(|_| item.flex_grow == 0.0);
+                        let min_main_size = style_min
+                            .maybe_max(flex_basis_min)
+                            .or(flex_basis_min)
+                            .unwrap_or(item.resolved_minimum_main_size)
+                            .max(item.resolved_minimum_main_size);
+                        let max_main_size = style_max.maybe_min(flex_basis_max).or(flex_basis_max).unwrap_or(f32::INFINITY);
+                        let content_contribution = match (min_main_size, style_preferred, max_main_size) {
+                            (min, Some(pref), max) if max <= min || max <= pref => {
+                                pref.min(max).max(min) + item.margin.main_axis_sum(dir)
+                            }
+                            (min, _, max) if max <= min => min + item.margin.main_axis_sum(dir),
+                            _ if item.overflow.x.is_scroll_container() || item.overflow.y.is_scroll_container() => {
+                                item.flex_basis + item.margin.main_axis_sum(dir)
+                            }
+                            (_, Some(pref), _) => {
+                                let inner_main_size = pref.max(item.padding_border_main);
+                                if c.is_row {
+                                    (inner_main_size + item.margin.main_axis_sum(dir)).maybe_clamp(style_min, style_max)
+                                } else {
+                                    (inner_main_size.max(item.flex_basis) + item.margin.main_axis_sum(dir)).maybe_clamp(style_min, style_max)
+                                }
+                            }
+                            _ => {
+                                let cross_axis_parent_size = c.node_inner_size.cross(dir);
+                                let child_min_cross = item.min_size.cross(dir);
+                                let child_max_cross = item.max_size.cross(dir);
+                                let cross_axis_available_space = available_space
+                                    .cross(dir)
+                                    .map_definite(|val| {
+                                        (c.divided_cross_space(cross_axis_parent_size.unwrap_or(val)) - item.margin.cross_axis_sum(dir)).max(0.0)
+                                    })
+                                    .maybe_clamp(child_min_cross, child_max_cross);
+                                let mut child_known_dimensions = item.size.with_main(dir, None);
+                                child_known_dimensions.set_cross(
+                                    dir,
+                                    child_known_dimensions.cross(dir).maybe_clamp(item.min_size.cross(dir), item.max_size.cross(dir)),
+                                );
+                                if item.align_self.keyword == AlignItemsKeyword::Stretch && child_known_dimensions.cross(dir).is_none() {
+                                    let stretched = match c.indefinite_stretch_cross {
+                                        Some(cross) => Some((cross - item.margin.cross_axis_sum(dir)).max(0.0)),
+                                        None => cross_axis_available_space.into_option(),
+                                    };
+                                    child_known_dimensions.set_cross(dir, stretched);
+                                }
+                                let child_available_space = available_space.with_cross(dir, cross_axis_available_space);
+                                let measured_main_size = tree.measure_child_size(
+                                    item.node,
+                                    child_known_dimensions,
+                                    c.node_inner_size,
+                                    child_available_space,
+                                    SizingMode::ContentSize,
+                                    abs_main(dir),
+                                    Line::FALSE,
+                                );
+                                let inner_main_size = measured_main_size.maybe_max(None);
+                                if c.is_row {
+                                    (inner_main_size + item.margin.main_axis_sum(dir)).maybe_clamp(style_min, style_max)
+                                } else {
+                                    (inner_main_size.max(item.flex_basis) + item.margin.main_axis_sum(dir))
+                                        .maybe_clamp(style_min, style_max)
+                                }
+                            }
+                        };
+                        let flex_fraction = {
+                            let diff = content_contribution - item.flex_basis;
+                            if diff > 0.0 {
+                                diff / item.flex_grow.max(1.0)
+                            } else if diff < 0.0 {
+                                let scaled_shrink_factor = item.flex_shrink.max(1.0) * item.inner_flex_basis;
+                                diff / scaled_shrink_factor
                             } else {
-                                (inner_main_size.max(item.flex_basis) + item.margin.main_axis_sum(dir)).maybe_clamp(style_min, style_max)
+                                0.0
                             }
-                        }
-                        _ => {
-                            let cross_axis_parent_size = c.node_inner_size.cross(dir);
-                            let child_min_cross = item.min_size.cross(dir);
-                            let child_max_cross = item.max_size.cross(dir);
-                            let cross_axis_available_space = available_space
-                                .cross(dir)
-                                .map_definite(|val| {
-                                    (c.divided_cross_space(cross_axis_parent_size.unwrap_or(val)) - item.margin.cross_axis_sum(dir)).max(0.0)
-                                })
-                                .maybe_clamp(child_min_cross, child_max_cross);
-                            let mut child_known_dimensions = item.size.with_main(dir, None);
-                            child_known_dimensions.set_cross(
-                                dir,
-                                child_known_dimensions.cross(dir).maybe_clamp(item.min_size.cross(dir), item.max_size.cross(dir)),
-                            );
-                            if item.align_self.keyword == AlignItemsKeyword::Stretch && child_known_dimensions.cross(dir).is_none() {
-                                let stretched = match c.indefinite_stretch_cross {
-                                    Some(cross) => Some((cross - item.margin.cross_axis_sum(dir)).max(0.0)),
-                                    None => cross_axis_available_space.into_option(),
-                                };
-                                child_known_dimensions.set_cross(dir, stretched);
-                            }
-                            let child_available_space = available_space.with_cross(dir, cross_axis_available_space);
-                            let measured_main_size = tree.measure_child_size(
-                                item.node,
-                                child_known_dimensions,
-                                c.node_inner_size,
-                                child_available_space,
-                                SizingMode::ContentSize,
-                                abs_main(dir),
-                                Line::FALSE,
-                            );
-                            let inner_main_size = measured_main_size.maybe_max(None);
-                            if c.is_row {
-                                (inner_main_size + item.margin.main_axis_sum(dir)).maybe_clamp(style_min, style_max)
-                            } else {
-                                (inner_main_size.max(item.flex_basis) + item.margin.main_axis_sum(dir))
-                                    .maybe_clamp(style_min, style_max)
-                            }
-                        }
-                    };
-                    let flex_fraction = {
-                        let diff = content_contribution - item.flex_basis;
-                        if diff > 0.0 {
-                            diff / item.flex_grow.max(1.0)
-                        } else if diff < 0.0 {
+                        };
+                        let flex_contribution = if flex_fraction > 0.0 {
+                            item.flex_grow.max(1.0) * flex_fraction
+                        } else if flex_fraction < 0.0 {
                             let scaled_shrink_factor = item.flex_shrink.max(1.0) * item.inner_flex_basis;
-                            diff / scaled_shrink_factor
+                            if scaled_shrink_factor == 0.0 { 0.0 } else { scaled_shrink_factor * flex_fraction }
                         } else {
                             0.0
-                        }
-                    };
-                    let flex_contribution = if flex_fraction > 0.0 {
-                        item.flex_grow.max(1.0) * flex_fraction
-                    } else if flex_fraction < 0.0 {
-                        let scaled_shrink_factor = item.flex_shrink.max(1.0) * item.inner_flex_basis;
-                        if scaled_shrink_factor == 0.0 { 0.0 } else { scaled_shrink_factor * flex_fraction }
-                    } else {
-                        0.0
-                    };
-                    // The general algorithm also stores this as the target size, which resolving
-                    // the flexible lengths overwrites unread.
-                    item_main_size_sum += item.flex_basis + flex_contribution;
+                        };
+                        // The general algorithm also stores this as the target size, which resolving
+                        // the flexible lengths overwrites unread.
+                        item_main_size_sum += item.flex_basis + flex_contribution;
+                    }
+                    let gap_sum = sum_axis_gaps(c.gap.main(dir), line_items.len());
+                    main_size = main_size.max(item_main_size_sum + gap_sum);
                 }
-                let gap_sum = sum_axis_gaps(c.gap.main(dir), items.len());
-                main_size = main_size.max(item_main_size_sum + gap_sum);
                 main_size + main_content_box_inset
             }
         },
@@ -653,6 +708,7 @@ fn determine_container_main_size<D: FlexDir, T: LayoutTree + CacheAccess + ?Size
 }
 
 /// See [`super::cross::determine_hypothetical_cross_size`].
+#[inline(always)]
 fn determine_hypothetical_cross_size<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     items: &mut [Item],
@@ -723,25 +779,33 @@ fn determine_hypothetical_cross_size<D: FlexDir, T: LayoutTree + CacheAccess + ?
     }
 }
 
-/// See [`super::cross::calculate_cross_size`]; one line, no baseline alignment.
-fn calculate_cross_size<D: FlexDir>(items: &[Item], node_size: Size<Option<f32>>, c: &AlgoConstants<D>) -> f32 {
+/// See [`super::cross::calculate_cross_size`]; no baseline alignment.
+fn calculate_cross_size<const WRAP: bool, D: FlexDir>(lines: &mut [FlexLine], items: &[Item], node_size: Size<Option<f32>>, c: &AlgoConstants<D>) {
+    let lines = if WRAP { lines } else { &mut lines[..1] };
     let dir = c.dir;
     let cross_axis_padding_border = c.content_box_inset.cross_axis_sum(dir);
     let cross_min_size = c.min_size.cross(dir);
     let cross_max_size = c.max_size.cross(dir);
-    if node_size.cross(dir).is_some() {
-        node_size
+    if !WRAP && node_size.cross(dir).is_some() {
+        lines[0].cross_size = node_size
             .cross(dir)
             .maybe_clamp(cross_min_size, cross_max_size)
             .maybe_sub(cross_axis_padding_border)
             .maybe_max(0.0)
-            .unwrap_or(0.0)
+            .unwrap_or(0.0);
     } else {
-        items
-            .iter()
-            .map(|ch| ch.hypothetical_inner_size.cross(dir) + ch.margin.cross_axis_sum(dir))
-            .fold(0.0f32, f32::max)
-            .maybe_clamp(cross_min_size.maybe_sub(cross_axis_padding_border), cross_max_size.maybe_sub(cross_axis_padding_border))
+        for line in lines.iter_mut() {
+            line.cross_size = items[line.start..line.end]
+                .iter()
+                .map(|ch| ch.hypothetical_inner_size.cross(dir) + ch.margin.cross_axis_sum(dir))
+                .fold(0.0f32, f32::max);
+        }
+        if !WRAP {
+            lines[0].cross_size = lines[0].cross_size.maybe_clamp(
+                cross_min_size.maybe_sub(cross_axis_padding_border),
+                cross_max_size.maybe_sub(cross_axis_padding_border),
+            );
+        }
     }
 }
 
@@ -788,13 +852,15 @@ fn item_request<D: FlexDir>(item: &Item, c: &AlgoConstants<D>) -> ChildRequest {
 
 /// See [`super::final_pass::final_layout_pass`]; returns the in-flow overflow and the container's
 /// baselines.
-fn final_layout_pass<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
+fn final_layout_pass<const WRAP: bool, D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
-    line: &FlexLine,
+    lines: &[FlexLine],
     items: &[Item],
     through: &mut Vec<crate::compute::oof::OofEntry>,
     c: &AlgoConstants<D>,
 ) -> (Rect<f32>, Baselines) {
+    // A single line's loops fold away.
+    let lines = if WRAP { lines } else { &lines[..1] };
     let dir = c.dir;
     let mut total_offset_cross = if c.is_column && c.layout_direction == Direction::Rtl {
         c.container_size.width - c.content_box_inset.cross_end(dir)
@@ -810,126 +876,134 @@ fn final_layout_pass<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     let outputs = questions.answers();
 
     let padding_border = c.content_box_inset;
-    let mut total_offset_main = if c.layout_direction == Direction::Rtl && dir.is_row() {
-        c.container_size.width - padding_border.main_end(dir)
-    } else {
-        padding_border.main_start(dir)
-    };
-    let line_offset_cross = line.offset_cross;
     let is_rtl_column = c.layout_direction == Direction::Rtl && dir.is_column();
-    if is_rtl_column {
-        total_offset_cross -= line_offset_cross + line.cross_size;
-    }
     let is_rtl_row = dir.is_row() && c.layout_direction == Direction::Rtl;
     let container_size = c.container_size;
     let border = c.border;
-    // Only the first item's first baseline and the endmost item's last baseline are read.
-    let first_index = if c.is_column && dir.is_reverse() { items.len() - 1 } else { 0 };
-    let last_index = if c.is_column && dir.is_reverse() { 0 } else { items.len() - 1 };
+    // Only the first line's first item's first baseline and the last line's endmost item's last
+    // baseline are read.
+    let (first_line, last_line) = (&lines[0], &lines[lines.len() - 1]);
+    let first_index = if c.is_column && dir.is_reverse() { first_line.end - 1 } else { first_line.start };
+    let last_index = if c.is_column && dir.is_reverse() { last_line.start } else { last_line.end - 1 };
     let mut first_baseline = 0.0;
     let mut last_baseline = 0.0;
-    let mut place = |index: usize, item: &Item, out: &LayoutOutput| {
-        let size = out.size;
-        let plan = tree.style_plan(item.node).expect("plain items have a plan");
-        let inset = if plan.offsets_in_flow { plan.inset } else { Rect::NONE };
-        let (padding, item_border) = (plan.padding, plan.border);
-        let main_relative_inset = if is_rtl_row {
-            inset.main_end(dir).or(inset.main_start(dir).map(|p| -p)).unwrap_or(0.0)
+    for line in lines {
+        let mut total_offset_main = if c.layout_direction == Direction::Rtl && dir.is_row() {
+            c.container_size.width - padding_border.main_end(dir)
         } else {
-            inset.main_start(dir).or(inset.main_end(dir).map(|p| -p)).unwrap_or(0.0)
+            padding_border.main_start(dir)
         };
-        let cross_relative_inset = if is_rtl_column {
-            inset.cross_end(dir).map(|p| -p).or(inset.cross_start(dir)).unwrap_or(0.0)
-        } else {
-            inset.cross_start(dir).or(inset.cross_end(dir).map(|p| -p)).unwrap_or(0.0)
-        };
-        let effective_line_offset_cross = if is_rtl_column { 0.0 } else { line_offset_cross };
-        let offset_main = if is_rtl_row {
-            total_offset_main - item.offset_main - item.margin.main_end(dir) - main_relative_inset - size.width
-        } else {
-            total_offset_main + item.offset_main + item.margin.main_start(dir) + main_relative_inset
-        };
-        let offset_cross =
-            total_offset_cross + item.offset_cross + effective_line_offset_cross + item.margin.cross_start(dir) + cross_relative_inset;
-
-        if index == first_index || index == last_index {
-            let (baseline, item_last_baseline) = if dir.is_row() {
-                let baseline_offset_cross =
-                    total_offset_cross + item.offset_cross + effective_line_offset_cross + item.margin.cross_start(dir);
-                let inner_baseline = |baseline: Option<f32>| {
-                    let baseline = baseline.unwrap_or(size.height);
-                    if item.overflow.y.is_scroll_container() { baseline.min(size.height).max(0.0) } else { baseline }
-                };
-                (
-                    baseline_offset_cross + inner_baseline(out.baselines.first),
-                    baseline_offset_cross + inner_baseline(out.baselines.last),
-                )
+        let line_offset_cross = line.offset_cross;
+        if is_rtl_column {
+            total_offset_cross -= line_offset_cross + line.cross_size;
+        }
+        let mut place = |index: usize, item: &Item, out: &LayoutOutput| {
+            let size = out.size;
+            let plan = tree.style_plan(item.node).expect("plain items have a plan");
+            let inset = if plan.offsets_in_flow { plan.inset } else { Rect::NONE };
+            let (padding, item_border) = (plan.padding, plan.border);
+            let main_relative_inset = if is_rtl_row {
+                inset.main_end(dir).or(inset.main_start(dir).map(|p| -p)).unwrap_or(0.0)
             } else {
-                let baseline_offset_main = total_offset_main + item.offset_main + item.margin.main_start(dir);
-                (
-                    baseline_offset_main + out.baselines.first.unwrap_or(size.height),
-                    baseline_offset_main + out.baselines.last.unwrap_or(size.height),
-                )
+                inset.main_start(dir).or(inset.main_end(dir).map(|p| -p)).unwrap_or(0.0)
             };
-            if index == first_index {
-                first_baseline = baseline;
+            let cross_relative_inset = if is_rtl_column {
+                inset.cross_end(dir).map(|p| -p).or(inset.cross_start(dir)).unwrap_or(0.0)
+            } else {
+                inset.cross_start(dir).or(inset.cross_end(dir).map(|p| -p)).unwrap_or(0.0)
+            };
+            let effective_line_offset_cross = if is_rtl_column { 0.0 } else { line_offset_cross };
+            let offset_main = if is_rtl_row {
+                total_offset_main - item.offset_main - item.margin.main_end(dir) - main_relative_inset - size.width
+            } else {
+                total_offset_main + item.offset_main + item.margin.main_start(dir) + main_relative_inset
+            };
+            let offset_cross =
+                total_offset_cross + item.offset_cross + effective_line_offset_cross + item.margin.cross_start(dir) + cross_relative_inset;
+
+            if index == first_index || index == last_index {
+                let (baseline, item_last_baseline) = if dir.is_row() {
+                    let baseline_offset_cross =
+                        total_offset_cross + item.offset_cross + effective_line_offset_cross + item.margin.cross_start(dir);
+                    let inner_baseline = |baseline: Option<f32>| {
+                        let baseline = baseline.unwrap_or(size.height);
+                        if item.overflow.y.is_scroll_container() { baseline.min(size.height).max(0.0) } else { baseline }
+                    };
+                    (
+                        baseline_offset_cross + inner_baseline(out.baselines.first),
+                        baseline_offset_cross + inner_baseline(out.baselines.last),
+                    )
+                } else {
+                    let baseline_offset_main = total_offset_main + item.offset_main + item.margin.main_start(dir);
+                    (
+                        baseline_offset_main + out.baselines.first.unwrap_or(size.height),
+                        baseline_offset_main + out.baselines.last.unwrap_or(size.height),
+                    )
+                };
+                if index == first_index {
+                    first_baseline = baseline;
+                }
+                if index == last_index {
+                    last_baseline = item_last_baseline;
+                }
             }
-            if index == last_index {
-                last_baseline = item_last_baseline;
-            }
-        }
 
-        let location =
-            if dir.is_row() { Point { x: offset_main, y: offset_cross } } else { Point { x: offset_cross, y: offset_main } };
-        let scrollbar_size = Size {
-            width: if item.overflow.y == Overflow::Scroll { item.scrollbar_width } else { 0.0 },
-            height: if item.overflow.x == Overflow::Scroll { item.scrollbar_width } else { 0.0 },
-        };
-        let layout = Layout {
-            order: item.order,
-            size,
-            scrollable_overflow_rect: out.scrollable_overflow_rect,
-            scrollbar_size,
-            location,
-            padding,
-            border: item_border,
-            margin: item.margin,
-        };
-        tree.set_unrounded_layout(item.node, &layout);
-        if out.oof != 0 {
-            through.push(crate::compute::oof::OofEntry::Through { node: item.node, order: item.order, bits: out.oof, location });
-        }
-
-        if is_rtl_row {
-            total_offset_main -= item.offset_main + item.margin.main_axis_sum(dir) + size.main(dir);
-        } else {
-            total_offset_main += item.offset_main + item.margin.main_axis_sum(dir) + size.main(dir);
-        }
-
-        let contribution_location = if c.layout_direction == Direction::Rtl {
-            Point { x: container_size.width - (location.x + size.width) - border.right, y: location.y - border.top }
-        } else {
-            Point { x: location.x - border.left, y: location.y - border.top }
-        };
-        overflow_rect = union(
-            overflow_rect,
-            scrollable_overflow_contribution(
-                contribution_location,
+            let location =
+                if dir.is_row() { Point { x: offset_main, y: offset_cross } } else { Point { x: offset_cross, y: offset_main } };
+            let scrollbar_size = Size {
+                width: if item.overflow.y == Overflow::Scroll { item.scrollbar_width } else { 0.0 },
+                height: if item.overflow.x == Overflow::Scroll { item.scrollbar_width } else { 0.0 },
+            };
+            let layout = Layout {
+                order: item.order,
                 size,
-                out.scrollable_overflow_rect,
-                item.overflow,
-                item.contain,
-                c.is_scroll_container,
-            ),
-        );
-    };
-    if dir.is_reverse() {
-        for (index, (item, out)) in items.iter().zip(outputs).enumerate().rev() {
-            place(index, item, out);
+                scrollable_overflow_rect: out.scrollable_overflow_rect,
+                scrollbar_size,
+                location,
+                padding,
+                border: item_border,
+                margin: item.margin,
+            };
+            tree.set_unrounded_layout(item.node, &layout);
+            if out.oof != 0 {
+                through.push(crate::compute::oof::OofEntry::Through { node: item.node, order: item.order, bits: out.oof, location });
+            }
+
+            if is_rtl_row {
+                total_offset_main -= item.offset_main + item.margin.main_axis_sum(dir) + size.main(dir);
+            } else {
+                total_offset_main += item.offset_main + item.margin.main_axis_sum(dir) + size.main(dir);
+            }
+
+            let contribution_location = if c.layout_direction == Direction::Rtl {
+                Point { x: container_size.width - (location.x + size.width) - border.right, y: location.y - border.top }
+            } else {
+                Point { x: location.x - border.left, y: location.y - border.top }
+            };
+            overflow_rect = union(
+                overflow_rect,
+                scrollable_overflow_contribution(
+                    contribution_location,
+                    size,
+                    out.scrollable_overflow_rect,
+                    item.overflow,
+                    item.contain,
+                    c.is_scroll_container,
+                ),
+            );
+        };
+        let line_items = items[line.start..line.end].iter().zip(&outputs[line.start..line.end]);
+        if dir.is_reverse() {
+            for (offset, (item, out)) in line_items.enumerate().rev() {
+                place(line.start + offset, item, out);
+            }
+        } else {
+            for (offset, (item, out)) in line_items.enumerate() {
+                place(line.start + offset, item, out);
+            }
         }
-    } else {
-        for (index, (item, out)) in items.iter().zip(outputs).enumerate() {
-            place(index, item, out);
+        if !is_rtl_column {
+            total_offset_cross += line_offset_cross + line.cross_size;
         }
     }
 

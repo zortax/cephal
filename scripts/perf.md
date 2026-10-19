@@ -7,7 +7,7 @@ and writes `target/bench/suite.csv` (`CEPHAL_BENCH_CSV`) with `suite.meta.json` 
 CPU, core affinity, governor, compiler and the cephal and taffy versions. Options:
 
 - `--engines cephal,cephal_parallel,taffy`, `--modes cold,incremental,build`, `--sizes 1000,10000`,
-  `--tag <tag>` (e.g. `grid`, `hit`, `miss:wrap`), `--exact` (filters match whole names), `--quick`,
+  `--tag <tag>` (e.g. `grid`, `hit`, `miss:baseline`), `--exact` (filters match whole names), `--quick`,
   `--list`;
 - `CEPHAL_BENCH_SECS`: sampling time per measurement (default 1);
 - `CEPHAL_BENCH_READ=1`: also read every node's layout inside the timed region. Judge every
@@ -96,8 +96,11 @@ layout asks, and appends them to `target/bench/stats.csv` (`CEPHAL_BENCH_STATS`)
 - `collision`: size misses whose answer equals one already cached for the node under another key.
   Collisions are what canonicalising questions (`compute::normalize`, observed min/max-content
   axes) could still save.
-- `flex_fused` and `flex_not_fused`: single-line flex container runs that took the fused path
-  (`src/compute/flex/fused.rs`) and those whose items needed the general algorithm.
+- `flex_fused` and `flex_not_fused`: flex container runs that took the fused path
+  (`src/compute/flex/fused.rs`) and those that needed the general algorithm, with the reasons
+  `flex_miss_*`: `wrap` (`wrap-reverse` or `balance`), `no_plan` (an item's lengths are relative),
+  `aspect_ratio`, `auto_margin`, `basis` (`content`, keyword or relative), `size_keyword`,
+  `baseline` and `empty`; `flex_wrap` counts the multi-line runs, fused or not.
 
 ## Fast paths
 

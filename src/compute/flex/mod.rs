@@ -234,7 +234,7 @@ fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized, D: FlexDir>(
         crate::compute::stats::bump(&crate::compute::stats::FLEX_WRAP);
     }
     if fused::enabled() {
-        if constants.is_wrap {
+        if constants.is_wrap_reverse || constants.is_balance {
             #[cfg(feature = "stats")]
             count_miss(tree, None);
         } else {
@@ -347,7 +347,8 @@ fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized, D: FlexDir>(
     output
 }
 
-/// Counts a container the fused path does not take, by reason: `None` for its `flex-wrap`.
+/// Counts a container the fused path does not take, by reason: `None` for `wrap-reverse` or
+/// `balance`.
 #[cfg(feature = "stats")]
 fn count_miss<T: LayoutTree + ?Sized>(tree: &T, miss: Option<fused::Miss>) {
     use crate::compute::stats::*;

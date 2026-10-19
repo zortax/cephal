@@ -133,7 +133,11 @@ fn container_style(rng: &mut Rng) -> Style {
     let mut s = item_style(rng, true);
     s.display = if rng.chance(9, 10) { Display::Flex } else { rng.pick(&[Display::Block, Display::Grid]) };
     s.flex_direction = rng.pick(&[FlexDirection::Row, FlexDirection::Column, FlexDirection::RowReverse, FlexDirection::ColumnReverse]);
-    s.flex_wrap = if rng.chance(1, 8) { rng.pick(&[FlexWrap::Wrap, FlexWrap::WrapReverse]) } else { FlexWrap::NoWrap };
+    // Wrapping containers take the fused path too, unless they wrap in reverse.
+    s.flex_wrap = rng.pick(&[FlexWrap::NoWrap, FlexWrap::NoWrap, FlexWrap::NoWrap, FlexWrap::Wrap, FlexWrap::Wrap, FlexWrap::WrapReverse]);
+    if s.flex_wrap != FlexWrap::NoWrap && rng.chance(1, 8) {
+        s.flex_line_count = rng.pick(&[2, 3]);
+    }
     if rng.chance(1, 2) {
         s.gap = Size { width: lp_len(rng), height: lp_len(rng) };
     }
@@ -152,7 +156,18 @@ fn container_style(rng: &mut Rng) -> Style {
         Some(AlignContent::SAFE_CENTER),
     ]);
     s.align_items = rng.pick(&[None, None, Some(AlignItems::CENTER), Some(AlignItems::FLEX_END), Some(AlignItems::START), Some(AlignItems::END)]);
-    s.align_content = rng.pick(&[None, None, Some(AlignContent::SPACE_AROUND), Some(AlignContent::CENTER), Some(AlignContent::END)]);
+    s.align_content = rng.pick(&[
+        None,
+        None,
+        Some(AlignContent::SPACE_AROUND),
+        Some(AlignContent::CENTER),
+        Some(AlignContent::END),
+        Some(AlignContent::SPACE_BETWEEN),
+        Some(AlignContent::SPACE_EVENLY),
+        Some(AlignContent::FLEX_START),
+        Some(AlignContent::FLEX_END),
+        Some(AlignContent::SAFE_CENTER),
+    ]);
     if rng.chance(1, 6) {
         s.direction = Direction::Rtl;
     }
@@ -167,7 +182,8 @@ fn container_style(rng: &mut Rng) -> Style {
 }
 
 fn build(rng: &mut Rng, tree: &mut Tree<Text>, depth: u32) -> NodeId {
-    let children = if depth >= 3 || (depth > 0 && rng.chance(1, 2)) { 0 } else { rng.below(7) + 1 };
+    // Up to ten children, so that wrapping containers form several lines.
+    let children = if depth >= 3 || (depth > 0 && rng.chance(1, 2)) { 0 } else { rng.below(10) + 1 };
     if children == 0 {
         let style = item_style(rng, false);
         let text = Text(rng.below(8) as u32 + 1);
