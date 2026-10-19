@@ -110,8 +110,31 @@ pub(super) fn place_grid_items<T: LayoutTree + ?Sized>(
     // 3. Everything else, walking the cursor.
     let start = (matrix.track_counts(primary_axis).implicit_start_line(), matrix.track_counts(secondary_axis).implicit_start_line());
     let mut cursor = start;
+    // Dense packing searches from the start for every item, which is quadratic in the items. But
+    // cells only ever fill up, so a position that did not fit an item of some span shape still does
+    // not, and the search for the next item of that shape may begin where the last one was placed:
+    // the first position that fits is the same. A grid that grows in the primary axis, or before
+    // its start in the secondary axis, may fit where it did not before; the hints are then dropped.
+    let mut hints: Scratch<((u16, u16), (OriginZeroLine, OriginZeroLine))> = Scratch::take();
+    let mut hint_grid = (*matrix.track_counts(primary_axis), matrix.track_counts(secondary_axis).negative_implicit);
     for &(index, child, p) in children.iter().filter(|(_, _, p)| !p.get(secondary_axis).is_definite()) {
+        let hinted = auto_flow.is_dense() && !p.get(primary_axis).is_definite();
+        let shape = (p.get(primary_axis).indefinite_span(), p.get(secondary_axis).indefinite_span());
+        if hinted {
+            let grid = (*matrix.track_counts(primary_axis), matrix.track_counts(secondary_axis).negative_implicit);
+            if grid != hint_grid {
+                hints.clear();
+                hint_grid = grid;
+            }
+            cursor = hints.iter().find(|(s, _)| *s == shape).map_or(start, |&(_, at)| at);
+        }
         let (primary_span, secondary_span) = place_indefinitely_positioned_item(matrix, p, auto_flow, cursor);
+        if hinted {
+            match hints.iter_mut().find(|(s, _)| *s == shape) {
+                Some(hint) => hint.1 = (primary_span.start, secondary_span.start),
+                None => hints.push((shape, (primary_span.start, secondary_span.start))),
+            }
+        }
         record(matrix, items, child, index, primary_span, secondary_span, CellOccupancyState::AutoPlaced);
         cursor = if auto_flow.is_dense() { start } else { (primary_span.end, secondary_span.start) };
     }
@@ -215,3 +238,4 @@ fn clamp_span(span: Line<OriginZeroLine>) -> Line<OriginZeroLine> {
 }
 
 crate::compute::scratch::pooled!((usize, NodeId, Placement));
+crate::compute::scratch::pooled!(((u16, u16), (OriginZeroLine, OriginZeroLine)));
