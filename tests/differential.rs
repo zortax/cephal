@@ -50,6 +50,9 @@ enum Strip {
     GridItemPaddingBorder,
     /// `min-content` grid tracks.
     MinContentTracks,
+    /// Multi-line flex containers: taffy puts the items of one whose main size is not definite on
+    /// a single line, whatever size it is laid out at.
+    FlexWrap,
     /// Cross-axis alignment in flex containers (items are stretched instead): taffy lets the
     /// percentage heights inside a row flex item that is not stretched resolve against its height.
     FlexCrossAlignment,
@@ -73,6 +76,7 @@ const STRIPS: &[Strip] = &[
     Strip::GridItemMargins,
     Strip::GridItemPaddingBorder,
     Strip::MinContentTracks,
+    Strip::FlexWrap,
     Strip::FlexCrossAlignment,
     Strip::LeafInsets,
 ];
@@ -151,6 +155,7 @@ fn strip(tree: &mut Tree<Text>, root: cephal::tree::NodeId, what: Strip) {
                 g.auto_rows.iter_mut().for_each(fix);
             }
             Strip::GridItemMargins if parent_is_grid => s.margin = cephal::geometry::Rect::splat(LengthPercentageAuto::ZERO),
+            Strip::FlexWrap => s.flex_wrap = cephal::style::FlexWrap::NoWrap,
             Strip::FlexCrossAlignment => {
                 if s.display == Display::Flex {
                     s.align_items = None;

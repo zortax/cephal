@@ -32,7 +32,7 @@ fn main_axis_available_space<D: FlexDir>(c: &AlgoConstants<D>, available_space: 
 }
 
 pub(super) fn collect_flex_lines<D: FlexDir, I: Flexible>(c: &AlgoConstants<D>, available_space: Size<AvailableSpace>, items: &[I]) -> Scratch<FlexLine> {
-    if !c.is_wrap || !c.known_main_size_is_definite {
+    if !c.is_wrap {
         return single_line(items);
     }
     match main_axis_available_space(c, available_space) {

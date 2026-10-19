@@ -70,6 +70,15 @@ A percentage gap refers to the container's content box (css-align-3 §8.1); Chro
 percentage row gap of a flex container whose height is indefinite as zero, also once the height
 is found from the content. Taffy resolves it against that height, which then shrinks the items.
 
+## Lines of a multi-line flex container whose main size is not definite
+
+Census category `FlexWrap`. Fixture `flex_column_wrap_item_breaks_at_its_size`.
+
+A multi-line flex container breaks its lines at its inner main size (css-flexbox-1 §9.3), the
+size it is laid out at, whether or not that size counts as definite for percentages (the
+height of a column flex item in a container of auto height, held by a max-height). Taffy puts
+all items of such a container on one line.
+
 ## The root (both engines, by design)
 
 Not a divergence between the engines, but where both differ from a browser's root element,
