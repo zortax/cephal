@@ -132,7 +132,7 @@ impl<'a, T: LayoutTree + CacheAccess + ?Sized> Measurer<'a, T> {
                 let calc = |id, basis| self.tree.resolve_calc(id, basis);
                 item.min_content_contribution_cache.get_abstract(self.axis).is_none()
                     && item.minimum_contribution_cache.get_abstract(self.axis).is_none()
-                    && item.minimum_needs_content(self.axis, axis_tracks, area, &calc)
+                    && item.minimum_needs_content(self.axis, axis_tracks, area, self.inner_node_size, &calc)
             };
             if needs {
                 item.min_content_contribution_cache.set_abstract(self.axis, Some(f32::NAN));
@@ -257,11 +257,9 @@ fn size_batch<T: LayoutTree + CacheAccess + ?Sized>(
             let track = &axis_tracks[track_index];
             let new_base_size = match track.min.kind() {
                 LengthKind::MinContent => track.base_size.max(m.min_content(item, axis_tracks)),
-                LengthKind::Percent(_) | LengthKind::Calc(_) => {
-                    if axis_inner_node_size.is_none() { track.base_size.max(m.min_content(item, axis_tracks)) } else { track.base_size }
-                }
                 LengthKind::MaxContent => track.base_size.max(m.max_content(item, axis_tracks)),
-                LengthKind::Auto => {
+                // A percentage against an indefinite container behaves as `auto`.
+                _ if track.min_behaves_as_auto(axis_inner_node_size) => {
                     let space = match axis_available_grid_space {
                         AvailableSpace::MinContent | AvailableSpace::MaxContent
                             if !item.overflow.get(axis.as_abs()).is_scroll_container() =>
@@ -276,8 +274,8 @@ fn size_batch<T: LayoutTree + CacheAccess + ?Sized>(
                     };
                     axis_tracks[track_index].base_size.max(space)
                 }
-                LengthKind::Length(_) => track.base_size,
-                _ => unreachable!("invalid min track sizing function"),
+                // Not intrinsic: a length, or a percentage against a definite size.
+                _ => track.base_size,
             };
             let growth_limit_min_content =
                 if !item.overflow.get(axis.as_abs()).is_scroll_container() { Some(m.min_content(item, axis_tracks)) } else { None };

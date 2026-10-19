@@ -18,6 +18,14 @@ pub(super) struct ResolvedSizes {
     pub size: Size<Option<f32>>,
     pub min_size: Size<Option<f32>>,
     pub max_size: Size<Option<f32>>,
+    pub padding_border: Size<f32>,
+}
+
+/// The minimum contribution as the item's style determines it.
+#[derive(Clone, Copy)]
+enum StyleMinimum {
+    Fixed(f32),
+    MinContent,
 }
 
 pub(super) struct GridItem {
@@ -158,6 +166,7 @@ impl GridItem {
             size: resolve(self.size.map(|v| v.raw())),
             min_size: resolve(self.min_size.map(|v| v.raw())),
             max_size: resolve(self.max_size.map(|v| v.raw())),
+            padding_border: padding_border_size,
         }
     }
 
@@ -262,7 +271,7 @@ impl GridItem {
         let calc = |id, basis| tree.resolve_calc(id, basis);
         let margins = self.margins_axis_sums_with_baseline_shims(grid_area_size.width, tree);
         let aspect_ratio = self.aspect_ratio;
-        let ResolvedSizes { size: inherent_size, min_size, max_size } = self.sizes(grid_area_size, &calc);
+        let ResolvedSizes { size: inherent_size, min_size, max_size, .. } = self.sizes(grid_area_size, &calc);
         let grid_area_minus_margins = grid_area_size.maybe_sub(margins).maybe_max(Size::ZERO);
         let width = inherent_size.width.or_else(|| {
             if self.size.width.is_sizing_keyword() {
@@ -400,15 +409,39 @@ impl GridItem {
         crate::compute::size_request(self.node, known_dimensions, grid_area_size, available, SizingMode::InherentSize, axis.as_abs().into())
     }
 
-    /// The minimum contribution the style fixes: the size, else the min size, else zero for a
-    /// scroll container.
-    fn explicit_minimum(&self, axis: AbstractAxis, grid_area_size: Size<Option<f32>>, calc: &impl Fn(CalcId, f32) -> f32) -> Option<f32> {
+    /// What the style makes of the minimum contribution (css-grid-1 §11.5, css-sizing-3 §5.2):
+    /// a definite preferred size clamped by the min and max sizes; the min-content contribution
+    /// for a sizing keyword other than `stretch`; else the min size, cyclic percentages against
+    /// zero; else zero for a scroll container; else (`None`) the automatic minimum.
+    fn style_minimum(&self, axis: AbstractAxis, grid_area_size: Size<Option<f32>>, calc: &impl Fn(CalcId, f32) -> f32) -> Option<StyleMinimum> {
         let sizes = self.sizes(grid_area_size, calc);
-        sizes
-            .size
-            .get_abstract(axis)
-            .or(sizes.min_size.get_abstract(axis))
-            .or_else(|| self.overflow.get(axis.as_abs()).maybe_into_automatic_min_size())
+        if let Some(size) = sizes.size.get_abstract(axis) {
+            let (min, max) = (self.min_size.get_abstract(axis), self.max_size.get_abstract(axis));
+            if min.is_auto() && max.is_auto() {
+                return Some(StyleMinimum::Fixed(size));
+            }
+            let basis = grid_area_size.get_abstract(axis);
+            // A compressible replaced element resolves an indefinite percentage max size against zero.
+            let max_basis = if self.is_compressible_replaced { basis.or(Some(0.0)) } else { basis };
+            let adjustment = if self.box_sizing == BoxSizing::ContentBox { sizes.padding_border.get_abstract(axis) } else { 0.0 };
+            let min = min.resolve(basis, calc).map(|v| v + adjustment);
+            let max = max.resolve(max_basis, calc).map(|v| v + adjustment);
+            return Some(StyleMinimum::Fixed(size.maybe_clamp(min, max)));
+        }
+        let size = self.size.get_abstract(axis);
+        if size.is_sizing_keyword() && !size.is_stretch() {
+            return Some(StyleMinimum::MinContent);
+        }
+        let min_size = if self.fixed_sizes.is_some() || grid_area_size.width.is_some() && grid_area_size.height.is_some() {
+            sizes.min_size.get_abstract(axis)
+        } else {
+            let adjustment = if self.box_sizing == BoxSizing::ContentBox { sizes.padding_border } else { Size::ZERO };
+            crate::compute::block::resolve_size(self.min_size.map(|v| v.raw()), grid_area_size.map(|s| Some(s.unwrap_or(0.0))), calc)
+                .maybe_apply_aspect_ratio(self.aspect_ratio)
+                .maybe_add(adjustment)
+                .get_abstract(axis)
+        };
+        min_size.or_else(|| self.overflow.get(axis.as_abs()).maybe_into_automatic_min_size()).map(StyleMinimum::Fixed)
     }
 
     /// Whether [`Self::minimum_contribution`] would measure min-content rather than read the style.
@@ -417,16 +450,22 @@ impl GridItem {
         axis: AbstractAxis,
         axis_tracks: &[GridTrack],
         grid_area_size: Size<Option<f32>>,
+        inner_node_size: Size<Option<f32>>,
         calc: &impl Fn(crate::style::CalcId, f32) -> f32,
     ) -> bool {
-        self.explicit_minimum(axis, grid_area_size, calc).is_none() && self.uses_content_based_minimum(axis, axis_tracks)
+        match self.style_minimum(axis, grid_area_size, calc) {
+            Some(StyleMinimum::Fixed(_)) => false,
+            Some(StyleMinimum::MinContent) => true,
+            None => self.uses_content_based_minimum(axis, axis_tracks, inner_node_size.get_abstract(axis)),
+        }
     }
 
-    /// css-grid-1 §6.6: the automatic minimum is content-based when the item spans an `auto`-min
-    /// track and either spans one track or crosses no flexible one.
+    /// css-grid-1 §6.6: the automatic minimum is content-based when the item spans a track whose
+    /// min sizing function behaves as `auto` and either spans one track or crosses no flexible one.
     #[inline]
-    fn uses_content_based_minimum(&self, axis: AbstractAxis, axis_tracks: &[GridTrack]) -> bool {
-        (self.span(axis) == 1 || !self.crosses_flexible_track(axis)) && self.spans_track_matching(axis, axis_tracks, |t| t.min.is_auto())
+    fn uses_content_based_minimum(&self, axis: AbstractAxis, axis_tracks: &[GridTrack], axis_inner_node_size: Option<f32>) -> bool {
+        (self.span(axis) == 1 || !self.crosses_flexible_track(axis))
+            && self.spans_track_matching(axis, axis_tracks, |t| t.min_behaves_as_auto(axis_inner_node_size))
     }
 
     /// Drops the "requested" markers a collect pass left in the contribution caches.
@@ -528,22 +567,26 @@ impl GridItem {
         inner_node_size: Size<Option<f32>>,
     ) -> f32 {
         let calc = |id, basis| tree.resolve_calc(id, basis);
-        if let Some(v) = self.explicit_minimum(axis, grid_area_size, &calc) {
-            return v;
+        match self.style_minimum(axis, grid_area_size, &calc) {
+            Some(StyleMinimum::Fixed(v)) => return v,
+            Some(StyleMinimum::MinContent) => return self.min_content_contribution_cached(axis, tree, grid_area_size, grid_area_size),
+            None => {}
         }
-        if !self.uses_content_based_minimum(axis, axis_tracks) {
+        if !self.uses_content_based_minimum(axis, axis_tracks, inner_node_size.get_abstract(axis)) {
             return 0.0;
         }
         let mut minimum = self.min_content_contribution_cached(axis, tree, grid_area_size, grid_area_size);
+        let calc = |id, basis| tree.resolve_calc(id, basis);
         if self.is_compressible_replaced {
-            let calc = |id, basis| tree.resolve_calc(id, basis);
             let size = self.size.get_abstract(axis).resolve(Some(0.0), &calc);
             let max_size = self.max_size.get_abstract(axis).resolve(Some(0.0), &calc);
             minimum = minimum.maybe_min(size).maybe_min(max_size);
         }
-        let calc = |id, basis| tree.resolve_calc(id, basis);
+        // The clamp by fixed max track sizing functions is a stretch fit into them: it never
+        // shrinks the item below its padding and border.
         let limit = self.spanned_fixed_track_limit(axis, axis_tracks, inner_node_size.get_abstract(axis), &calc);
-        minimum.maybe_min(limit)
+        let padding_border = self.sizes(grid_area_size, &calc).padding_border.get_abstract(axis);
+        minimum.maybe_min(limit.map(|l| l.max(padding_border)))
     }
 
     pub fn minimum_contribution_cached<T: LayoutTree + CacheAccess + ?Sized>(

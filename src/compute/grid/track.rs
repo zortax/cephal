@@ -63,6 +63,11 @@ impl GridTrack {
     pub fn uses_percentage(&self) -> bool {
         self.min.uses_percentage() || self.max.uses_percentage()
     }
+    /// The min sizing function is `auto`, or a percentage while the container size is indefinite.
+    #[inline]
+    pub fn min_behaves_as_auto(&self, axis_inner_node_size: Option<f32>) -> bool {
+        self.min.is_auto() || (axis_inner_node_size.is_none() && self.min.uses_percentage())
+    }
     #[inline]
     pub fn has_intrinsic_sizing_function(&self) -> bool {
         self.min.is_intrinsic() || self.max.is_intrinsic()
