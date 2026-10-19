@@ -199,7 +199,11 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
         return LayoutOutput::from_outer_size(Size { width: container_outer_width, height: 0.0 });
     }
 
-    let container_percentage_resolution_height = percentage_basis.height.or(size.height.maybe_max(min_size.height));
+    // Under `ContentSize` the box's own `height` and `min-height` are ignored, as a basis too
+    // (the content size suggestion must not depend on them, css-flexbox-1 §4.5).
+    let container_percentage_resolution_height = percentage_basis
+        .height
+        .or(if inputs.sizing_mode == SizingMode::InherentSize { size.height.maybe_max(min_size.height) } else { None });
 
     // Percentage padding and borders resolve against the containing block's width.
     let percentage_resolution_width = parent_size.width.unwrap_or(container_outer_width);
