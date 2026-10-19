@@ -19,8 +19,8 @@ pub(super) fn determine_content_based_container_width<T: LayoutTree + CacheAcces
     for item in items.iter().filter(|item| !item.position.is_out_of_flow()) {
         let known_dimensions = item.size.maybe_clamp(item.min_size, item.max_size);
         let calc = |id, basis| tree.resolve_calc(id, basis);
-        let item_x_margin_sum =
-            item.margin.map(|m| m.resolve_or_zero(available_space.width.into_option(), &calc)).horizontal_axis_sum();
+        // Percentages of the width being found resolve against zero (css-sizing-3 §5.2.1).
+        let item_x_margin_sum = item.margin.map(|m| m.resolve_or_zero(None, &calc)).horizontal_axis_sum();
         let width = match known_dimensions.width {
             Some(w) => w,
             None => {

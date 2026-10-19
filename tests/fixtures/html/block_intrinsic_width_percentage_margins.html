@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    Percentage margins of a block's children count as zero in its intrinsic width
+    (css-sizing-3 §5.2.1), here the shrink-to-fit width of absolutely positioned boxes; they
+    resolve against the width found afterwards
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; position: relative; width: 126px; height: 100px;">
+  <div style="display: block; position: absolute;">
+    <div style="display: block; padding-left: 16px;">
+      <div style="display: block; margin-left: 3%;">X</div>
+    </div>
+  </div>
+  <div style="display: flex; flex-direction: column; position: absolute; top: 20px;">
+    <div style="display: block; margin-right: 10%;">X&#8203;X</div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -29,6 +29,16 @@ width is known, the content gets that width less the padding, border and scrollb
 border-box size, so text in a 25px grid column with a 15px scrollbar is laid out 25px wide
 instead of 10px, and wraps less.
 
+## Percentage margins in a block's intrinsic width
+
+Census category `PercentMargins`. Fixture `block_intrinsic_width_percentage_margins`.
+
+A percentage margin refers to the width of the containing block, which the intrinsic width of a
+block container is being found for: in its children's intrinsic contributions such margins
+count as zero (css-sizing-3 §5.2.1), and resolve against the width found afterwards. Taffy
+resolves them against the available space, so the shrink-to-fit width of an absolutely
+positioned block grows by 3% of its containing block for a child's `margin-left: 3%`.
+
 ## The root (both engines, by design)
 
 Not a divergence between the engines, but where both differ from a browser's root element,

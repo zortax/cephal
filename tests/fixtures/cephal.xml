@@ -484,6 +484,130 @@
     </node>
   </expectations>
 </test>
+<test name="block_intrinsic_width_percentage_margins__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="ltr" position="relative" width="126px" height="100px">
+      <div display="block" direction="ltr" position="absolute">
+        <div display="block" direction="ltr" position="relative" padding-left="16px">
+          <text display="block" direction="ltr" position="relative" margin-left="3%">
+            X
+          </text>
+        </div>
+      </div>
+      <div display="flex" direction="ltr" position="absolute" flex-direction="column" top="20px">
+        <text display="block" direction="ltr" position="relative" margin-right="10%">
+          X​X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="126" height="100">
+      <node x="0" y="0" width="26" height="10">
+        <node x="0" y="0" width="26" height="10">
+          <node x="16" y="0" width="10" height="10"/>
+        </node>
+      </node>
+      <node x="0" y="20" width="20" height="20">
+        <node x="0" y="0" width="18" height="20"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="block_intrinsic_width_percentage_margins__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="rtl" position="relative" width="126px" height="100px">
+      <div display="block" direction="rtl" position="absolute">
+        <div display="block" direction="rtl" position="relative" padding-left="16px">
+          <text display="block" direction="rtl" position="relative" margin-left="3%">
+            X
+          </text>
+        </div>
+      </div>
+      <div display="flex" direction="rtl" position="absolute" flex-direction="column" top="20px">
+        <text display="block" direction="rtl" position="relative" margin-right="10%">
+          X​X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="126" height="100">
+      <node x="100" y="0" width="26" height="10">
+        <node x="0" y="0" width="26" height="10">
+          <node x="16" y="0" width="10" height="10"/>
+        </node>
+      </node>
+      <node x="106" y="20" width="20" height="20">
+        <node x="0" y="0" width="18" height="20"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="block_intrinsic_width_percentage_margins__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" position="relative" width="126px" height="100px">
+      <div display="block" box-sizing="content-box" direction="ltr" position="absolute">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" padding-left="16px">
+          <text display="block" box-sizing="content-box" direction="ltr" position="relative" margin-left="3%">
+            X
+          </text>
+        </div>
+      </div>
+      <div display="flex" box-sizing="content-box" direction="ltr" position="absolute" flex-direction="column" top="20px">
+        <text display="block" box-sizing="content-box" direction="ltr" position="relative" margin-right="10%">
+          X​X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="126" height="100">
+      <node x="0" y="0" width="26" height="10">
+        <node x="0" y="0" width="26" height="10">
+          <node x="16" y="0" width="10" height="10"/>
+        </node>
+      </node>
+      <node x="0" y="20" width="20" height="20">
+        <node x="0" y="0" width="18" height="20"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="block_intrinsic_width_percentage_margins__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" position="relative" width="126px" height="100px">
+      <div display="block" box-sizing="content-box" direction="rtl" position="absolute">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" padding-left="16px">
+          <text display="block" box-sizing="content-box" direction="rtl" position="relative" margin-left="3%">
+            X
+          </text>
+        </div>
+      </div>
+      <div display="flex" box-sizing="content-box" direction="rtl" position="absolute" flex-direction="column" top="20px">
+        <text display="block" box-sizing="content-box" direction="rtl" position="relative" margin-right="10%">
+          X​X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="126" height="100">
+      <node x="100" y="0" width="26" height="10">
+        <node x="0" y="0" width="26" height="10">
+          <node x="16" y="0" width="10" height="10"/>
+        </node>
+      </node>
+      <node x="106" y="20" width="20" height="20">
+        <node x="0" y="0" width="18" height="20"/>
+      </node>
+    </node>
+  </expectations>
+</test>
 <test name="block_margin_collapse_through_empty_clamped__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
