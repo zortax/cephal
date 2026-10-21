@@ -8,6 +8,21 @@ use crate::compute::common::sizing_keyword::SizingKeywordResolution;
 use crate::geometry::{AvailableSpace, Line, MaybeMath, Size};
 use crate::tree::{CacheAccess, LayoutTree, SizingMode};
 
+/// A contribution held to the flex base size where the item cannot shrink or grow (css-flexbox-1
+/// §9.9.1), then to its min and max sizes, which win (as Chrome).
+#[inline]
+pub(super) fn within_limits(
+    size: f32,
+    flex_basis_min: Option<f32>,
+    flex_basis_max: Option<f32>,
+    style_min: Option<f32>,
+    style_max: Option<f32>,
+    resolved_minimum: f32,
+) -> f32 {
+    let size = size.maybe_min(flex_basis_max).maybe_max(flex_basis_min);
+    size.maybe_min(style_max).max(style_min.unwrap_or(resolved_minimum).max(resolved_minimum))
+}
+
 /// The item's hypothetical outer main size: its flex base size clamped by its min and max sizes.
 #[inline]
 fn item_main_length(child: &FlexItem, dir: impl FlexDir) -> f32 {
@@ -98,9 +113,12 @@ pub(super) fn determine_container_main_size<D: FlexDir, T: LayoutTree + CacheAcc
                         let max_main_size = style_max.maybe_min(flex_basis_max).or(flex_basis_max).unwrap_or(f32::INFINITY);
                         let content_contribution = match (min_main_size, style_preferred, max_main_size) {
                             (min, Some(pref), max) if c.is_row && (max <= min || max <= pref) => {
-                                pref.min(max).max(min) + item.margin.main_axis_sum(dir)
+                                within_limits(pref, flex_basis_min, flex_basis_max, style_min, style_max, item.resolved_minimum_main_size) + item.margin.main_axis_sum(dir)
                             }
-                            (min, _, max) if max <= min => min + item.margin.main_axis_sum(dir),
+                            (min, _, max) if max <= min => {
+                                within_limits(min, flex_basis_min, flex_basis_max, style_min, style_max, item.resolved_minimum_main_size)
+                                    + item.margin.main_axis_sum(dir)
+                            }
                             (_, Some(pref), _) => {
                                 let item_pb_main = item.padding.main_axis_sum(dir) + item.border.main_axis_sum(dir);
                                 let inner_main_size = pref.max(item_pb_main);
@@ -176,9 +194,9 @@ pub(super) fn determine_container_main_size<D: FlexDir, T: LayoutTree + CacheAcc
                                 // A row item contributes its content, a column item its hypothetical
                                 // size; within its flex base size where it cannot grow or shrink.
                                 if c.is_row {
-                                    inner_main_size.min(max_main_size).max(min_main_size) + item.margin.main_axis_sum(dir)
+                                    within_limits(inner_main_size, flex_basis_min, flex_basis_max, style_min, style_max, item.resolved_minimum_main_size) + item.margin.main_axis_sum(dir)
                                 } else {
-                                    item.flex_basis.min(max_main_size).max(min_main_size) + item.margin.main_axis_sum(dir)
+                                    within_limits(item.flex_basis, flex_basis_min, flex_basis_max, style_min, style_max, item.resolved_minimum_main_size) + item.margin.main_axis_sum(dir)
                                 }
                             }
                         };

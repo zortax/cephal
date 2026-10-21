@@ -10,6 +10,7 @@
 //! not one per line, since each answer depends only on the item's own target main size.
 
 use super::axis::{FlexAxisRect, FlexAxisSize, FlexAxisSum, FlexDir, abs_main, sum_axis_gaps};
+use super::main_size::within_limits;
 use super::flexible::{Flexible, resolve_flexible_lengths};
 use super::{AlgoConstants, FlexLine, align, cross};
 use crate::compute::common::alignment::{apply_alignment_fallback, compute_alignment_offset};
@@ -615,9 +616,12 @@ fn determine_container_main_size<const WRAP: bool, D: FlexDir, T: LayoutTree + C
                         let max_main_size = style_max.maybe_min(flex_basis_max).or(flex_basis_max).unwrap_or(f32::INFINITY);
                         let content_contribution = match (min_main_size, style_preferred, max_main_size) {
                             (min, Some(pref), max) if c.is_row && (max <= min || max <= pref) => {
-                                pref.min(max).max(min) + item.margin.main_axis_sum(dir)
+                                within_limits(pref, flex_basis_min, flex_basis_max, style_min, style_max, item.resolved_minimum_main_size) + item.margin.main_axis_sum(dir)
                             }
-                            (min, _, max) if max <= min => min + item.margin.main_axis_sum(dir),
+                            (min, _, max) if max <= min => {
+                                within_limits(min, flex_basis_min, flex_basis_max, style_min, style_max, item.resolved_minimum_main_size)
+                                    + item.margin.main_axis_sum(dir)
+                            }
                             (_, Some(pref), _) => {
                                 let inner_main_size = pref.max(item.padding_border_main);
                                 if c.is_row {
@@ -662,9 +666,9 @@ fn determine_container_main_size<const WRAP: bool, D: FlexDir, T: LayoutTree + C
                                 let inner_main_size = measured_main_size.maybe_max(None);
                                 // See `main_size::determine_container_main_size`.
                                 if c.is_row {
-                                    inner_main_size.min(max_main_size).max(min_main_size) + item.margin.main_axis_sum(dir)
+                                    within_limits(inner_main_size, flex_basis_min, flex_basis_max, style_min, style_max, item.resolved_minimum_main_size) + item.margin.main_axis_sum(dir)
                                 } else {
-                                    item.flex_basis.min(max_main_size).max(min_main_size) + item.margin.main_axis_sum(dir)
+                                    within_limits(item.flex_basis, flex_basis_min, flex_basis_max, style_min, style_max, item.resolved_minimum_main_size) + item.margin.main_axis_sum(dir)
                                 }
                             }
                         };
