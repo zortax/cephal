@@ -17,7 +17,7 @@ use axis::{Column, FlexAxisRect, FlexAxisSize, FlexAxisSum, FlexDir, Row};
 
 use crate::compute::LayoutTreeExt;
 use crate::compute::scratch::Scratch;
-use crate::geometry::{AvailableSpace, Line, MaybeMath, Point, Rect, Size};
+use crate::geometry::{AbsoluteAxis, AvailableSpace, Line, MaybeMath, Point, Rect, Size};
 use crate::style::{
     AlignContent, AlignItems, AlignSelf, BoxSizing, Contain, Dimension, Direction, JustifyContent,
     Overflow,
@@ -63,10 +63,6 @@ pub(super) struct FlexItem {
 }
 
 impl FlexItem {
-    #[inline]
-    fn is_scroll_container(&self) -> bool {
-        self.overflow.x.is_scroll_container() || self.overflow.y.is_scroll_container()
-    }
     #[inline]
     fn participates_in_baseline_alignment(&self, dir: impl FlexDir) -> bool {
         self.align_self.keyword == crate::style::AlignItemsKeyword::Baseline && !self.margin_is_auto.cross_start(dir) && !self.margin_is_auto.cross_end(dir)
@@ -237,6 +233,38 @@ pub fn compute_flexbox_layout<T: LayoutTree + CacheAccess + ?Sized>(
     output
 }
 
+/// A single-line row container of unknown width in definite space is shrink-to-fit (CSS 2.2
+/// §10.3.5, css-sizing-3 §5.1): its max-content width, here found as its content's main size, but
+/// no wider than the space unless its min-content width is. Narrows `c`'s sizes to that.
+fn shrink_row_to_fit<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
+    tree: &mut T,
+    node: NodeId,
+    inputs: &LayoutInput,
+    available_space: Size<AvailableSpace>,
+    c: &mut AlgoConstants<D>,
+) {
+    let dir = c.dir;
+    let AvailableSpace::Definite(space) = available_space.main(dir) else { return };
+    if !dir.is_row() || c.is_wrap || inputs.known_dimensions.width.is_some() || c.inner_container_size.main(dir) <= space {
+        return;
+    }
+    let min_content = tree.measure_child_size(
+        node,
+        Size { width: None, height: inputs.known_dimensions.height },
+        inputs.parent_size,
+        Size { width: AvailableSpace::MinContent, height: inputs.available_space.height },
+        inputs.sizing_mode,
+        AbsoluteAxis::Horizontal,
+        inputs.vertical_margins_are_collapsible,
+    );
+    let inset = c.content_box_inset.main_axis_sum(dir);
+    let outer = (space + inset).max(min_content).maybe_clamp(c.min_size.main(dir), c.max_size.main(dir)).max(inset);
+    if outer < c.container_size.main(dir) {
+        c.container_size.set_main(dir, outer);
+        c.inner_container_size.set_main(dir, outer - inset);
+    }
+}
+
 fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized, D: FlexDir>(
     tree: &mut T,
     node: NodeId,
@@ -290,6 +318,7 @@ fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized, D: FlexDir>(
         constants.container_size.set_main(dir, outer_main_size);
     } else {
         main_size::determine_container_main_size(tree, available_space, &mut lines, &mut items, &mut constants);
+        shrink_row_to_fit(tree, node, &inputs, available_space, &mut constants);
         constants.node_inner_size.set_main(dir, Some(constants.inner_container_size.main(dir)));
         constants.node_outer_size.set_main(dir, Some(constants.container_size.main(dir)));
         // A percentage column gap resolves against the now known width; a percentage row gap

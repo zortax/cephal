@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    A row flex container's intrinsic width counts an item that cannot shrink at no less than its
+    flex base size (css-flexbox-1 §9.9.1), and a row flex container in a narrow column flex
+    container is no narrower than its min-content width, its item's definite width
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; width: 280px;">
+  <div style="display: flex;">
+    <div style="display: flex; flex-direction: row-reverse; justify-content: space-between;">
+      <div style="display: block; flex-grow: 1; flex-shrink: 0; flex-basis: 35px; height: 10px;"></div>
+    </div>
+  </div>
+  <div style="display: flex; width: 19px; flex-direction: column; flex-wrap: wrap;">
+    <div style="display: flex;">
+      <div style="display: block; width: 165px; height: 10px;"></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -338,6 +338,7 @@ fn lay_out<const WRAP: bool, D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
         c.container_size.set_main(dir, outer_main_size);
     } else {
         determine_container_main_size::<WRAP, _, _>(tree, available_space, lines, &items, c);
+        super::shrink_row_to_fit(tree, node, &inputs, available_space, c);
         c.node_inner_size.set_main(dir, Some(c.inner_container_size.main(dir)));
         c.node_outer_size.set_main(dir, Some(c.container_size.main(dir)));
         // See `compute_preliminary`: only a column gap resolves against the found size.
@@ -617,9 +618,6 @@ fn determine_container_main_size<const WRAP: bool, D: FlexDir, T: LayoutTree + C
                                 pref.min(max).max(min) + item.margin.main_axis_sum(dir)
                             }
                             (min, _, max) if max <= min => min + item.margin.main_axis_sum(dir),
-                            _ if item.overflow.x.is_scroll_container() || item.overflow.y.is_scroll_container() => {
-                                item.flex_basis + item.margin.main_axis_sum(dir)
-                            }
                             (_, Some(pref), _) => {
                                 let inner_main_size = pref.max(item.padding_border_main);
                                 if c.is_row {
@@ -662,11 +660,11 @@ fn determine_container_main_size<const WRAP: bool, D: FlexDir, T: LayoutTree + C
                                     Line::FALSE,
                                 );
                                 let inner_main_size = measured_main_size.maybe_max(None);
+                                // See `main_size::determine_container_main_size`.
                                 if c.is_row {
-                                    (inner_main_size + item.margin.main_axis_sum(dir)).maybe_clamp(style_min, style_max)
+                                    inner_main_size.min(max_main_size).max(min_main_size) + item.margin.main_axis_sum(dir)
                                 } else {
-                                    (inner_main_size.max(item.flex_basis) + item.margin.main_axis_sum(dir))
-                                        .maybe_clamp(style_min, style_max)
+                                    item.flex_basis.min(max_main_size).max(min_main_size) + item.margin.main_axis_sum(dir)
                                 }
                             }
                         };

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    A flex root of `width: max-content` takes its max-content width, also wider than the viewport
+  </title>
+</head>
+<body>
+
+<div class="viewport" style="display: block; width: 141px; height: 100px;">
+  <div id="test-root" style="display: flex; flex-direction: column; width: max-content;">
+    <div style="display: flex;">
+      <div style="display: block; width: 163px; height: 10px;"></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

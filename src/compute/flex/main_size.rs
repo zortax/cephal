@@ -101,7 +101,6 @@ pub(super) fn determine_container_main_size<D: FlexDir, T: LayoutTree + CacheAcc
                                 pref.min(max).max(min) + item.margin.main_axis_sum(dir)
                             }
                             (min, _, max) if max <= min => min + item.margin.main_axis_sum(dir),
-                            _ if item.is_scroll_container() => item.flex_basis + item.margin.main_axis_sum(dir),
                             (_, Some(pref), _) => {
                                 let item_pb_main = item.padding.main_axis_sum(dir) + item.border.main_axis_sum(dir);
                                 let inner_main_size = pref.max(item_pb_main);
@@ -150,7 +149,16 @@ pub(super) fn determine_container_main_size<D: FlexDir, T: LayoutTree + CacheAcc
                                     }
                                     ckd
                                 };
-                                let child_available_space = available_space.with_cross(dir, cross_axis_available_space);
+                                // A content-sized main size keyword contributes that size.
+                                let main_space = match crate::compute::common::sizing_keyword::resolve_sizing_keyword(
+                                    item.size_style.main(dir).raw(),
+                                    None,
+                                    None,
+                                ) {
+                                    Some(SizingKeywordResolution::Measure(space)) => space,
+                                    _ => available_space.main(dir),
+                                };
+                                let child_available_space = available_space.with_cross(dir, cross_axis_available_space).with_main(dir, main_space);
                                 let measured_main_size = tree.measure_child_size(
                                     item.node,
                                     child_known_dimensions,
@@ -165,11 +173,12 @@ pub(super) fn determine_container_main_size<D: FlexDir, T: LayoutTree + CacheAcc
                                     .zip(child_known_dimensions.cross(dir))
                                     .map(|(ratio, cross)| if c.is_row { cross * ratio } else { cross / ratio });
                                 let inner_main_size = measured_main_size.maybe_max(transferred_main_size);
+                                // A row item contributes its content, a column item its hypothetical
+                                // size; within its flex base size where it cannot grow or shrink.
                                 if c.is_row {
-                                    (inner_main_size + item.margin.main_axis_sum(dir)).maybe_clamp(style_min, style_max)
+                                    inner_main_size.min(max_main_size).max(min_main_size) + item.margin.main_axis_sum(dir)
                                 } else {
-                                    (inner_main_size.max(item.flex_basis) + item.margin.main_axis_sum(dir))
-                                        .maybe_clamp(style_min, style_max)
+                                    item.flex_basis.min(max_main_size).max(min_main_size) + item.margin.main_axis_sum(dir)
                                 }
                             }
                         };

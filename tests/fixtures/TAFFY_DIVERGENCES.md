@@ -176,6 +176,25 @@ Census category `RootMinMaxWidth`. Fixture `root_max_width`.
 A block root fills the viewport's width held between its min and max widths (CSS 2.2 §10.4).
 Taffy fills the viewport whatever its `max-width`.
 
+## Intrinsic and shrink-to-fit widths of row flex containers
+
+Mostly census category `unexplained` (no feature to strip). Fixtures `flex_row_shrink_to_fit`,
+`flex_intrinsic_size_inflexible_items`, `flex_intrinsic_size_keywords_and_scroll_items`,
+`root_flex_width_max_content`.
+
+- A single-line row flex container of `auto` width in definite space (absolutely positioned, an
+  unstretched item) is shrink-to-fit (CSS 2.2 §10.3.5): no wider than the space unless its
+  min-content width is. Taffy takes its items' added hypothetical sizes, whatever the space.
+- Its intrinsic contributions (css-flexbox-1 §9.9.1) keep an item that cannot shrink (grow) at
+  no less (more) than its flex base size, count an item's `width: max-content` (or another
+  content keyword) at that size, and a scroll container item at its preferred width; taffy
+  counts the content, the min-content size, and the flex base size there.
+- A flex or grid root's sizing keyword is resolved as a block root's is; taffy ignores it.
+
+Chrome itself does not use the flex base size in a shrink-to-fit width (an empty item of
+`flex-basis: 197px` in an absolutely positioned row container gives it width 0, while
+`width: max-content` gives it 197px); cephal follows the latter (§9.9.1) in both.
+
 ## The root (both engines, by design)
 
 Not a divergence between the engines, but where both differ from a browser's root element,

@@ -269,8 +269,8 @@ pub mod verify {
 ///   function ignores the available height;
 /// - block flow never reads the available height, and the width only when it does not know it;
 /// - grid reads none on an axis it knows, and treats a min-content height as max-content;
-/// - flex, on an axis it knows, only asks whether the space is definite; a single-line container
-///   whose main size is unknown never reads the definite main space's value.
+/// - flex, on an axis it knows, only asks whether the space is definite; a single-line column
+///   container whose height is unknown never reads the definite height's value.
 #[inline]
 pub fn normalize(inputs: &mut LayoutInput, meta: crate::tree::QueryMeta) {
     use crate::tree::NodeKind;
@@ -305,9 +305,6 @@ pub fn normalize(inputs: &mut LayoutInput, meta: crate::tree::QueryMeta) {
     match kind {
         NodeKind::LeafIgnoringHeight | NodeKind::Block if known.height.is_none() => avail.height = AvailableSpace::MaxContent,
         NodeKind::Grid if avail.height == AvailableSpace::MinContent => avail.height = AvailableSpace::MaxContent,
-        NodeKind::FlexRowSingleLine if known.width.is_none() && avail.width.is_definite() => {
-            avail.width = AvailableSpace::Definite(0.0);
-        }
         NodeKind::FlexColumnSingleLine if known.height.is_none() && avail.height.is_definite() => {
             avail.height = AvailableSpace::Definite(0.0);
         }
@@ -483,45 +480,40 @@ fn compute_in_flow_root_layout<T: LayoutTree + CacheAccess + ?Sized>(
     // The root's border box gets the available space less its margins.
     let root_available_space = available_space.maybe_sub(margin.sum_axes()).maybe_max(Size::ZERO);
 
-    let mut known_dimensions = Size::NONE;
-    if matches!(style.display, crate::style::Display::Block | crate::style::Display::FlowRoot) {
-        let resolve = |s: Size<crate::style::Length>| block::resolve_size(s, parent_size, &calc);
-        let min_size = resolve(style.min_size.map(|v| v.raw()))
-            .maybe_apply_aspect_ratio(style.aspect_ratio)
-            .maybe_add(box_sizing_adjustment);
-        let max_size = resolve(style.max_size.map(|v| v.raw()))
-            .maybe_apply_aspect_ratio(style.aspect_ratio)
-            .maybe_add(box_sizing_adjustment);
-        let clamped_style_size = resolve(style.size.map(|v| v.raw()))
-            .maybe_apply_aspect_ratio(style.aspect_ratio)
-            .maybe_add(box_sizing_adjustment)
-            .maybe_clamp(min_size, max_size);
+    let is_block = matches!(style.display, crate::style::Display::Block | crate::style::Display::FlowRoot);
+    let resolve = |s: Size<crate::style::Length>| block::resolve_size(s, parent_size, &calc);
+    let min_size = resolve(style.min_size.map(|v| v.raw())).maybe_apply_aspect_ratio(style.aspect_ratio).maybe_add(box_sizing_adjustment);
+    let max_size = resolve(style.max_size.map(|v| v.raw())).maybe_apply_aspect_ratio(style.aspect_ratio).maybe_add(box_sizing_adjustment);
+    let clamped_style_size =
+        resolve(style.size.map(|v| v.raw())).maybe_apply_aspect_ratio(style.aspect_ratio).maybe_add(box_sizing_adjustment).maybe_clamp(min_size, max_size);
+    // Sizing keywords, for any root: `stretch` fills the viewport less the margins, a
+    // content-based width is measured against it; a content-based height is the automatic one.
+    use common::sizing_keyword::{SizingKeywordResolution, resolve_sizing_keyword};
+    let (size_style, root_available_height) = (style.size, root_available_space.height);
+    let keyword_width = match resolve_sizing_keyword(size_style.width.raw(), root_available_space.width.into_option(), parent_size.width) {
+        Some(SizingKeywordResolution::Exact(w)) => Some(w),
+        Some(SizingKeywordResolution::Measure(avail)) => Some(tree.measure_child_size(
+            root,
+            Size::NONE,
+            parent_size,
+            Size { width: avail, height: root_available_height },
+            SizingMode::InherentSize,
+            crate::geometry::AbsoluteAxis::Horizontal,
+            Line::FALSE,
+        )),
+        None => None,
+    };
+    let keyword_height = match resolve_sizing_keyword(size_style.height.raw(), root_available_height.into_option(), parent_size.height) {
+        Some(SizingKeywordResolution::Exact(h)) => Some(h),
+        _ => None,
+    };
+    let keyword_size = Size { width: keyword_width, height: keyword_height }.maybe_clamp(min_size, max_size);
+    let mut known_dimensions = keyword_size.maybe_max(padding_border_size.map(Some));
+    if is_block {
         let min_max_definite_size = min_size.zip_map(max_size, |min, max| match (min, max) {
             (Some(min), Some(max)) if max <= min => Some(min),
             _ => None,
         });
-        // Sizing keywords: `stretch` fills the viewport less the margins, a content-based width
-        // is measured against it; a content-based height is the automatic one.
-        use common::sizing_keyword::{SizingKeywordResolution, resolve_sizing_keyword};
-        let (size_style, root_available_height) = (style.size, root_available_space.height);
-        let keyword_width = match resolve_sizing_keyword(size_style.width.raw(), root_available_space.width.into_option(), parent_size.width) {
-            Some(SizingKeywordResolution::Exact(w)) => Some(w),
-            Some(SizingKeywordResolution::Measure(avail)) => Some(tree.measure_child_size(
-                root,
-                Size::NONE,
-                parent_size,
-                Size { width: avail, height: root_available_height },
-                SizingMode::InherentSize,
-                crate::geometry::AbsoluteAxis::Horizontal,
-                Line::FALSE,
-            )),
-            None => None,
-        };
-        let keyword_height = match resolve_sizing_keyword(size_style.height.raw(), root_available_height.into_option(), parent_size.height) {
-            Some(SizingKeywordResolution::Exact(h)) => Some(h),
-            _ => None,
-        };
-        let keyword_size = Size { width: keyword_width, height: keyword_height }.maybe_clamp(min_size, max_size);
         // A block root stretches to a definite available width less its margins.
         let available_space_based_size =
             Size { width: root_available_space.width.into_option().maybe_clamp(min_size.width, max_size.width), height: None };
