@@ -124,5 +124,17 @@ fixtures at a release tag. Fixtures cephal does not pass yet are listed with the
 `tests/fixtures/expected_failures.txt`. A listed fixture that starts passing fails the run, so
 the list only shrinks on purpose. `CEPHAL_FIXTURES_ALL=1` runs them all as ordinary fixtures.
 `tests/differential.rs` keeps the same kind of list for random trees in `differential_known.txt`;
-its `census` test regenerates it, attributing each seed to the feature whose removal makes cephal
+its `census` test regenerates it, attributing each seed to the features whose removal makes cephal
 and taffy agree.
+
+`scripts/gen_fixtures.sh` renders cephal's own fixtures (`tests/fixtures/html`, in taffy's gentest
+format) in Chrome for Testing into `tests/fixtures/cephal.xml`. Chrome, not taffy, decides what is
+right:
+
+- `scripts/chrome_seeds.sh [SEEDS]` writes the random trees of the given differential seeds as
+  fixtures, renders them in Chrome and reports, per seed, which boxes each engine gets wrong.
+- `CEPHAL_SEED=n cargo test --release --test differential reduce -- --ignored --nocapture` shrinks
+  a seed to the few boxes on which Chrome still disagrees with cephal (`CEPHAL_KEEP=cephal`) or
+  with taffy, to turn it into a small fixture.
+- `tests/fixtures/TAFFY_DIVERGENCES.md` records where taffy differs from Chrome and the
+  specification.

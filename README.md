@@ -13,8 +13,9 @@ The engine supports:
   their nearest positioned ancestor or the viewport, with static positions and self-alignment);
 - pixel snapping.
 
-Cephal runs the 6,504 Chrome-generated layout fixtures of taffy 0.15. The ones it does not pass yet
-are listed by cause in `tests/fixtures/expected_failures.txt`.
+Cephal passes the 6,504 Chrome-generated layout fixtures of taffy 0.15 and 188 of its own. Where
+cephal and taffy disagree, Chrome decides: `tests/fixtures/TAFFY_DIVERGENCES.md` lists the cases
+where taffy differs from the CSS specification and Chrome, with the fixtures that pin them.
 
 ## Incremental layout
 
@@ -134,10 +135,12 @@ PanGui's `Expand` has no automatic minimum size, but CSS flex items do. The `*_m
 
 ## Tests
 
-- `tests/fixtures.rs` runs 6,504 Chrome-generated fixtures from taffy 0.15 (`scripts/update_fixtures.sh`
-  regenerates them), apart from the listed expected failures.
+- `tests/fixtures.rs` runs 6,504 Chrome-generated fixtures from taffy 0.15
+  (`scripts/update_fixtures.sh` regenerates them) and cephal's own, written as HTML in
+  `tests/fixtures/html` and rendered in Chrome by `scripts/gen_fixtures.sh`.
 - `tests/differential.rs` compares random trees with taffy, apart from the divergences listed in
-  `tests/differential_known.txt`.
+  `tests/differential_known.txt`. `scripts/chrome_seeds.sh` renders those trees in Chrome to tell
+  which engine is right.
 - `tests/incremental.rs` compares incremental and parallel results with cold serial layouts.
 
 Use `CEPHAL_SEEDS` and `CEPHAL_STEPS` to set the size of the random test suites. Use
