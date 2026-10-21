@@ -78,7 +78,7 @@
 147 unexplained
 148 [FlexWrap]
 149 unexplained
-150 [GridItemPaddingBorder]
+150 unexplained
 151 BlockAlignContent+FlexWrap+FlexCrossAlignment
 153 [RootSizingKeywords]
 155 RootSizingKeywords+BlockAlignContent
@@ -109,7 +109,7 @@
 201 [PercentGaps]
 203 FlexWrap+FlexCrossAlignment+LeafInsets
 206 [PercentTracks]
-207 [InitialContainingBlockGridPlacement,PercentPadding]
+207 unexplained
 208 unexplained
 209 BlockAlignContent+FlexWrap+LeafInsets
 210 unexplained
@@ -236,7 +236,7 @@
 457 unexplained
 459 [RootSizingKeywords]
 461 [RootSizingKeywords]
-466 [LeafInsets]
+466 GridItemPaddingBorder+LeafInsets
 467 unexplained
 468 RootSizingKeywords+GridItemPaddingBorder+SpaceBetween+FlexWrap+LeafInsets
 469 unexplained
@@ -440,7 +440,7 @@
 823 [RootSizingKeywords]
 825 RootSizingKeywords+Absolute+PercentGaps+FlexWrap+FlexCrossAlignment
 829 unexplained
-830 PercentTracks+FlexCrossAlignment
+830 unexplained
 831 Absolute+PercentMargins+GridItemPaddingBorder+SpaceBetween+FlexWrap+FlexCrossAlignment+LeafInsets
 834 unexplained
 835 SpaceBetween+BlockAlignContent+FlexWrap+FlexCrossAlignment
@@ -483,7 +483,7 @@
 899 [RootSizingKeywords]
 900 unexplained
 901 [LeafInsets]
-903 RootSizingKeywords+PercentMargins
+903 RootSizingKeywords+PercentMargins+LeafInsets
 906 Absolute+PercentPadding+LeafInsets
 907 unexplained
 911 Positioned+BlockAlignContent

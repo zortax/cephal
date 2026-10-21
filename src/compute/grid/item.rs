@@ -515,7 +515,8 @@ impl GridItem {
             return Some(StyleMinimum::Fixed(size.max(sizes.padding_border.get_abstract(axis))));
         }
         let size = self.size.get_abstract(axis);
-        if size.is_sizing_keyword() && !size.is_stretch() {
+        // `fit-content` and `stretch` behave as `auto` here (as Chrome).
+        if size.is_sizing_keyword() && !size.is_stretch() && size.kind() != crate::style::LengthKind::FitContent {
             return Some(StyleMinimum::MinContent);
         }
         let min_size = if self.fixed_sizes.is_some() || grid_area_size.width.is_some() && grid_area_size.height.is_some() {

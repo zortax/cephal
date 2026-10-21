@@ -2520,6 +2520,170 @@
     </node>
   </expectations>
 </test>
+<test name="grid_item_fit_content_minimum_contribution__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="ltr" position="absolute" width="128px">
+      <div display="grid" direction="ltr" position="relative" grid-template-columns="3fr 46% auto">
+        <div display="block" direction="ltr" position="relative" width="fit-content" grid-column-start="span 2">
+          <div display="block" direction="ltr" position="relative" width="194px" height="5px"/>
+        </div>
+      </div>
+      <div display="grid" direction="ltr" position="relative" grid-template-columns="minmax(auto, 20px) 30px">
+        <div display="block" direction="ltr" position="relative" width="fit-content">
+          <div display="block" direction="ltr" position="relative" width="194px" height="5px"/>
+        </div>
+      </div>
+      <div display="grid" direction="ltr" position="relative" grid-template-columns="minmax(auto, 20px) 30px">
+        <div display="block" direction="ltr" position="relative" width="min-content">
+          <div display="block" direction="ltr" position="relative" width="50px" height="5px"/>
+        </div>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="128" height="15">
+      <node x="0" y="0" width="128" height="5" resolved-rows="5px" resolved-columns="69.125px 58.875px 0px">
+        <node x="0" y="0" width="194" height="5">
+          <node x="0" y="0" width="194" height="5"/>
+        </node>
+      </node>
+      <node x="0" y="5" width="128" height="5" resolved-rows="5px" resolved-columns="20px 30px">
+        <node x="0" y="0" width="194" height="5">
+          <node x="0" y="0" width="194" height="5"/>
+        </node>
+      </node>
+      <node x="0" y="10" width="128" height="5" resolved-rows="5px" resolved-columns="50px 30px">
+        <node x="0" y="0" width="50" height="5">
+          <node x="0" y="0" width="50" height="5"/>
+        </node>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="grid_item_fit_content_minimum_contribution__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="rtl" position="absolute" width="128px">
+      <div display="grid" direction="rtl" position="relative" grid-template-columns="3fr 46% auto">
+        <div display="block" direction="rtl" position="relative" width="fit-content" grid-column-start="span 2">
+          <div display="block" direction="rtl" position="relative" width="194px" height="5px"/>
+        </div>
+      </div>
+      <div display="grid" direction="rtl" position="relative" grid-template-columns="minmax(auto, 20px) 30px">
+        <div display="block" direction="rtl" position="relative" width="fit-content">
+          <div display="block" direction="rtl" position="relative" width="194px" height="5px"/>
+        </div>
+      </div>
+      <div display="grid" direction="rtl" position="relative" grid-template-columns="minmax(auto, 20px) 30px">
+        <div display="block" direction="rtl" position="relative" width="min-content">
+          <div display="block" direction="rtl" position="relative" width="50px" height="5px"/>
+        </div>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="128" height="15">
+      <node x="0" y="0" width="128" height="5" resolved-rows="5px" resolved-columns="69.125px 58.875px 0px">
+        <node x="-66" y="0" width="194" height="5">
+          <node x="0" y="0" width="194" height="5"/>
+        </node>
+      </node>
+      <node x="0" y="5" width="128" height="5" resolved-rows="5px" resolved-columns="20px 30px">
+        <node x="-66" y="0" width="194" height="5">
+          <node x="0" y="0" width="194" height="5"/>
+        </node>
+      </node>
+      <node x="0" y="10" width="128" height="5" resolved-rows="5px" resolved-columns="50px 30px">
+        <node x="78" y="0" width="50" height="5">
+          <node x="0" y="0" width="50" height="5"/>
+        </node>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="grid_item_fit_content_minimum_contribution__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" position="absolute" width="128px">
+      <div display="grid" box-sizing="content-box" direction="ltr" position="relative" grid-template-columns="3fr 46% auto">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" width="fit-content" grid-column-start="span 2">
+          <div display="block" box-sizing="content-box" direction="ltr" position="relative" width="194px" height="5px"/>
+        </div>
+      </div>
+      <div display="grid" box-sizing="content-box" direction="ltr" position="relative" grid-template-columns="minmax(auto, 20px) 30px">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" width="fit-content">
+          <div display="block" box-sizing="content-box" direction="ltr" position="relative" width="194px" height="5px"/>
+        </div>
+      </div>
+      <div display="grid" box-sizing="content-box" direction="ltr" position="relative" grid-template-columns="minmax(auto, 20px) 30px">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" width="min-content">
+          <div display="block" box-sizing="content-box" direction="ltr" position="relative" width="50px" height="5px"/>
+        </div>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="128" height="15">
+      <node x="0" y="0" width="128" height="5" resolved-rows="5px" resolved-columns="69.125px 58.875px 0px">
+        <node x="0" y="0" width="194" height="5">
+          <node x="0" y="0" width="194" height="5"/>
+        </node>
+      </node>
+      <node x="0" y="5" width="128" height="5" resolved-rows="5px" resolved-columns="20px 30px">
+        <node x="0" y="0" width="194" height="5">
+          <node x="0" y="0" width="194" height="5"/>
+        </node>
+      </node>
+      <node x="0" y="10" width="128" height="5" resolved-rows="5px" resolved-columns="50px 30px">
+        <node x="0" y="0" width="50" height="5">
+          <node x="0" y="0" width="50" height="5"/>
+        </node>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="grid_item_fit_content_minimum_contribution__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" position="absolute" width="128px">
+      <div display="grid" box-sizing="content-box" direction="rtl" position="relative" grid-template-columns="3fr 46% auto">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" width="fit-content" grid-column-start="span 2">
+          <div display="block" box-sizing="content-box" direction="rtl" position="relative" width="194px" height="5px"/>
+        </div>
+      </div>
+      <div display="grid" box-sizing="content-box" direction="rtl" position="relative" grid-template-columns="minmax(auto, 20px) 30px">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" width="fit-content">
+          <div display="block" box-sizing="content-box" direction="rtl" position="relative" width="194px" height="5px"/>
+        </div>
+      </div>
+      <div display="grid" box-sizing="content-box" direction="rtl" position="relative" grid-template-columns="minmax(auto, 20px) 30px">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" width="min-content">
+          <div display="block" box-sizing="content-box" direction="rtl" position="relative" width="50px" height="5px"/>
+        </div>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="128" height="15">
+      <node x="0" y="0" width="128" height="5" resolved-rows="5px" resolved-columns="69.125px 58.875px 0px">
+        <node x="-66" y="0" width="194" height="5">
+          <node x="0" y="0" width="194" height="5"/>
+        </node>
+      </node>
+      <node x="0" y="5" width="128" height="5" resolved-rows="5px" resolved-columns="20px 30px">
+        <node x="-66" y="0" width="194" height="5">
+          <node x="0" y="0" width="194" height="5"/>
+        </node>
+      </node>
+      <node x="0" y="10" width="128" height="5" resolved-rows="5px" resolved-columns="50px 30px">
+        <node x="78" y="0" width="50" height="5">
+          <node x="0" y="0" width="50" height="5"/>
+        </node>
+      </node>
+    </node>
+  </expectations>
+</test>
 <test name="grid_item_size_floored_by_padding_border__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
