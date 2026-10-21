@@ -6,7 +6,8 @@
   <title>
     A block with an aspect ratio and automatic heights is at least as tall as its content
     (css-sizing-4 §5.2.1), capped by its max-height; a scroll container or an explicit min-height
-    keeps the ratio; a definite height keeps it whatever max-width does to the width
+    (even a percentage of an indefinite height) keeps the ratio; a definite height keeps it
+    whatever max-width does to the width
   </title>
 </head>
 <body>
@@ -29,6 +30,7 @@
     <div style="display: block; height: 50px;"></div>
   </div>
   <div style="display: block; height: 195px; max-width: 11%; aspect-ratio: 1;"></div>
+  <div style="display: block; max-width: 23px; min-height: 8%; aspect-ratio: 1;">X&#8203;X&#8203;X&#8203;X&#8203;X</div>
 </div>
 
 </body>

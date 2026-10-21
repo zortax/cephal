@@ -1191,10 +1191,13 @@
         <div display="block" direction="ltr" position="relative" height="50px"/>
       </div>
       <div display="block" direction="ltr" position="relative" height="195px" max-width="11%" aspect-ratio="1"/>
+      <text display="block" direction="ltr" position="relative" min-height="8%" max-width="23px" aspect-ratio="1">
+        X​X​X​X​X
+      </text>
     </div>
   </input>
   <expectations>
-    <node x="0" y="0" width="300" height="462">
+    <node x="0" y="0" width="300" height="485">
       <node x="0" y="0" width="0" height="6">
         <node x="0" y="0" width="6" height="6"/>
       </node>
@@ -1212,6 +1215,7 @@
         <node x="0" y="0" width="20" height="50"/>
       </node>
       <node x="0" y="267" width="33" height="195"/>
+      <node x="0" y="462" width="23" height="23"/>
     </node>
   </expectations>
 </test>
@@ -1238,10 +1242,13 @@
         <div display="block" direction="rtl" position="relative" height="50px"/>
       </div>
       <div display="block" direction="rtl" position="relative" height="195px" max-width="11%" aspect-ratio="1"/>
+      <text display="block" direction="rtl" position="relative" min-height="8%" max-width="23px" aspect-ratio="1">
+        X​X​X​X​X
+      </text>
     </div>
   </input>
   <expectations>
-    <node x="0" y="0" width="300" height="462">
+    <node x="0" y="0" width="300" height="485">
       <node x="300" y="0" width="0" height="6">
         <node x="-6" y="0" width="6" height="6"/>
       </node>
@@ -1259,6 +1266,7 @@
         <node x="0" y="0" width="20" height="50"/>
       </node>
       <node x="267" y="267" width="33" height="195"/>
+      <node x="277" y="462" width="23" height="23"/>
     </node>
   </expectations>
 </test>
@@ -1285,10 +1293,13 @@
         <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="50px"/>
       </div>
       <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="195px" max-width="11%" aspect-ratio="1"/>
+      <text display="block" box-sizing="content-box" direction="ltr" position="relative" min-height="8%" max-width="23px" aspect-ratio="1">
+        X​X​X​X​X
+      </text>
     </div>
   </input>
   <expectations>
-    <node x="0" y="0" width="300" height="462">
+    <node x="0" y="0" width="300" height="485">
       <node x="0" y="0" width="0" height="6">
         <node x="0" y="0" width="6" height="6"/>
       </node>
@@ -1306,6 +1317,7 @@
         <node x="0" y="0" width="20" height="50"/>
       </node>
       <node x="0" y="267" width="33" height="195"/>
+      <node x="0" y="462" width="23" height="23"/>
     </node>
   </expectations>
 </test>
@@ -1332,10 +1344,13 @@
         <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="50px"/>
       </div>
       <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="195px" max-width="11%" aspect-ratio="1"/>
+      <text display="block" box-sizing="content-box" direction="rtl" position="relative" min-height="8%" max-width="23px" aspect-ratio="1">
+        X​X​X​X​X
+      </text>
     </div>
   </input>
   <expectations>
-    <node x="0" y="0" width="300" height="462">
+    <node x="0" y="0" width="300" height="485">
       <node x="300" y="0" width="0" height="6">
         <node x="-6" y="0" width="6" height="6"/>
       </node>
@@ -1353,6 +1368,7 @@
         <node x="0" y="0" width="20" height="50"/>
       </node>
       <node x="267" y="267" width="33" height="195"/>
+      <node x="277" y="462" width="23" height="23"/>
     </node>
   </expectations>
 </test>

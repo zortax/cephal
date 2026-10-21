@@ -25,6 +25,9 @@ pub struct LeafBox {
     pub aspect_ratio: Option<f32>,
     /// A scroll container on either axis.
     pub scrolls: bool,
+    /// The height the aspect ratio gives is a minimum the content may exceed (see
+    /// [`crate::compute::block::ratio_height_is_minimum`]); otherwise it is the height.
+    pub ratio_is_minimum: bool,
     /// The style alone keeps the box from collapsing through.
     pub style_prevents_collapse: bool,
 }
@@ -131,6 +134,7 @@ fn resolve_box(style: &crate::style::Style, parent_size: Size<Option<f32>>, calc
         content_start,
         aspect_ratio,
         scrolls,
+        ratio_is_minimum: crate::compute::block::ratio_height_is_minimum(style, Size::NONE),
         style_prevents_collapse,
     }
 }
@@ -157,6 +161,7 @@ struct Prepared {
     pb_sum: Size<f32>,
     content_start: (f32, f32),
     scrolls: bool,
+    ratio_is_minimum: bool,
     padding_top: f32,
     padding_bottom: f32,
 }
@@ -182,6 +187,7 @@ fn prepare(resolved: &LeafBox, known_dimensions: Size<Option<f32>>, sizing_mode:
         pb_sum: resolved.padding_border_sum,
         content_start: resolved.content_start,
         scrolls: resolved.scrolls,
+        ratio_is_minimum: resolved.ratio_is_minimum,
         padding_top: resolved.padding.top,
         padding_bottom: resolved.padding.bottom,
     }
@@ -212,6 +218,7 @@ pub fn compute_leaf_layout_with<T: LayoutTree + ?Sized>(
         pb_sum,
         content_start,
         scrolls,
+        ratio_is_minimum,
         padding_top,
         padding_bottom,
     } = match tree.style_plan(node) {
@@ -283,11 +290,17 @@ pub fn compute_leaf_layout_with<T: LayoutTree + ?Sized>(
         .or(node_size)
         .unwrap_or(measured_size + content_box_inset_sum)
         .maybe_clamp(node_min_size, node_max_size);
-    let size = Size {
-        width: clamped.width,
-        height: clamped.height.max(aspect_ratio.map_or(0.0, |r| (clamped.width / r).maybe_min(node_max_size.height))),
-    }
-    .f32_max(pb_sum);
+    let height = match aspect_ratio {
+        // The ratio gives the height, which the content may exceed only where that is its
+        // automatic minimum.
+        Some(r) if known_dimensions.height.is_none() && node_size.height.is_none() => {
+            let ratio_height = (clamped.width / r).maybe_clamp(node_min_size.height, node_max_size.height);
+            if ratio_is_minimum { clamped.height.max(ratio_height) } else { ratio_height }
+        }
+        Some(r) => clamped.height.max((clamped.width / r).maybe_min(node_max_size.height)),
+        None => clamped.height,
+    };
+    let size = Size { width: clamped.width, height }.f32_max(pb_sum);
 
     let scrollable_overflow_rect = Rect {
         left: 0.0,
