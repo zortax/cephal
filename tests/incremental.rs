@@ -2,8 +2,8 @@
 
 mod common;
 
-use cephal::geometry::{AvailableSpace, Size};
-use cephal::style::{AlignItems, Dimension, FlexWrap, Position};
+use cephal::geometry::{AvailableSpace, Line, Rect, Size};
+use cephal::style::{AlignItems, Dimension, Display, FlexWrap, GridPlacement, LengthPercentageAuto, Position};
 use cephal::tree::{Layout, NodeId};
 use cephal::{Parallel, Tree};
 use common::*;
@@ -39,12 +39,18 @@ fn assert_same(step: &str, incremental: &Tree<Text>, cold: &Tree<Text>, root: No
     }
 }
 
-/// One random edit; returns a description.
-fn edit(rng: &mut Rng, tree: &mut Tree<Text>, root: NodeId) -> String {
+/// Edit kinds of the scripts that once failed (see [`regressions`]): their seeds replay only with
+/// the edits that existed then.
+const LEGACY_KINDS: u64 = 18;
+/// Every edit kind, including the properties only a parent reads.
+const ALL_KINDS: u64 = 25;
+
+/// One random edit of the first `kinds` kinds; returns a description.
+fn edit(rng: &mut Rng, tree: &mut Tree<Text>, root: NodeId, kinds: u64) -> String {
     let mut nodes = Vec::new();
     all_nodes(tree, root, &mut nodes);
     let target = rng.pick(&nodes);
-    match rng.below(18) {
+    match rng.below(kinds) {
         0 | 1 => {
             let container = tree.child_count(target) > 0;
             tree.set_style(target, random_style(rng, container));
@@ -176,11 +182,104 @@ fn edit(rng: &mut Rng, tree: &mut Tree<Text>, root: NodeId) -> String {
             });
             format!("patch out-of-flow self-alignment {n:?}")
         }
+        // Properties only the parent (or the containing block) reads, which leave the node's own
+        // answers cached; mostly on items of flex and grid containers, which read most of them.
+        18 => {
+            let n = pick_or(rng, nodes.iter().copied().filter(|&n| is_flex_or_grid_item(tree, n)), target);
+            let value = rng.pick(&[
+                None,
+                Some(AlignItems::STRETCH),
+                Some(AlignItems::CENTER),
+                Some(AlignItems::END),
+                Some(AlignItems::FLEX_START),
+                Some(AlignItems::BASELINE),
+                Some(AlignItems::SAFE_END),
+            ]);
+            tree.patch_style(n, |s| s.align_self = value);
+            format!("patch align-self {n:?} to {value:?}")
+        }
+        19 => {
+            let n = pick_or(rng, nodes.iter().copied().filter(|&n| n != root), target);
+            let value =
+                rng.pick(&[None, Some(AlignItems::STRETCH), Some(AlignItems::CENTER), Some(AlignItems::END), Some(AlignItems::START), Some(AlignItems::SAFE_CENTER)]);
+            tree.patch_style(n, |s| s.justify_self = value);
+            format!("patch justify-self {n:?} to {value:?}")
+        }
+        20 => {
+            let n = pick_or(rng, nodes.iter().copied().filter(|&n| is_flex_or_grid_item(tree, n)), target);
+            let (grow, shrink) = (rng.pick(&[0.0, 0.5, 1.0, 2.0]), rng.pick(&[0.0, 1.0, 3.0]));
+            let basis = if rng.chance(1, 2) { tree.style(n).flex_basis } else { dimension(rng) };
+            tree.patch_style(n, |s| {
+                s.flex_grow = grow;
+                s.flex_shrink = shrink;
+                s.flex_basis = basis;
+            });
+            format!("patch flex {n:?} to {grow} {shrink} {basis:?}")
+        }
+        21 => {
+            let n = pick_or(rng, nodes.iter().copied().filter(|&n| is_flex_or_grid_item(tree, n)), target);
+            let place = |rng: &mut Rng| match rng.below(4) {
+                0 => GridPlacement::Auto,
+                1 => GridPlacement::Line(rng.below(3) as i16 + 1),
+                2 => GridPlacement::Line(-1),
+                _ => GridPlacement::Span(rng.below(2) as u16 + 1),
+            };
+            let row = Line { start: place(rng), end: place(rng) };
+            let column = Line { start: place(rng), end: place(rng) };
+            tree.patch_style(n, |s| {
+                s.grid_row = row;
+                s.grid_column = column;
+            });
+            format!("patch grid placement {n:?}")
+        }
+        22 => {
+            // Relative boxes' offsets; static boxes ignore them.
+            let n = pick_or(rng, nodes.iter().copied().filter(|&n| tree.style(n).position == Position::Relative), target);
+            let inset = if rng.chance(1, 4) {
+                Rect { left: lpa(rng), right: lpa(rng), top: lpa(rng), bottom: lpa(rng) }
+            } else {
+                // Lengths only: the query meta stays, so the node keeps its answers.
+                let len = |rng: &mut Rng| if rng.chance(1, 3) { LengthPercentageAuto::AUTO } else { LengthPercentageAuto::length(rng.below(30) as f32) };
+                Rect { left: len(rng), right: len(rng), top: len(rng), bottom: len(rng) }
+            };
+            tree.patch_style(n, |s| s.inset = inset);
+            format!("patch relative insets {n:?}")
+        }
+        23 => {
+            // Leaves and containers turning relative (or static again), so 22 finds them.
+            let n = pick_or(rng, nodes.iter().copied().filter(|&n| n != root && !tree.style(n).position.is_out_of_flow()), target);
+            let position = if tree.style(n).position == Position::Relative { Position::Static } else { Position::Relative };
+            let left = LengthPercentageAuto::length(rng.below(20) as f32);
+            tree.patch_style(n, |s| {
+                s.position = position;
+                s.inset.left = left;
+            });
+            format!("patch position {n:?} to {position:?}")
+        }
+        24 => {
+            let n = pick_or(rng, nodes.iter().copied().filter(|&n| n != root), target);
+            let align = rng.pick(&[None, Some(AlignItems::CENTER), Some(AlignItems::STRETCH)]);
+            let justify = rng.pick(&[None, Some(AlignItems::END)]);
+            let grow = rng.pick(&[0.0, 1.0]);
+            let top = rng.pick(&[LengthPercentageAuto::AUTO, LengthPercentageAuto::length(7.0)]);
+            tree.patch_style(n, |s| {
+                s.align_self = align;
+                s.justify_self = justify;
+                s.flex_grow = grow;
+                s.inset.top = top;
+            });
+            format!("patch placement {n:?}")
+        }
         _ => {
             tree.patch_style(target, |s| s.flex_grow = rng.pick(&[0.0, 1.0, 3.0]));
             format!("patch flex-grow {target:?}")
         }
     }
+}
+
+/// Whether `node`'s parent is a flex or grid container.
+fn is_flex_or_grid_item(tree: &Tree<Text>, node: NodeId) -> bool {
+    tree.parent(node).is_some_and(|p| matches!(tree.style(p).display, Display::Flex | Display::Grid))
 }
 
 /// A random node of `candidates`, or `fallback` when there is none.
@@ -200,7 +299,7 @@ fn next_is_out_of_flow(tree: &Tree<Text>, node: NodeId) -> bool {
     siblings.next().is_some_and(|n| tree.style(n).position.is_out_of_flow())
 }
 
-fn run_script(seed: u64, steps: usize) {
+fn run_script(seed: u64, steps: usize, kinds: u64) {
     let mut rng = Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1);
     let mut tree: Tree<Text> = Tree::new();
     let root = build_subtree(&mut rng, &mut tree, 0);
@@ -230,10 +329,10 @@ fn run_script(seed: u64, steps: usize) {
         } else {
             // Identical rng state and slots: `par` and `one` receive the same edit.
             let mut replay = Rng(rng.0);
-            edit(&mut replay, &mut par, root);
+            edit(&mut replay, &mut par, root, kinds);
             let mut replay = Rng(rng.0);
-            edit(&mut replay, &mut one, root);
-            edit(&mut rng, &mut tree, root)
+            edit(&mut replay, &mut one, root, kinds);
+            edit(&mut rng, &mut tree, root, kinds)
         };
         tree.compute_layout_with_measure(root, viewport, measure);
         let mut cold = tree.clone_cold();
@@ -275,7 +374,7 @@ fn run_script(seed: u64, steps: usize) {
 /// fractional offset was not rounded again.
 #[test]
 fn regressions() {
-    run_script(368, 40);
+    run_script(368, 40, LEGACY_KINDS);
 }
 
 #[test]
@@ -284,7 +383,7 @@ fn incremental_matches_cold_layout() {
     let steps: usize = std::env::var("CEPHAL_STEPS").ok().and_then(|v| v.parse().ok()).unwrap_or(25);
     let start: u64 = std::env::var("CEPHAL_SEED_START").ok().and_then(|v| v.parse().ok()).unwrap_or(1);
     for seed in start..=seeds {
-        run_script(seed, steps);
+        run_script(seed, steps, ALL_KINDS);
     }
 }
 
@@ -336,7 +435,7 @@ fn debug_seed() {
             };
             "resize".to_owned()
         } else {
-            edit(&mut rng, &mut tree, root)
+            edit(&mut rng, &mut tree, root, ALL_KINDS)
         };
         println!("step {step}: {what}");
         if step == steps {

@@ -502,6 +502,13 @@ impl<Ctx> Tree<Ctx> {
     }
 
     /// Replaces the style; an equal style is a no-op.
+    ///
+    /// Edits are classified by what reads the changed properties. Those only the parent (or the
+    /// containing block) reads to place the node as an item, `align-self`, `justify-self`,
+    /// `flex-grow`, `flex-shrink`, `flex-basis`, `grid-row`, `grid-column` and `inset` (see
+    /// [`placement_only_differs`]), re-run that box but keep the node's own answers and subtree,
+    /// so measure functions must not read them either. Insets of a static or sticky box in flow
+    /// are read by nothing.
     pub fn set_style(&mut self, node: NodeId, style: Style) {
         let i = self.index(node);
         let old = self.style_ids[i];
@@ -509,29 +516,56 @@ impl<Ctx> Tree<Ctx> {
         if old_style == &style {
             return;
         }
+        let has_parent = self.links[i].parent != NONE;
+        let out_of_flow = old_style.position.is_out_of_flow() && !old_style.generates_no_box() && has_parent;
         // An out-of-flow box that stays one, with the same static position, is laid out by its
         // containing block alone: its parent never asks it anything.
-        let stays_out_of_flow = old_style.position.is_out_of_flow()
+        let stays_out_of_flow = out_of_flow
             && style.position == old_style.position
-            && !old_style.generates_no_box()
             && !style.generates_no_box()
-            && self.links[i].parent != NONE
             && same_static_position(old_style, &style);
+        let placement_only = has_parent && placement_only_differs(old_style, &style);
+        // Position is not a placement property, so it is the same in both styles here.
+        let only_ignored_insets = placement_only
+            && !old_style.position.offsets_in_flow()
+            && !old_style.position.is_out_of_flow()
+            && same_except_insets(old_style, &style);
+        let old_meta = self.flags[i] & META_MASK;
         let new = self.styles.intern(style);
         self.styles.release(old);
         self.style_ids[i] = new;
         self.refresh_meta(i);
-        if stays_out_of_flow {
-            self.mark_dirty_index(i);
-            let id = self.id_of(i);
-            let mut scheduler = core::mem::take(&mut self.scheduler);
-            let mut marker = view::Marker { tree: self };
-            let cb = crate::schedule::Incremental::containing_block(&marker, id);
-            scheduler.mark_containing_block(&mut marker, cb);
-            self.scheduler = scheduler;
+        // A changed meta (an inset turning into a percentage) canonicalises the node's questions
+        // differently: its cached answers are filed under other keys than a cold layout's.
+        let edit = if !placement_only || self.flags[i] & META_MASK != old_meta {
+            StyleEdit::Own
+        } else if only_ignored_insets {
+            StyleEdit::Ignored
+        } else if stays_out_of_flow {
+            StyleEdit::ContainingBlock
         } else {
-            self.mark_dirty_with_parent(i);
+            StyleEdit::Parent
+        };
+        match edit {
+            StyleEdit::Ignored => {}
+            StyleEdit::Parent => self.mark_dirty_index(self.links[i].parent as usize),
+            StyleEdit::ContainingBlock => self.mark_containing_block_of(i),
+            StyleEdit::Own if stays_out_of_flow => {
+                self.mark_dirty_index(i);
+                self.mark_containing_block_of(i);
+            }
+            StyleEdit::Own => self.mark_dirty_with_parent(i),
         }
+    }
+
+    /// Queues the containing block of the out-of-flow node `i` for its out-of-flow pass.
+    fn mark_containing_block_of(&mut self, i: usize) {
+        let id = self.id_of(i);
+        let mut scheduler = core::mem::take(&mut self.scheduler);
+        let mut marker = view::Marker { tree: self };
+        let cb = crate::schedule::Incremental::containing_block(&marker, id);
+        scheduler.mark_containing_block(&mut marker, cb);
+        self.scheduler = scheduler;
     }
 
     /// Edits the style in place; dirtiness is derived from the resulting diff.
@@ -924,6 +958,114 @@ impl<Ctx> Tree<Ctx> {
     pub fn is_dirty(&self, node: NodeId) -> bool {
         self.flags[self.index(node)] & crate::schedule::DIRTY != 0
     }
+}
+
+/// What a style edit invalidates, from what reads the changed properties.
+enum StyleEdit {
+    /// Nothing reads them.
+    Ignored,
+    /// Only the parent, placing the node as an item: it re-runs, the node keeps its answers.
+    Parent,
+    /// Only the containing block of an out-of-flow node: its out-of-flow pass re-runs.
+    ContainingBlock,
+    /// The node's own layout may change: it and its parent re-run.
+    Own,
+}
+
+/// Whether `a` and `b` differ only in properties the node's own layout never reads, those its
+/// parent or containing block reads to place it:
+///
+/// - `align-self`, `justify-self`: flex and grid items (`flex/mod.rs`, `fused.rs`,
+///   `grid/item.rs`, `grid/alignment.rs`), block children (`block/items.rs`), static positions
+///   (`block/mod.rs`, `flex/mod.rs`, `grid/mod.rs`) and out-of-flow placement (`oof.rs`);
+/// - `flex-grow`, `flex-shrink`, `flex-basis`: flex items only (`flex/mod.rs`, `base_size.rs`,
+///   `fused.rs`); the `StylePlan` fields derived from `flex-basis` (`plain_flex_item`,
+///   `flex_basis`) are read only there, and the plan's existence does not depend on it;
+/// - `grid-row`, `grid-column`: grid placement (`grid/placement.rs`, `grid/mod.rs`, `oof.rs`);
+/// - `inset`: relative offsets applied by the parent (`block/flow.rs`, `flex/final_pass.rs`,
+///   `fused.rs`, `grid/alignment.rs`) and out-of-flow placement (`oof.rs`); the root's own insets
+///   are read by `compute_root_layout`, so a root is never classified. Percentages change the
+///   node's query meta, which the caller checks.
+///
+/// The destructuring is exhaustive so a new property must be classified here.
+fn placement_only_differs(a: &Style, b: &Style) -> bool {
+    let Style {
+        display,
+        box_sizing,
+        direction,
+        position,
+        overflow,
+        contain,
+        float,
+        clear,
+        text_align,
+        item_is_table,
+        item_is_replaced,
+        scrollbar_width,
+        aspect_ratio,
+        size,
+        min_size,
+        max_size,
+        inset: _,
+        margin,
+        padding,
+        border,
+        gap,
+        align_items,
+        align_self: _,
+        justify_items,
+        justify_self: _,
+        align_content,
+        justify_content,
+        flex_direction,
+        flex_wrap,
+        flex_line_count,
+        flex_basis: _,
+        flex_grow: _,
+        flex_shrink: _,
+        grid_row: _,
+        grid_column: _,
+        grid,
+    } = a;
+    *display == b.display
+        && *box_sizing == b.box_sizing
+        && *direction == b.direction
+        && *position == b.position
+        && *overflow == b.overflow
+        && *contain == b.contain
+        && *float == b.float
+        && *clear == b.clear
+        && *text_align == b.text_align
+        && *item_is_table == b.item_is_table
+        && *item_is_replaced == b.item_is_replaced
+        && *scrollbar_width == b.scrollbar_width
+        && *aspect_ratio == b.aspect_ratio
+        && *size == b.size
+        && *min_size == b.min_size
+        && *max_size == b.max_size
+        && *margin == b.margin
+        && *padding == b.padding
+        && *border == b.border
+        && *gap == b.gap
+        && *align_items == b.align_items
+        && *justify_items == b.justify_items
+        && *align_content == b.align_content
+        && *justify_content == b.justify_content
+        && *flex_direction == b.flex_direction
+        && *flex_wrap == b.flex_wrap
+        && *flex_line_count == b.flex_line_count
+        && *grid == b.grid
+}
+
+/// With [`placement_only_differs`]: whether only the insets differ.
+fn same_except_insets(a: &Style, b: &Style) -> bool {
+    a.align_self == b.align_self
+        && a.justify_self == b.justify_self
+        && a.flex_grow == b.flex_grow
+        && a.flex_shrink == b.flex_shrink
+        && a.flex_basis == b.flex_basis
+        && a.grid_row == b.grid_row
+        && a.grid_column == b.grid_column
 }
 
 /// Whether a parent records the same static position for an out-of-flow child of either style.
