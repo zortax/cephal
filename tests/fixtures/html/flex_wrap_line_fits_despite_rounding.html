@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    Items that exactly fill a multi-line flex container stay on one line, also when the
+    container's width comes out of a computation with rounding error (here a shrink-to-fit width
+    less a percentage padding)
+  </title>
+</head>
+<body>
+
+<div class="viewport" style="display: block; width: 617px; height: 300px;">
+  <div id="test-root" style="display: block; width: fit-content; padding-right: 4%;">
+    <div style="display: flex; flex-wrap: wrap-reverse;">
+      <div style="display: block;">X</div>
+      <div style="display: grid; grid-template-columns: 20% 22px;">
+        <div style="display: block; padding-left: 2px;">X&#8203;X&#8203;X&#8203;X&#8203;X&#8203;X&#8203;X</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

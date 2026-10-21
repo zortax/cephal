@@ -2472,6 +2472,90 @@
     </node>
   </expectations>
 </test>
+<test name="flex_scrollbars_wider_than_box_percentages__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="ltr" position="absolute" width="17px">
+      <div display="flex" direction="ltr" position="relative" overflow-x="hidden" overflow-y="scroll" scrollbar-width="15" width="4px" border-top="1px" border-left="1px" border-bottom="1px" border-right="1px">
+        <div display="block" direction="ltr" position="relative" padding-top="50%">
+          <div display="block" direction="ltr" position="relative" height="5px"/>
+        </div>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="17" height="7">
+      <node x="0" y="0" width="4" height="7" scroll_width="0" scroll_height="0">
+        <node x="1" y="1" width="0" height="5">
+          <node x="0" y="0" width="0" height="5"/>
+        </node>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_scrollbars_wider_than_box_percentages__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="rtl" position="absolute" width="17px">
+      <div display="flex" direction="rtl" position="relative" overflow-x="hidden" overflow-y="scroll" scrollbar-width="15" width="4px" border-top="1px" border-left="1px" border-bottom="1px" border-right="1px">
+        <div display="block" direction="rtl" position="relative" padding-top="50%">
+          <div display="block" direction="rtl" position="relative" height="5px"/>
+        </div>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="17" height="7">
+      <node x="13" y="0" width="4" height="7" scroll_width="0" scroll_height="0">
+        <node x="3" y="1" width="0" height="5">
+          <node x="0" y="0" width="0" height="5"/>
+        </node>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_scrollbars_wider_than_box_percentages__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" position="absolute" width="17px">
+      <div display="flex" box-sizing="content-box" direction="ltr" position="relative" overflow-x="hidden" overflow-y="scroll" scrollbar-width="15" width="4px" border-top="1px" border-left="1px" border-bottom="1px" border-right="1px">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" padding-top="50%">
+          <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="5px"/>
+        </div>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="17" height="7">
+      <node x="0" y="0" width="6" height="7" scroll_width="0" scroll_height="0">
+        <node x="1" y="1" width="0" height="5">
+          <node x="0" y="0" width="0" height="5"/>
+        </node>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_scrollbars_wider_than_box_percentages__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" position="absolute" width="17px">
+      <div display="flex" box-sizing="content-box" direction="rtl" position="relative" overflow-x="hidden" overflow-y="scroll" scrollbar-width="15" width="4px" border-top="1px" border-left="1px" border-bottom="1px" border-right="1px">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" padding-top="50%">
+          <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="5px"/>
+        </div>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="17" height="7">
+      <node x="11" y="0" width="6" height="7" scroll_width="0" scroll_height="0">
+        <node x="5" y="1" width="0" height="5">
+          <node x="0" y="0" width="0" height="5"/>
+        </node>
+      </node>
+    </node>
+  </expectations>
+</test>
 <test name="flex_space_between_overflow_reversed__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
@@ -2576,6 +2660,114 @@
       <node x="0" y="10" width="300" height="40">
         <node x="290" y="10" width="10" height="30"/>
         <node x="290" y="-20" width="10" height="30"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_wrap_line_fits_despite_rounding__border_box_ltr" use-rounding="true">
+  <viewport width="617px" height="300px"/>
+  <input>
+    <div display="block" direction="ltr" position="relative" width="fit-content" padding-right="4%">
+      <div display="flex" direction="ltr" position="relative" flex-wrap="wrap-reverse">
+        <text display="block" direction="ltr" position="relative">
+          X
+        </text>
+        <div display="grid" direction="ltr" position="relative" grid-template-columns="20% 22px">
+          <text display="block" direction="ltr" position="relative" padding-left="2px">
+            X​X​X​X​X​X​X
+          </text>
+        </div>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="129" height="70">
+      <node x="0" y="0" width="104" height="70">
+        <node x="0" y="0" width="10" height="70"/>
+        <node x="10" y="0" width="94" height="70" resolved-rows="70px" resolved-columns="18.7969px 22px">
+          <node x="0" y="0" width="19" height="70"/>
+        </node>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_wrap_line_fits_despite_rounding__border_box_rtl" use-rounding="true">
+  <viewport width="617px" height="300px"/>
+  <input>
+    <div display="block" direction="rtl" position="relative" width="fit-content" padding-right="4%">
+      <div display="flex" direction="rtl" position="relative" flex-wrap="wrap-reverse">
+        <text display="block" direction="rtl" position="relative">
+          X
+        </text>
+        <div display="grid" direction="rtl" position="relative" grid-template-columns="20% 22px">
+          <text display="block" direction="rtl" position="relative" padding-left="2px">
+            X​X​X​X​X​X​X
+          </text>
+        </div>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="488" y="0" width="129" height="70">
+      <node x="0" y="0" width="104" height="70">
+        <node x="94" y="0" width="10" height="70"/>
+        <node x="0" y="0" width="94" height="70" resolved-rows="70px" resolved-columns="18.7969px 22px">
+          <node x="76" y="0" width="18" height="70"/>
+        </node>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_wrap_line_fits_despite_rounding__content_box_ltr" use-rounding="true">
+  <viewport width="617px" height="300px"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" position="relative" width="fit-content" padding-right="4%">
+      <div display="flex" box-sizing="content-box" direction="ltr" position="relative" flex-wrap="wrap-reverse">
+        <text display="block" box-sizing="content-box" direction="ltr" position="relative">
+          X
+        </text>
+        <div display="grid" box-sizing="content-box" direction="ltr" position="relative" grid-template-columns="20% 22px">
+          <text display="block" box-sizing="content-box" direction="ltr" position="relative" padding-left="2px">
+            X​X​X​X​X​X​X
+          </text>
+        </div>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="129" height="70">
+      <node x="0" y="0" width="104" height="70">
+        <node x="0" y="0" width="10" height="70"/>
+        <node x="10" y="0" width="94" height="70" resolved-rows="70px" resolved-columns="18.7969px 22px">
+          <node x="0" y="0" width="19" height="70"/>
+        </node>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_wrap_line_fits_despite_rounding__content_box_rtl" use-rounding="true">
+  <viewport width="617px" height="300px"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" position="relative" width="fit-content" padding-right="4%">
+      <div display="flex" box-sizing="content-box" direction="rtl" position="relative" flex-wrap="wrap-reverse">
+        <text display="block" box-sizing="content-box" direction="rtl" position="relative">
+          X
+        </text>
+        <div display="grid" box-sizing="content-box" direction="rtl" position="relative" grid-template-columns="20% 22px">
+          <text display="block" box-sizing="content-box" direction="rtl" position="relative" padding-left="2px">
+            X​X​X​X​X​X​X
+          </text>
+        </div>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="488" y="0" width="129" height="70">
+      <node x="0" y="0" width="104" height="70">
+        <node x="94" y="0" width="10" height="70"/>
+        <node x="0" y="0" width="94" height="70" resolved-rows="70px" resolved-columns="18.7969px 22px">
+          <node x="76" y="0" width="18" height="70"/>
+        </node>
       </node>
     </node>
   </expectations>

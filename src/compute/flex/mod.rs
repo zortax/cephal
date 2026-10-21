@@ -135,7 +135,9 @@ impl<D: FlexDir> AlgoConstants<D> {
     /// size.
     #[inline]
     fn percent_basis(&self) -> Size<Option<f32>> {
-        if self.cross_size_is_indefinite { self.node_inner_size.with_cross(self.dir, None) } else { self.node_inner_size }
+        let basis = if self.cross_size_is_indefinite { self.node_inner_size.with_cross(self.dir, None) } else { self.node_inner_size };
+        // Scrollbars wider than the box leave no room, not negative room.
+        basis.maybe_max(Size::ZERO.map(Some))
     }
     /// Cross space per line when `flex-line-count` splits it.
     #[inline]
@@ -587,7 +589,8 @@ fn compute_constants<T: LayoutTree + ?Sized, D: FlexDir>(
     let cross_axis_available_space_is_definite =
         has_definite_cross_size || matches!(available_space.cross(dir), AvailableSpace::Definite(_));
     let cross_size_is_indefinite = is_row && known_dimensions.height.is_some() && !known_dimensions_are_definite.height;
-    let percent_basis = if cross_size_is_indefinite { node_inner_size.with_cross(dir, None) } else { node_inner_size };
+    let percent_basis =
+        if cross_size_is_indefinite { node_inner_size.with_cross(dir, None) } else { node_inner_size }.maybe_max(Size::ZERO.map(Some));
     let gap_basis = if is_column && !known_main_size_is_definite { percent_basis.with_main(dir, None) } else { percent_basis };
     let gap_basis = gap_basis.or(Size::ZERO.map(Some));
     let gap = Size {

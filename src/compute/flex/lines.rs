@@ -46,7 +46,8 @@ pub(super) fn collect_flex_lines<D: FlexDir, I: Flexible>(c: &AlgoConstants<D>, 
                 let mut end = items.len();
                 for (idx, child) in items[start..].iter().enumerate() {
                     line_length += child.hypothetical_outer_main(c.dir) + if idx == 0 { 0.0 } else { gap };
-                    if line_length > limit && idx != 0 {
+                    // Rounding error does not break a line that fits (Chrome lays out in 1/64px).
+                    if line_length > limit + 1.0 / 128.0 && idx != 0 {
                         end = start + idx;
                         break;
                     }

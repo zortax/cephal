@@ -57,17 +57,14 @@ impl Layout {
     /// Maximum horizontal scroll offset: reachable content extent less the padding box, floored at zero.
     #[inline]
     pub fn scroll_width(&self) -> f32 {
-        (self.scrollable_overflow_rect.right + self.scrollbar_size.width.min(self.size.width) - self.size.width
-            + self.border.left
-            + self.border.right)
-            .max(0.0)
+        // The scrollport: the padding box less the scrollbar, which never takes more than it has.
+        let client = (self.size.width - self.border.left - self.border.right - self.scrollbar_size.width).max(0.0);
+        (self.scrollable_overflow_rect.right - client).max(0.0)
     }
     #[inline]
     pub fn scroll_height(&self) -> f32 {
-        (self.scrollable_overflow_rect.bottom + self.scrollbar_size.height.min(self.size.height) - self.size.height
-            + self.border.top
-            + self.border.bottom)
-            .max(0.0)
+        let client = (self.size.height - self.border.top - self.border.bottom - self.scrollbar_size.height).max(0.0);
+        (self.scrollable_overflow_rect.bottom - client).max(0.0)
     }
 }
 
