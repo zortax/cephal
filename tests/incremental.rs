@@ -497,6 +497,69 @@ fn unchanged_frames_recompute_nothing() {
     assert!(!tree.is_dirty(root));
 }
 
+/// Lays `tree` out and compares it with a cold layout, bit for bit.
+fn check(tree: &mut Tree<Text>, root: NodeId, step: &str) {
+    let viewport = Size { width: AvailableSpace::Definite(400.0), height: AvailableSpace::Definite(300.0) };
+    tree.compute_layout_with_measure(root, viewport, measure);
+    let mut cold = tree.clone_cold();
+    cold.compute_layout_with_measure(root, viewport, measure);
+    assert_same(step, tree, &cold, root);
+}
+
+fn sized(width: f32, height: f32) -> cephal::Style {
+    let mut s = cephal::Style::DEFAULT;
+    s.size = Size { width: Dimension::length(width), height: Dimension::length(height) };
+    s
+}
+
+/// A hidden subtree laid out hidden again is left alone only while nothing under it changed.
+#[test]
+fn hidden_subtrees_are_zeroed_after_every_edit_below() {
+    let mut tree: Tree<Text> = Tree::new();
+    let leaf = tree.new_leaf_with_context(cephal::Style::DEFAULT, Text(4));
+    let inner = tree.new_with_children(sized(80.0, 40.0), &[leaf]);
+    let mut none = cephal::Style::DEFAULT;
+    none.display = Display::None;
+    let hidden = tree.new_with_children(none, &[inner]);
+    let visible_leaf = tree.new_leaf_with_context(cephal::Style::DEFAULT, Text(5));
+    let visible = tree.new_with_children(sized(90.0, 30.0), &[visible_leaf]);
+    let sibling = tree.new_leaf(sized(20.0, 20.0));
+    let mut row = cephal::Style::DEFAULT;
+    row.display = Display::Flex;
+    let root = tree.new_with_children(row, &[hidden, visible, sibling]);
+    check(&mut tree, root, "initial");
+    tree.patch_style(sibling, |s| s.size.width = Dimension::length(21.0));
+    check(&mut tree, root, "the parent re-runs");
+    // A laid-out subtree moves under the hidden one.
+    tree.remove_child(root, visible);
+    tree.append_child(inner, visible);
+    check(&mut tree, root, "a laid-out subtree moved in");
+    tree.patch_style(sibling, |s| s.size.width = Dimension::length(22.0));
+    check(&mut tree, root, "the parent re-runs again");
+    // Edits below, each with a re-run of the parent.
+    tree.set_context(leaf, Some(Text(12)));
+    tree.patch_style(sibling, |s| s.size.width = Dimension::length(23.0));
+    check(&mut tree, root, "content below");
+    tree.patch_style(inner, |s| s.size.width = Dimension::length(81.0));
+    tree.patch_style(sibling, |s| s.size.width = Dimension::length(24.0));
+    check(&mut tree, root, "style below");
+    let added = tree.new_leaf(sized(10.0, 10.0));
+    tree.insert_child_at(inner, 0, added);
+    check(&mut tree, root, "insert below");
+    // Shown, hidden again, and a subtree moved out while hidden.
+    tree.patch_style(hidden, |s| s.display = Display::Block);
+    check(&mut tree, root, "shown");
+    tree.patch_style(hidden, |s| s.display = Display::None);
+    check(&mut tree, root, "hidden again");
+    tree.remove_child(inner, visible);
+    tree.append_child(root, visible);
+    check(&mut tree, root, "a subtree moved out");
+    // A hidden child of a hidden subtree's child, toggled.
+    tree.patch_style(inner, |s| s.display = Display::None);
+    tree.patch_style(hidden, |s| s.display = Display::Block);
+    check(&mut tree, root, "the outer shown, the inner hidden");
+}
+
 /// `CEPHAL_SEED=59 CEPHAL_STEPS=12 cargo test --test incremental debug_seed -- --ignored --nocapture`
 #[test]
 #[ignore]

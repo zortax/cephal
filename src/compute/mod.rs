@@ -65,11 +65,13 @@ pub mod stats {
     /// layouts, and ones that had to run its algorithm instead.
     pub static INFLOW_GATHERED: AtomicUsize = AtomicUsize::new(0);
     pub static INFLOW_FALLBACK: AtomicUsize = AtomicUsize::new(0);
+    /// Hidden layouts that found their subtree already zeroed.
+    pub static HIDDEN_KEPT: AtomicUsize = AtomicUsize::new(0);
     pub fn bump(c: &AtomicUsize) {
         c.fetch_add(1, Relaxed);
     }
     pub fn report() -> String {
-        let all = [("hidden", &HIDDEN), ("cheap_leaf", &CHEAP_LEAF), ("hit_size", &HIT_SIZE), ("hit_final", &HIT_FINAL), ("miss_size", &MISS_SIZE), ("miss_final", &MISS_FINAL), ("measure", &MEASURE), ("speculative", &SPECULATIVE), ("relaxed_hit", &RELAXED_HIT), ("batches", &BATCHES), ("plan_few_requests", &PLAN_FEW_REQUESTS), ("plan_few_groups", &PLAN_FEW_GROUPS), ("plan_little_work", &PLAN_LITTLE_WORK), ("batch_us", &BATCH_NANOS), ("batch_requests", &BATCH_REQUESTS), ("collision", &COLLISION), ("run_size_axis", &RUN_SIZE_AXIS), ("run_size_both", &RUN_SIZE_BOTH), ("flex_fused", &FLEX_FUSED), ("flex_not_fused", &FLEX_NOT_FUSED), ("flex_miss_wrap", &FLEX_MISS_WRAP), ("flex_miss_no_plan", &FLEX_MISS_NO_PLAN), ("flex_miss_aspect_ratio", &FLEX_MISS_ASPECT_RATIO), ("flex_miss_auto_margin", &FLEX_MISS_AUTO_MARGIN), ("flex_miss_basis", &FLEX_MISS_BASIS), ("flex_miss_size_keyword", &FLEX_MISS_SIZE_KEYWORD), ("flex_miss_baseline", &FLEX_MISS_BASELINE), ("flex_miss_empty", &FLEX_MISS_EMPTY), ("flex_wrap", &FLEX_WRAP), ("grid_measure_elided", &GRID_MEASURE_ELIDED), ("grid_measured", &GRID_MEASURED), ("inflow_gathered", &INFLOW_GATHERED), ("inflow_fallback", &INFLOW_FALLBACK)];
+        let all = [("hidden", &HIDDEN), ("cheap_leaf", &CHEAP_LEAF), ("hit_size", &HIT_SIZE), ("hit_final", &HIT_FINAL), ("miss_size", &MISS_SIZE), ("miss_final", &MISS_FINAL), ("measure", &MEASURE), ("speculative", &SPECULATIVE), ("relaxed_hit", &RELAXED_HIT), ("batches", &BATCHES), ("plan_few_requests", &PLAN_FEW_REQUESTS), ("plan_few_groups", &PLAN_FEW_GROUPS), ("plan_little_work", &PLAN_LITTLE_WORK), ("batch_us", &BATCH_NANOS), ("batch_requests", &BATCH_REQUESTS), ("collision", &COLLISION), ("run_size_axis", &RUN_SIZE_AXIS), ("run_size_both", &RUN_SIZE_BOTH), ("flex_fused", &FLEX_FUSED), ("flex_not_fused", &FLEX_NOT_FUSED), ("flex_miss_wrap", &FLEX_MISS_WRAP), ("flex_miss_no_plan", &FLEX_MISS_NO_PLAN), ("flex_miss_aspect_ratio", &FLEX_MISS_ASPECT_RATIO), ("flex_miss_auto_margin", &FLEX_MISS_AUTO_MARGIN), ("flex_miss_basis", &FLEX_MISS_BASIS), ("flex_miss_size_keyword", &FLEX_MISS_SIZE_KEYWORD), ("flex_miss_baseline", &FLEX_MISS_BASELINE), ("flex_miss_empty", &FLEX_MISS_EMPTY), ("flex_wrap", &FLEX_WRAP), ("grid_measure_elided", &GRID_MEASURE_ELIDED), ("grid_measured", &GRID_MEASURED), ("inflow_gathered", &INFLOW_GATHERED), ("inflow_fallback", &INFLOW_FALLBACK), ("hidden_kept", &HIDDEN_KEPT)];
         let s = all.iter().map(|(n, c)| format!("{n}={}", c.swap(0, Relaxed))).collect::<Vec<_>>().join(" ");
         s
     }
@@ -376,14 +378,26 @@ fn block_observing<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, f: impl F
     output
 }
 
-/// Zeroes the subtree's layout; never cached.
+/// Zeroes the subtree's layout; never cached. Below a node whose subtree is already zeroed, with
+/// nothing stored, cleared or edited in it since, nothing is visited again (see
+/// [`crate::tree::NodeCache::is_hidden`]).
 pub fn compute_hidden_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, node: NodeId) -> LayoutOutput {
+    // Parents write a hidden child's layout before asking for it, so the node's own is rewritten.
+    tree.set_unrounded_layout(node, &Layout::with_order(0));
+    if tree.cache(node).is_hidden() {
+        #[cfg(feature = "stats")]
+        stats::bump(&stats::HIDDEN_KEPT);
+        return LayoutOutput::HIDDEN;
+    }
     tree.cache_mut(node).clear();
     oof::finish_none(tree, node);
-    tree.set_unrounded_layout(node, &Layout::with_order(0));
     let children: scratch::Scratch<NodeId> = scratch::Scratch::collect(tree.children(node));
     for &child in &children {
         compute_child_layout(tree, child, LayoutInput::HIDDEN, None);
+    }
+    // Leaves cost less to zero again than to mark.
+    if tree.speculation() == 0 && !children.is_empty() {
+        tree.cache_mut(node).mark_hidden();
     }
     LayoutOutput::HIDDEN
 }

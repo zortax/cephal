@@ -31,6 +31,9 @@ struct Inner {
     /// Set when an answer was computed during a speculative pass and not stored: some ancestor's
     /// answers depend on a question no entry records. Kept until the entries are cleared.
     unstored: bool,
+    /// Set by a hidden layout of the node's subtree (see [`NodeCache::mark_hidden`]); dropped by
+    /// any store, clear or drain.
+    hidden: bool,
     inline: Slots<INLINE_SIZE_ENTRIES>,
     /// Kept when the entries are cleared, for the next stores.
     spill: Option<Box<Slots<SPILL_SIZE_ENTRIES>>>,
@@ -38,7 +41,7 @@ struct Inner {
 
 impl Inner {
     const fn empty() -> Self {
-        Self { final_entry: None, len: 0, evicted: false, unstored: false, inline: Slots::empty(), spill: None }
+        Self { final_entry: None, len: 0, evicted: false, unstored: false, hidden: false, inline: Slots::empty(), spill: None }
     }
 
     /// The first live size entry that answers `key`.
@@ -216,6 +219,7 @@ impl NodeCache {
             return;
         }
         let c = self.0.get_or_insert_with(|| Box::new(Inner::empty()));
+        c.hidden = false;
         match run_mode {
             RunMode::PerformLayout => {
                 // Two final-layout questions in one frame: the parent depends on both, only one survives.
@@ -256,6 +260,7 @@ impl NodeCache {
             c.len = 0;
             c.evicted = false;
             c.unstored = false;
+            c.hidden = false;
         }
     }
 
@@ -307,6 +312,21 @@ impl NodeCache {
         self.0.as_deref().is_some_and(|c| c.unstored)
     }
 
+    /// Records that the node's subtree was just laid out hidden: the node holds no answers, and
+    /// every node below holds none and a zero layout.
+    #[inline]
+    pub fn mark_hidden(&mut self) {
+        self.0.get_or_insert_with(|| Box::new(Inner::empty())).hidden = true;
+    }
+
+    /// Whether the subtree is still as [`Self::mark_hidden`] recorded it. Anything that reaches a
+    /// node below through the scheduler (an edit, a moved subtree) drains or clears every hidden
+    /// ancestor on its way up, since none holds an answer, so the mark cannot outlive a change below.
+    #[inline]
+    pub fn is_hidden(&self) -> bool {
+        self.0.as_deref().is_some_and(|c| c.hidden)
+    }
+
     /// Whether eviction may have removed an entry the parent relied on.
     #[inline]
     pub fn had_eviction(&self) -> bool {
@@ -333,6 +353,7 @@ impl NodeCache {
             out.push((e.key.into_input(RunMode::PerformLayout), e.output, e.observed));
         }
         c.evicted = false;
+        c.hidden = false;
     }
 }
 
