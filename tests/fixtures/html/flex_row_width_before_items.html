@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    A row flex container of content-based width (here centered in a column flex container) lays
+    out its items at the width it finds: their percentage margins resolve against it and count in
+    its height
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; width: 610px;">
+  <div style="display: flex; flex-direction: column; align-items: center;">
+    <div style="display: flex; flex-wrap: wrap-reverse;">
+      <div style="display: block; margin-top: 50%; padding-right: 15px;"></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

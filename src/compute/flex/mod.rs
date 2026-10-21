@@ -216,11 +216,23 @@ pub fn compute_flexbox_layout<T: LayoutTree + CacheAccess + ?Sized>(
 
     let mut inputs = LayoutInput { known_dimensions: styled_known, known_dimensions_are_definite, ..inputs };
     let dir = tree.style(node).flex_direction;
-    // A column container of unknown width finds its width first and lays its items out at it,
-    // so their percentages resolve against it (as Chrome).
-    if !dir.is_row() && styled_known.width.is_none() && !(run_mode == RunMode::ComputeSize && inputs.axis == RequestedAxis::Horizontal) {
-        let width_question = LayoutInput { run_mode: RunMode::ComputeSize, axis: RequestedAxis::Horizontal, ..inputs };
-        let width = compute_preliminary(tree, node, width_question, Column(dir.is_reverse())).size.width;
+    // A container of unknown width finds its width first and lays its items out at it, so their
+    // percentages resolve against it (as Chrome).
+    // Only items that resolve something against the width need it.
+    if styled_known.width.is_none()
+        && !(run_mode == RunMode::ComputeSize && inputs.axis == RequestedAxis::Horizontal)
+        && tree.children(node).any(|child| tree.query_meta(child).dependency.width)
+    {
+        // Through the cache: the parent often asked it already.
+        let width = tree.measure_child_size(
+            node,
+            inputs.known_dimensions,
+            inputs.parent_size,
+            inputs.available_space,
+            inputs.sizing_mode,
+            AbsoluteAxis::Horizontal,
+            inputs.vertical_margins_are_collapsible,
+        );
         inputs.known_dimensions.width = Some(width);
         inputs.known_dimensions_are_definite.width = true;
     }
