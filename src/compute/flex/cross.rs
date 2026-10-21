@@ -16,6 +16,8 @@ struct CrossPending {
     min: Option<f32>,
     max: Option<f32>,
     padding_border_sum: f32,
+    /// The cross size the aspect ratio gives, which the content can only exceed.
+    floor: f32,
     /// Index of the measurement among the batch's questions.
     question: usize,
 }
@@ -68,6 +70,17 @@ pub(super) fn determine_hypothetical_cross_size<D: FlexDir, T: LayoutTree + Cach
             let unread = fixed_line_cross.is_some() && is_stretched(child, dir) && !child.participates_in_baseline_alignment(dir);
             stretched_cross.or(unread.then_some(f32::NAN))
         });
+        // An automatic cross size follows the used main size through the aspect ratio; with an
+        // automatic minimum, the content can make it larger (css-sizing-4 §5.2.1), unless the
+        // item scrolls.
+        let ratio_cross = child.aspect_ratio.filter(|_| child.size_style.cross(dir).is_auto()).map(|ratio| {
+            let main = child.target_size.main(dir);
+            (if c.is_row { main / ratio } else { main * ratio }).maybe_clamp(transferred_min_cross, transferred_max_cross).max(padding_border_sum)
+        });
+        let content_may_exceed = child.min_size.cross(dir).is_none()
+            && !child.overflow.x.is_scroll_container()
+            && !child.overflow.y.is_scroll_container();
+        let known = known.or(ratio_cross.filter(|_| !content_may_exceed));
         if let Some(child_inner_cross) = known {
             child.hypothetical_inner_size.set_cross(dir, child_inner_cross);
             child.hypothetical_outer_size.set_cross(dir, child_inner_cross + child.margin.cross_axis_sum(dir));
@@ -108,13 +121,14 @@ pub(super) fn determine_hypothetical_cross_size<D: FlexDir, T: LayoutTree + Cach
             },
         };
         let question = questions.ask(tree, request, read_cross);
-        pending.push(CrossPending { item: index, min: transferred_min_cross, max: transferred_max_cross, padding_border_sum, question });
+        let floor = ratio_cross.unwrap_or(padding_border_sum);
+        pending.push(CrossPending { item: index, min: transferred_min_cross, max: transferred_max_cross, padding_border_sum, floor, question });
     }
     // Each item's cross size depends only on its own target main size.
     questions.finish(tree, read_cross);
     for p in pending.iter() {
         let child = &mut items[p.item];
-        let child_inner_cross = questions.get(p.question).maybe_clamp(p.min, p.max).max(p.padding_border_sum);
+        let child_inner_cross = questions.get(p.question).maybe_clamp(p.min, p.max).max(p.padding_border_sum).max(p.floor);
         child.hypothetical_inner_size.set_cross(dir, child_inner_cross);
         child.hypothetical_outer_size.set_cross(dir, child_inner_cross + child.margin.cross_axis_sum(dir));
     }

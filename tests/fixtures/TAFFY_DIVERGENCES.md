@@ -212,6 +212,15 @@ A grid container of automatic width in shrink-to-fit space (absolutely positione
 `fit-content` parent) is no wider than the space unless its min-content width is (CSS 2.2
 §10.3.5); taffy gives it its max-content width.
 
+## A flex item's cross size from its aspect ratio
+
+Census category `unexplained`. Fixture `flex_item_cross_size_from_aspect_ratio`.
+
+A flex item with an aspect ratio and an automatic cross size takes its cross size from its used
+main size through the ratio, or from its content where that is larger (its automatic minimum,
+css-sizing-4 §5.2.1). Taffy measures the content only, so an empty item of `aspect-ratio: 0.5`
+grown to 26px is 0px tall instead of 52px.
+
 ## The root (both engines, by design)
 
 Not a divergence between the engines, but where both differ from a browser's root element,

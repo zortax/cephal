@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    A flex item with an aspect ratio and an automatic cross size takes its cross size from its
+    used main size through the ratio, or from its content where that is taller (its automatic
+    minimum size, css-sizing-4 §5.2.1)
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; width: 300px;">
+  <div style="display: flex; width: 26px;">
+    <div style="display: block; aspect-ratio: 0.5; flex-grow: 2;"></div>
+  </div>
+  <div style="display: flex; width: 40px; align-items: start;">
+    <div style="display: block; aspect-ratio: 2; flex-grow: 1;"></div>
+  </div>
+  <div style="display: flex; width: 26px;">
+    <div style="display: block; aspect-ratio: 0.5; flex-grow: 2;">X&#8203;X&#8203;X&#8203;X&#8203;X&#8203;X&#8203;X&#8203;X&#8203;X&#8203;X&#8203;X&#8203;X&#8203;X&#8203;X&#8203;X&#8203;X&#8203;X&#8203;X&#8203;X&#8203;X</div>
+  </div>
+</div>
+
+</body>
+</html>
