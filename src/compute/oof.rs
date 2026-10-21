@@ -616,6 +616,15 @@ fn layout_oof_box<T: LayoutTree + CacheAccess + ?Sized>(
         area_offset = Point { x: grid_area.left, y: grid_area.top };
     }
     let _ = cb;
+    // Scrollbars wider than the containing block leave no room, not negative room: the area
+    // keeps the edge away from them (the inline end in rtl, where they sit at the start).
+    if area_size.width < 0.0 {
+        if direction == Direction::Rtl {
+            area_offset.x += area_size.width;
+        }
+        area_size.width = 0.0;
+    }
+    area_size.height = area_size.height.max(0.0);
     let area_width = area_size.width;
     let area_height = area_size.height;
 

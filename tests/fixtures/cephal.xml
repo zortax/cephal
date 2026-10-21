@@ -152,6 +152,82 @@
     </node>
   </expectations>
 </test>
+<test name="abspos_containing_block_narrower_than_scrollbar__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="ltr" position="absolute" width="13px">
+      <div display="block" direction="ltr" position="relative" overflow-x="hidden" overflow-y="scroll" scrollbar-width="15">
+        <div display="block" direction="ltr" position="absolute" right="4%"/>
+        <div display="block" direction="ltr" position="absolute" width="3px" height="3px" left="50%"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="13" height="0">
+      <node x="0" y="0" width="13" height="0" scroll_width="3" scroll_height="3">
+        <node x="0" y="0" width="0" height="0"/>
+        <node x="0" y="0" width="3" height="3"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="abspos_containing_block_narrower_than_scrollbar__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="rtl" position="absolute" width="13px">
+      <div display="block" direction="rtl" position="relative" overflow-x="hidden" overflow-y="scroll" scrollbar-width="15">
+        <div display="block" direction="rtl" position="absolute" right="4%"/>
+        <div display="block" direction="rtl" position="absolute" width="3px" height="3px" left="50%"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="13" height="0">
+      <node x="0" y="0" width="13" height="0" scroll_width="0" scroll_height="0">
+        <node x="13" y="0" width="0" height="0"/>
+        <node x="13" y="0" width="3" height="3"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="abspos_containing_block_narrower_than_scrollbar__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" position="absolute" width="13px">
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" overflow-x="hidden" overflow-y="scroll" scrollbar-width="15">
+        <div display="block" box-sizing="content-box" direction="ltr" position="absolute" right="4%"/>
+        <div display="block" box-sizing="content-box" direction="ltr" position="absolute" width="3px" height="3px" left="50%"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="13" height="0">
+      <node x="0" y="0" width="13" height="0" scroll_width="3" scroll_height="3">
+        <node x="0" y="0" width="0" height="0"/>
+        <node x="0" y="0" width="3" height="3"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="abspos_containing_block_narrower_than_scrollbar__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" position="absolute" width="13px">
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" overflow-x="hidden" overflow-y="scroll" scrollbar-width="15">
+        <div display="block" box-sizing="content-box" direction="rtl" position="absolute" right="4%"/>
+        <div display="block" box-sizing="content-box" direction="rtl" position="absolute" width="3px" height="3px" left="50%"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="13" height="0">
+      <node x="0" y="0" width="13" height="0" scroll_width="0" scroll_height="0">
+        <node x="13" y="0" width="0" height="0"/>
+        <node x="13" y="0" width="3" height="3"/>
+      </node>
+    </node>
+  </expectations>
+</test>
 <test name="abspos_content_height_indefinite__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>

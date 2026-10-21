@@ -254,7 +254,6 @@
 441 [RootSizingKeywords]
 442 BlockAlignContent+FlexWrap+FlexCrossAlignment
 443 [PercentPadding]
-444 unexplained
 446 [PercentPadding,FlexWrap]
 449 [RootSizingKeywords]
 450 unexplained
@@ -589,7 +588,7 @@
 963 unexplained
 964 unexplained
 965 Absolute+PercentMargins+FlexCrossAlignment
-968 [RootMinMaxWidth]
+968 unexplained
 969 unexplained
 970 [RootSizingKeywords]
 973 [PercentPadding]
