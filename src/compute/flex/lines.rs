@@ -23,10 +23,9 @@ fn main_axis_available_space<D: FlexDir>(c: &AlgoConstants<D>, available_space: 
             let available = if c.has_definite_main_size { available } else { available.min(max_size) };
             available.maybe_max(c.min_size.main(c.dir))
         }),
-        // A column's automatic main size is content based, so ancestor space does not wrap it.
-        None if !c.dir.is_row() && !c.has_definite_main_size && available_space.main(c.dir).is_definite() => {
-            AvailableSpace::MaxContent
-        }
+        // A column's automatic main size is content based, so ancestor space does not wrap it,
+        // and its min-content height is its max-content height (as Chrome).
+        None if !c.dir.is_row() && !c.has_definite_main_size => AvailableSpace::MaxContent,
         None => available_space.main(c.dir),
     }
 }
