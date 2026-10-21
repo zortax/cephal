@@ -220,6 +220,8 @@ pub(super) fn prepare_item<T: LayoutTree + CacheAccess + ?Sized>(
         }
     };
     let Size { width, height } = Size { width, height: inherent_size.height }.maybe_apply_aspect_ratio(aspect_ratio);
+    // A content-sized height is found at the used width, min and max sizes applied.
+    let used_width = width.maybe_clamp(min_size.width, max_size.width);
     let height = match height {
         Some(h) => Some(h),
         None => 'h: {
@@ -230,10 +232,10 @@ pub(super) fn prepare_item<T: LayoutTree + CacheAccess + ?Sized>(
                         Some(h) => h,
                         None => tree.measure_child_size(
                             node,
-                            Size { width, height: None },
+                            Size { width: used_width, height: None },
                             grid_area_size.map(Some),
                             Size {
-                                width: width.map_or(AvailableSpace::Definite(area_minus_margins.width), AvailableSpace::Definite),
+                                width: used_width.map_or(AvailableSpace::Definite(area_minus_margins.width), AvailableSpace::Definite),
                                 height: ah,
                             },
                             SizingMode::InherentSize,

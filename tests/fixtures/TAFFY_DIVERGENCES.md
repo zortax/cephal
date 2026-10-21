@@ -151,6 +151,15 @@ stretched) has its width found first and its items laid out at it (Chrome), so t
 padding, margins and widths resolve against that width. Taffy measures the container's height
 with its items' percentages resolved against nothing, and keeps that height.
 
+## A grid item's content-sized height below its min width
+
+Census category `unexplained` (seeds 636, 694, 700, 720, 981). Fixture
+`grid_item_content_height_at_min_width`.
+
+A grid item's `fit-content` (or other content-based) height is its content's height at the
+item's used width, after `min-width` and `max-width` (css-sizing-3 §5.2). Taffy measures it at
+the preferred width, here `0%`, so a percentage margin inside resolves against zero.
+
 ## The root (both engines, by design)
 
 Not a divergence between the engines, but where both differ from a browser's root element,

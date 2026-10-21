@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    A grid item's content-sized height (`fit-content`) is found at its used width, which its
+    min-width raises above its preferred width: the percentage margin inside resolves against it
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: grid; width: 118px;">
+  <div style="display: block; width: 0%; height: fit-content; min-width: 16%;">
+    <div style="display: block; margin-bottom: 17%;"></div>
+  </div>
+</div>
+
+</body>
+</html>
