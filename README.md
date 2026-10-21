@@ -87,9 +87,9 @@ nanoseconds per node (an empty cell is a tree the engine cannot express):
 | nested intrinsic flex rows (101,111, `min-width: 0`) | 71 | 323 | 638 | |
 
 Laying out in parallel on 16 cores brings the last two rows to 132 and 27 ns per node. On trees
-of about 100,000 nodes, a frame with a single edit (text, a width, moving a positioned box) takes
-0.13–0.27 ms with cephal and 5–6 ms with taffy. The exception is toggling `display` among thousands
-of absolutely positioned boxes: 30 ms against 19 ms.
+of about 100,000 nodes (a list, a dashboard, a document), a frame with a single edit (text, a width,
+moving a positioned box) takes 0.12–0.28 ms with cephal and 4.5–6 ms with taffy. Cephal is faster
+in every incremental scenario of the suite.
 
 ```sh
 taskset -c 2 cargo bench --bench suite [-- <filter>...]   # cephal and taffy
