@@ -2565,14 +2565,20 @@
           <div display="block" direction="ltr" position="relative" height="5px"/>
         </div>
       </div>
+      <div display="flex" direction="ltr" position="relative" flex-direction="row-reverse" overflow-x="hidden" overflow-y="scroll" scrollbar-width="15" justify-content="space-between" width="10px">
+        <div display="block" direction="ltr" position="relative" height="5px"/>
+      </div>
     </div>
   </input>
   <expectations>
-    <node x="0" y="0" width="17" height="7">
+    <node x="0" y="0" width="17" height="12">
       <node x="0" y="0" width="4" height="7" scroll_width="0" scroll_height="0">
         <node x="1" y="1" width="0" height="5">
           <node x="0" y="0" width="0" height="5"/>
         </node>
+      </node>
+      <node x="0" y="7" width="10" height="5" scroll_width="0" scroll_height="0">
+        <node x="0" y="0" width="0" height="5"/>
       </node>
     </node>
   </expectations>
@@ -2586,14 +2592,20 @@
           <div display="block" direction="rtl" position="relative" height="5px"/>
         </div>
       </div>
+      <div display="flex" direction="rtl" position="relative" flex-direction="row-reverse" overflow-x="hidden" overflow-y="scroll" scrollbar-width="15" justify-content="space-between" width="10px">
+        <div display="block" direction="rtl" position="relative" height="5px"/>
+      </div>
     </div>
   </input>
   <expectations>
-    <node x="0" y="0" width="17" height="7">
+    <node x="0" y="0" width="17" height="12">
       <node x="13" y="0" width="4" height="7" scroll_width="0" scroll_height="0">
         <node x="3" y="1" width="0" height="5">
           <node x="0" y="0" width="0" height="5"/>
         </node>
+      </node>
+      <node x="7" y="7" width="10" height="5" scroll_width="0" scroll_height="0">
+        <node x="10" y="0" width="0" height="5"/>
       </node>
     </node>
   </expectations>
@@ -2607,14 +2619,20 @@
           <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="5px"/>
         </div>
       </div>
+      <div display="flex" box-sizing="content-box" direction="ltr" position="relative" flex-direction="row-reverse" overflow-x="hidden" overflow-y="scroll" scrollbar-width="15" justify-content="space-between" width="10px">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="5px"/>
+      </div>
     </div>
   </input>
   <expectations>
-    <node x="0" y="0" width="17" height="7">
+    <node x="0" y="0" width="17" height="12">
       <node x="0" y="0" width="6" height="7" scroll_width="0" scroll_height="0">
         <node x="1" y="1" width="0" height="5">
           <node x="0" y="0" width="0" height="5"/>
         </node>
+      </node>
+      <node x="0" y="7" width="10" height="5" scroll_width="0" scroll_height="0">
+        <node x="0" y="0" width="0" height="5"/>
       </node>
     </node>
   </expectations>
@@ -2628,14 +2646,20 @@
           <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="5px"/>
         </div>
       </div>
+      <div display="flex" box-sizing="content-box" direction="rtl" position="relative" flex-direction="row-reverse" overflow-x="hidden" overflow-y="scroll" scrollbar-width="15" justify-content="space-between" width="10px">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="5px"/>
+      </div>
     </div>
   </input>
   <expectations>
-    <node x="0" y="0" width="17" height="7">
+    <node x="0" y="0" width="17" height="12">
       <node x="11" y="0" width="6" height="7" scroll_width="0" scroll_height="0">
         <node x="5" y="1" width="0" height="5">
           <node x="0" y="0" width="0" height="5"/>
         </node>
+      </node>
+      <node x="7" y="7" width="10" height="5" scroll_width="0" scroll_height="0">
+        <node x="10" y="0" width="0" height="5"/>
       </node>
     </node>
   </expectations>

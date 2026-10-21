@@ -328,7 +328,8 @@ fn compute_preliminary<T: LayoutTree + CacheAccess + ?Sized, D: FlexDir>(
     let dir = constants.dir;
     if let Some(inner_main_size) = constants.node_inner_size.main(dir) {
         let outer_main_size = inner_main_size + constants.content_box_inset.main_axis_sum(dir);
-        constants.inner_container_size.set_main(dir, inner_main_size);
+        // Scrollbars wider than the box leave no room, not negative room.
+        constants.inner_container_size.set_main(dir, inner_main_size.max(0.0));
         constants.container_size.set_main(dir, outer_main_size);
     } else {
         main_size::determine_container_main_size(tree, available_space, &mut lines, &mut items, &mut constants);

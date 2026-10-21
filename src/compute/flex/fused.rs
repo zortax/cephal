@@ -334,7 +334,7 @@ fn lay_out<const WRAP: bool, D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
 
     if let Some(inner_main_size) = c.node_inner_size.main(dir) {
         let outer_main_size = inner_main_size + c.content_box_inset.main_axis_sum(dir);
-        c.inner_container_size.set_main(dir, inner_main_size);
+        c.inner_container_size.set_main(dir, inner_main_size.max(0.0));
         c.container_size.set_main(dir, outer_main_size);
     } else {
         determine_container_main_size::<WRAP, _, _>(tree, available_space, lines, &items, c);
