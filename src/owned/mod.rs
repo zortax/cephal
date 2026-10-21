@@ -982,7 +982,7 @@ enum StyleEdit {
 ///   (`block/mod.rs`, `flex/mod.rs`, `grid/mod.rs`) and out-of-flow placement (`oof.rs`);
 /// - `flex-grow`, `flex-shrink`, `flex-basis`: flex items only (`flex/mod.rs`, `base_size.rs`,
 ///   `fused.rs`); the `StylePlan` fields derived from `flex-basis` (`plain_flex_item`,
-///   `flex_basis`) are read only there, and the plan's existence does not depend on it;
+///   `flex_basis`) are read only there, and whether a `StylePlan` exists does not depend on it;
 /// - `grid-row`, `grid-column`: grid placement (`grid/placement.rs`, `grid/mod.rs`, `oof.rs`);
 /// - `inset`: relative offsets applied by the parent (`block/flow.rs`, `flex/final_pass.rs`,
 ///   `fused.rs`, `grid/alignment.rs`) and out-of-flow placement (`oof.rs`); the root's own insets

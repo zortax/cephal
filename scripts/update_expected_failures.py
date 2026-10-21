@@ -15,7 +15,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 LIST = ROOT / "tests" / "fixtures" / "expected_failures.txt"
-HEADER = "# group/fixture category -- fixtures from taffy v0.15.0 that cephal does not pass yet (Phase 1 shrinks this)"
+HEADER = "# group/fixture category -- fixtures cephal does not pass yet, with their cause"
 
 
 def main():

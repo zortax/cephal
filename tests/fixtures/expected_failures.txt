@@ -1,1 +1,1 @@
-# group/fixture category -- fixtures from taffy v0.15.0 that cephal does not pass yet (Phase 1 shrinks this)
+# group/fixture category -- fixtures cephal does not pass yet, with their cause
