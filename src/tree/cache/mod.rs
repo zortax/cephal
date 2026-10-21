@@ -263,6 +263,12 @@ impl NodeCache {
         self.0.as_deref()?.final_entry.as_ref().map(|e| e.output)
     }
 
+    /// The question the cached final-layout answer answers, as stored (canonicalised).
+    #[inline]
+    pub fn final_input(&self) -> Option<LayoutInput> {
+        self.0.as_deref()?.final_entry.as_ref().map(|e| e.key.into_input(RunMode::PerformLayout))
+    }
+
     /// Replaces the cached final-layout answer in place.
     #[inline]
     pub fn set_final_output(&mut self, output: LayoutOutput) {

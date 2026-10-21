@@ -148,13 +148,7 @@ impl LayoutOutput {
     /// Parents read a child's overflow rectangle only on axes where it propagates (visible
     /// overflow, no containment); on clipped or scrolled axes only the size matters.
     pub fn same_for_parent(&self, old: &Self, overflow: Point<crate::style::Overflow>, contain: crate::style::Contain) -> bool {
-        if self.size != old.size
-            || self.baselines != old.baselines
-            || self.top_margin != old.top_margin
-            || self.bottom_margin != old.bottom_margin
-            || self.margins_can_collapse_through != old.margins_can_collapse_through
-            || self.oof != old.oof
-        {
+        if !self.same_except_overflow(old) {
             return false;
         }
         let is_scroll_container = overflow.x.is_scroll_container() || overflow.y.is_scroll_container();
@@ -165,6 +159,17 @@ impl LayoutOutput {
         let propagates_x = !is_scroll_container && !contained && overflow.x == crate::style::Overflow::Visible;
         let propagates_y = !is_scroll_container && !contained && overflow.y == crate::style::Overflow::Visible;
         (same_x || !propagates_x) && (same_y || !propagates_y)
+    }
+
+    /// Whether `self` equals `old` apart from the overflow rectangles.
+    #[inline]
+    pub fn same_except_overflow(&self, old: &Self) -> bool {
+        self.size == old.size
+            && self.baselines == old.baselines
+            && self.top_margin == old.top_margin
+            && self.bottom_margin == old.bottom_margin
+            && self.margins_can_collapse_through == old.margins_can_collapse_through
+            && self.oof == old.oof
     }
 
     /// What `self` specifies as the answer to a `ComputeSize` question: the size, baselines and
