@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    While a grid container's intrinsic width is found, its percentage tracks count as `auto`
+    (css-grid-1 §7.2.1), also when it has a min-width; they resolve against the width found,
+    which the content makes larger than the min-width in the first grid and smaller in the second
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; width: 101px;">
+  <div style="display: grid; width: min-content; min-width: 17%; padding-right: 9%; grid-template-columns: 44%;">
+    <div style="display: block;">X</div>
+  </div>
+  <div style="display: grid; width: min-content; min-width: 17%; grid-template-columns: 44%;">
+    <div style="display: block;">X</div>
+  </div>
+</div>
+
+</body>
+</html>

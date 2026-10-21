@@ -160,6 +160,15 @@ A grid item's `fit-content` (or other content-based) height is its content's hei
 item's used width, after `min-width` and `max-width` (css-sizing-3 §5.2). Taffy measures it at
 the preferred width, here `0%`, so a percentage margin inside resolves against zero.
 
+## Percentage tracks of a grid with a min size and a content-based size
+
+Census category `PercentTracks`. Fixture `grid_percentage_track_intrinsic_with_min_width`.
+
+While a grid container's size is found from its tracks, its percentage tracks behave as `auto`,
+and resolve against the size found (css-grid-1 §7.2.1). Taffy resolves them against the
+container's min size while sizing it, so a grid whose content is wider than its min-width is
+sized at the min-width.
+
 ## The root (both engines, by design)
 
 Not a divergence between the engines, but where both differ from a browser's root element,

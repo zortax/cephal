@@ -2636,6 +2636,114 @@
     </node>
   </expectations>
 </test>
+<test name="grid_percentage_track_intrinsic_with_min_width__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="ltr" position="absolute" width="101px">
+      <div display="grid" direction="ltr" position="relative" width="min-content" min-width="17%" padding-right="9%" grid-template-columns="44%">
+        <text display="block" direction="ltr" position="relative">
+          X
+        </text>
+      </div>
+      <div display="grid" direction="ltr" position="relative" width="min-content" min-width="17%" grid-template-columns="44%">
+        <text display="block" direction="ltr" position="relative">
+          X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="101" height="20">
+      <node x="0" y="0" width="19" height="10" resolved-rows="10px" resolved-columns="4.39062px">
+        <node x="0" y="0" width="4" height="10"/>
+      </node>
+      <node x="0" y="10" width="17" height="10" resolved-rows="10px" resolved-columns="7.54688px">
+        <node x="0" y="0" width="8" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="grid_percentage_track_intrinsic_with_min_width__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="rtl" position="absolute" width="101px">
+      <div display="grid" direction="rtl" position="relative" width="min-content" min-width="17%" padding-right="9%" grid-template-columns="44%">
+        <text display="block" direction="rtl" position="relative">
+          X
+        </text>
+      </div>
+      <div display="grid" direction="rtl" position="relative" width="min-content" min-width="17%" grid-template-columns="44%">
+        <text display="block" direction="rtl" position="relative">
+          X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="101" height="20">
+      <node x="82" y="0" width="19" height="10" resolved-rows="10px" resolved-columns="4.39062px">
+        <node x="6" y="0" width="4" height="10"/>
+      </node>
+      <node x="84" y="10" width="17" height="10" resolved-rows="10px" resolved-columns="7.54688px">
+        <node x="9" y="0" width="8" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="grid_percentage_track_intrinsic_with_min_width__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" position="absolute" width="101px">
+      <div display="grid" box-sizing="content-box" direction="ltr" position="relative" width="min-content" min-width="17%" padding-right="9%" grid-template-columns="44%">
+        <text display="block" box-sizing="content-box" direction="ltr" position="relative">
+          X
+        </text>
+      </div>
+      <div display="grid" box-sizing="content-box" direction="ltr" position="relative" width="min-content" min-width="17%" grid-template-columns="44%">
+        <text display="block" box-sizing="content-box" direction="ltr" position="relative">
+          X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="101" height="20">
+      <node x="0" y="0" width="26" height="10" resolved-rows="10px" resolved-columns="7.54688px">
+        <node x="0" y="0" width="8" height="10"/>
+      </node>
+      <node x="0" y="10" width="17" height="10" resolved-rows="10px" resolved-columns="7.54688px">
+        <node x="0" y="0" width="8" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="grid_percentage_track_intrinsic_with_min_width__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" position="absolute" width="101px">
+      <div display="grid" box-sizing="content-box" direction="rtl" position="relative" width="min-content" min-width="17%" padding-right="9%" grid-template-columns="44%">
+        <text display="block" box-sizing="content-box" direction="rtl" position="relative">
+          X
+        </text>
+      </div>
+      <div display="grid" box-sizing="content-box" direction="rtl" position="relative" width="min-content" min-width="17%" grid-template-columns="44%">
+        <text display="block" box-sizing="content-box" direction="rtl" position="relative">
+          X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="101" height="20">
+      <node x="75" y="0" width="26" height="10" resolved-rows="10px" resolved-columns="7.54688px">
+        <node x="9" y="0" width="8" height="10"/>
+      </node>
+      <node x="84" y="10" width="17" height="10" resolved-rows="10px" resolved-columns="7.54688px">
+        <node x="9" y="0" width="8" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
 <test name="leaf_known_width_is_border_box__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>

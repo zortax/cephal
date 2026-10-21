@@ -170,7 +170,7 @@ pub(super) fn track_sizing_algorithm<T: LayoutTree + CacheAccess + ?Sized>(tree:
         has_baseline_aligned_item,
         run_mode,
     } = p;
-    let percentage_basis = inner_node_size.get_abstract(axis).or(axis_min_size);
+    let percentage_basis = inner_node_size.get_abstract(axis);
     initialize_track_sizes(tree, axis_tracks, percentage_basis);
     if has_baseline_aligned_item {
         if run_mode == crate::tree::RunMode::ComputeSize {
