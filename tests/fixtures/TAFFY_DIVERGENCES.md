@@ -239,6 +239,14 @@ min-height (css-sizing-4 §5.2.1). Min and max sizes transfer through the ratio 
 the ratio sizes, so a definite height stays when max-width narrows the box. Taffy keeps the
 ratio's height in both cases.
 
+## A grid item with auto margins that overflows its area
+
+Census category `unexplained`. Fixture `grid_item_auto_margin_overflow`.
+
+Auto margins disable a grid item's self-alignment (css-grid-1 §10.2); when the item overflows
+its area the margins are zero and the item stays at the start (Chrome). Taffy centers or
+end-aligns it per `align-self`/`justify-self`, moving it out past the start.
+
 ## The root (both engines, by design)
 
 Not a divergence between the engines, but where both differ from a browser's root element,

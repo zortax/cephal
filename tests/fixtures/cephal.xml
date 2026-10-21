@@ -3848,6 +3848,74 @@
     </node>
   </expectations>
 </test>
+<test name="grid_item_auto_margin_overflow__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="ltr" position="absolute" width="300px">
+      <div display="grid" direction="ltr" position="relative" align-items="center" justify-items="end" grid-template-rows="10px" grid-template-columns="20px">
+        <div display="block" direction="ltr" position="relative" width="50px" height="30px" margin-top="auto" margin-left="auto"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="300" height="10">
+      <node x="0" y="0" width="300" height="10" resolved-rows="10px" resolved-columns="20px">
+        <node x="0" y="0" width="50" height="30"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="grid_item_auto_margin_overflow__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="rtl" position="absolute" width="300px">
+      <div display="grid" direction="rtl" position="relative" align-items="center" justify-items="end" grid-template-rows="10px" grid-template-columns="20px">
+        <div display="block" direction="rtl" position="relative" width="50px" height="30px" margin-top="auto" margin-left="auto"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="300" height="10">
+      <node x="0" y="0" width="300" height="10" resolved-rows="10px" resolved-columns="20px">
+        <node x="250" y="0" width="50" height="30"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="grid_item_auto_margin_overflow__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" position="absolute" width="300px">
+      <div display="grid" box-sizing="content-box" direction="ltr" position="relative" align-items="center" justify-items="end" grid-template-rows="10px" grid-template-columns="20px">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" width="50px" height="30px" margin-top="auto" margin-left="auto"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="300" height="10">
+      <node x="0" y="0" width="300" height="10" resolved-rows="10px" resolved-columns="20px">
+        <node x="0" y="0" width="50" height="30"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="grid_item_auto_margin_overflow__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" position="absolute" width="300px">
+      <div display="grid" box-sizing="content-box" direction="rtl" position="relative" align-items="center" justify-items="end" grid-template-rows="10px" grid-template-columns="20px">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" width="50px" height="30px" margin-top="auto" margin-left="auto"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="300" height="10">
+      <node x="0" y="0" width="300" height="10" resolved-rows="10px" resolved-columns="20px">
+        <node x="250" y="0" width="50" height="30"/>
+      </node>
+    </node>
+  </expectations>
+</test>
 <test name="grid_item_content_height_at_min_width__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>

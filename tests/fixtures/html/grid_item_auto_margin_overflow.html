@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    A grid item's auto margin disables its self-alignment (css-grid-1 §10.2), also when the item
+    overflows its area and the margin absorbs nothing: the item stays at the start
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; width: 300px;">
+  <div style="display: grid; align-items: center; grid-template-rows: 10px; justify-items: end; grid-template-columns: 20px;">
+    <div style="display: block; margin-top: auto; height: 30px; margin-left: auto; width: 50px;"></div>
+  </div>
+</div>
+
+</body>
+</html>

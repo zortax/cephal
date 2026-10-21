@@ -393,7 +393,8 @@ fn align_item_within_area(
     let auto_size = if auto_count > 0 { free_space / auto_count as f32 } else { 0.0 };
     let resolved_margin = Line { start: margin.start.unwrap_or(auto_size) + baseline_shim, end: margin.end.unwrap_or(auto_size) };
     let overflows = resolved_size + non_auto_margin.sum() > area_size;
-    let keyword = resolve_self_alignment_safety(alignment, overflows);
+    // Auto margins disable self-alignment (css-grid-1 §10.2), also when they absorb nothing.
+    let keyword = if auto_count > 0 { AlignItemsKeyword::Start } else { resolve_self_alignment_safety(alignment, overflows) };
     let rtl = direction == Direction::Rtl;
     let alignment_offset = match keyword {
         AlignItemsKeyword::Start | AlignItemsKeyword::FlexStart | AlignItemsKeyword::Baseline | AlignItemsKeyword::Stretch => {
