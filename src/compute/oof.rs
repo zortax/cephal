@@ -19,6 +19,16 @@
 //! position or its own answer changes without its containing block's in-flow layout changing;
 //! the pass then reads the containing block's recorded geometry, so cold and incremental layouts
 //! call the same function on the same inputs.
+//!
+//! A tree that [keeps placements](crate::tree::LayoutTree::keeps_placements) has each pass record
+//! what it placed ([`Placements`]). The next pass keeps a box's placement instead of placing it
+//! again when everything the placement reads is unchanged: the containing block's geometry, the
+//! box's static position, where its parent sits and its order are compared; its final answer must
+//! still be cached for the same question (or it is still a leaf answering from its style), and its
+//! layout must still be the one the record stored. Its style and answers are the tree's to vouch
+//! for: it [forgets](crate::tree::LayoutTree::forget_placement) a box's records when the box is
+//! edited or answers differently, and all records of a block whose subtree may have changed which
+//! containing block holds which box.
 
 use crate::compute::LayoutTreeExt;
 use crate::compute::common::overflow::{scrollable_overflow_contribution, union};
@@ -26,6 +36,7 @@ use crate::compute::common::sizing_keyword::{SizingKeywordResolution, resolve_si
 use crate::compute::scratch::Scratch;
 use crate::geometry::{AbsoluteAxis, AvailableSpace, Line, MaybeMath, Point, Rect, Size};
 use crate::style::{AlignItems, AlignItemsKeyword, AlignmentSafety, BoxSizing, Dimension, Direction, Overflow, Position, Style};
+use crate::tree::cache::CacheKey;
 use crate::tree::{CacheAccess, Layout, LayoutInput, LayoutOutput, LayoutTree, NodeId, RequestedAxis, RunMode, SizingMode};
 
 /// Bit of [`LayoutOutput::oof`] and of containing-block claims: `position: absolute`.
@@ -177,6 +188,135 @@ pub struct AbsoluteContext {
     pub surfaced: Vec<OofEntry>,
     /// Present when the container claims some candidate.
     pub geometry: Option<OofGeometry>,
+    /// What the container's last out-of-flow pass placed; kept across its final layouts.
+    pub placed: Placements,
+    /// On the root: what the last pass against the initial containing block placed.
+    pub viewport: Placements,
+}
+
+/// What an out-of-flow pass placed, and against which geometry (see the module documentation).
+/// One word when empty, as every container's record carries two.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Placements(Option<Box<PlacementsInner>>);
+
+#[derive(Clone, Debug, PartialEq)]
+struct PlacementsInner {
+    geometry: OofGeometry,
+    boxes: Vec<Placement>,
+    /// Boxes forgotten since: placed again by the next pass.
+    stale: Vec<NodeId>,
+}
+
+impl Placements {
+    /// Whether nothing is recorded.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.0.is_none()
+    }
+
+    /// Forgets `node`'s placement, if recorded; forgets everything once many are.
+    pub fn forget(&mut self, node: NodeId) {
+        let Some(inner) = self.0.as_deref_mut() else { return };
+        inner.stale.push(node);
+        if inner.stale.len() > 64 && inner.stale.len() * 4 > inner.boxes.len() {
+            self.clear();
+        }
+    }
+
+    /// Forgets every placement.
+    pub fn clear(&mut self) {
+        self.0 = None;
+    }
+
+    /// `boxes` placed against `geometry`.
+    fn new(geometry: &OofGeometry, boxes: Vec<Placement>) -> Self {
+        if boxes.is_empty() {
+            return Self(None);
+        }
+        Self(Some(Box::new(PlacementsInner { geometry: geometry.clone(), boxes, stale: Vec::new() })))
+    }
+}
+
+/// One placed box: what its placement read beyond its style and answers, and where it went.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Placement {
+    node: NodeId,
+    order: u32,
+    bit: u8,
+    static_position: Point<AxisStaticPosition>,
+    parent_origin: Point<f32>,
+    /// The final-layout question the box answered, as cached; `None` for a cheap leaf, which is
+    /// never cached and answers from its style alone.
+    question: Option<CacheKey>,
+    /// Its border box within the containing block's.
+    location: Point<f32>,
+    /// A hash of the layout the pass stored, which another pass may have replaced since.
+    layout_hash: u64,
+    /// What the pass reads of its answer.
+    scrollable_overflow_rect: Rect<f32>,
+    oof: u8,
+}
+
+impl Placement {
+    /// Whether `candidate` is placed from the same inputs, bit for bit.
+    fn places(&self, candidate: &Candidate) -> bool {
+        fn line(a: Line<f32>, b: Line<f32>) -> bool {
+            a.start.to_bits() == b.start.to_bits() && a.end.to_bits() == b.end.to_bits()
+        }
+        let (a, b) = (&self.static_position, &candidate.static_position);
+        self.node == candidate.node
+            && self.order == candidate.order
+            && self.bit == candidate.bit
+            && line(a.x.area, b.x.area)
+            && a.x.align == b.x.align
+            && line(a.y.area, b.y.area)
+            && a.y.align == b.y.align
+            && self.parent_origin.x.to_bits() == candidate.parent_origin.x.to_bits()
+            && self.parent_origin.y.to_bits() == candidate.parent_origin.y.to_bits()
+    }
+}
+
+/// The previous pass's placements, looked up in the order candidates come, which is the order
+/// they were recorded in apart from boxes that came or went.
+struct Previous<'a> {
+    boxes: &'a [Placement],
+    stale: std::collections::HashSet<NodeId, crate::hash::FxBuild>,
+    cursor: usize,
+    index: Option<std::collections::HashMap<NodeId, usize, crate::hash::FxBuild>>,
+}
+
+impl<'a> Previous<'a> {
+    /// `placements` when they were made against `geometry`.
+    fn new(placements: &'a Placements, geometry: &OofGeometry) -> Self {
+        match placements.0.as_deref() {
+            Some(inner) if inner.geometry == *geometry => {
+                Self { boxes: &inner.boxes, stale: inner.stale.iter().copied().collect(), cursor: 0, index: None }
+            }
+            _ => Self { boxes: &[], stale: Default::default(), cursor: 0, index: None },
+        }
+    }
+
+    /// The placement recorded for `node`, unless forgotten.
+    fn get(&mut self, node: NodeId) -> Option<&'a Placement> {
+        let record = self.find(node)?;
+        if self.stale.contains(&node) { None } else { Some(record) }
+    }
+
+    fn find(&mut self, node: NodeId) -> Option<&'a Placement> {
+        // Boxes that went since leave a gap of a few entries; look a little ahead first.
+        const AHEAD: usize = 16;
+        let end = self.boxes.len().min(self.cursor + AHEAD);
+        let at = match (self.cursor..end).find(|&i| self.boxes[i].node == node) {
+            Some(i) => i,
+            None if self.boxes.is_empty() => return None,
+            None => {
+                let boxes = self.boxes;
+                *self.index.get_or_insert_with(|| boxes.iter().enumerate().map(|(i, p)| (p.node, i)).collect()).get(&node)?
+            }
+        };
+        self.cursor = at + 1;
+        Some(&self.boxes[at])
+    }
 }
 
 /// A box to lay out, with its static position relative to the containing block's border box.
@@ -236,7 +376,11 @@ pub(crate) fn finish<T: LayoutTree + CacheAccess + ?Sized>(
     let claims = tree.containing_block_claims(node);
     let bits = entries.iter().fold(0, |acc, e| acc | e.bits());
     let geometry = if bits & claims != 0 { Some(geometry()) } else { None };
-    let mut context = AbsoluteContext { entries, surfaced: Vec::new(), geometry };
+    let (placed, viewport) = match tree.keeps_placements() {
+        true => tree.take_absolute_context(node).map_or_else(Default::default, |c| (c.placed, c.viewport)),
+        false => Default::default(),
+    };
+    let mut context = AbsoluteContext { entries, surfaced: Vec::new(), geometry, placed, viewport };
     let result = run_pass(tree, node, &mut context, claims);
     tree.set_absolute_context(node, context);
     result
@@ -259,6 +403,7 @@ pub(crate) fn run_pass<T: LayoutTree + CacheAccess + ?Sized>(
     claims: u8,
 ) -> (Rect<f32>, u8) {
     context.surfaced.clear();
+    let previous = core::mem::take(&mut context.placed);
     let mut bits = 0;
     let mut claimed = 0;
     for e in &context.entries {
@@ -273,10 +418,21 @@ pub(crate) fn run_pass<T: LayoutTree + CacheAccess + ?Sized>(
     collect(tree, &context.entries, claims, Point::ZERO, &mut work);
     let outer = tree.take_observed();
     let adds_overflow = tree.out_of_flow_overflow(cb);
-    let overflow = lay_out(tree, Some(cb), &mut work, claims, adds_overflow, geometry, &mut bits, Some(&mut context.surfaced));
+    let keeps = tree.keeps_placements();
+    let mut placed = if keeps { Vec::with_capacity(work.len()) } else { Vec::new() };
+    let mut pass = Pass { previous: Previous::new(&previous, geometry), placed: &mut placed, keeps };
+    let overflow = lay_out(tree, Some(cb), &mut work, claims, adds_overflow, geometry, &mut bits, Some(&mut context.surfaced), &mut pass);
     tree.take_observed();
     tree.note_observed(outer);
+    context.placed = Placements::new(geometry, placed);
     (overflow, bits)
+}
+
+/// The previous placements of a pass and the ones it records, when the tree keeps them.
+struct Pass<'a, 'b> {
+    previous: Previous<'a>,
+    placed: &'b mut Vec<Placement>,
+    keeps: bool,
 }
 
 /// Lays out `work` and every claimed candidate surfacing from it; unclaimed ones are added to
@@ -291,6 +447,7 @@ fn lay_out<T: LayoutTree + CacheAccess + ?Sized>(
     geometry: &OofGeometry,
     bits: &mut u8,
     mut surfaced: Option<&mut Vec<OofEntry>>,
+    pass: &mut Pass<'_, '_>,
 ) -> Rect<f32> {
     let is_scroll_container = geometry.overflow.x.is_scroll_container() || geometry.overflow.y.is_scroll_container();
     let rtl = geometry.direction == Direction::Rtl;
@@ -299,8 +456,36 @@ fn lay_out<T: LayoutTree + CacheAccess + ?Sized>(
     while i < work.len() {
         let candidate = work[i];
         i += 1;
-        let placed = layout_oof_box(tree, cb, candidate, geometry);
-        let (location, size) = (placed.location, placed.size);
+        let kept = if pass.keeps { keep_placement(tree, &candidate, &mut pass.previous) } else { None };
+        let placed = match kept {
+            Some((placed, record)) => {
+                #[cfg(feature = "stats")]
+                crate::compute::stats::bump(&crate::compute::stats::OOF_KEPT);
+                pass.placed.push(record);
+                placed
+            }
+            None => {
+                #[cfg(feature = "stats")]
+                crate::compute::stats::bump(&crate::compute::stats::OOF_PLACED);
+                let (placed, _) = layout_oof_box(tree, cb, candidate, geometry);
+                if pass.keeps {
+                    pass.placed.push(Placement {
+                        node: candidate.node,
+                        order: candidate.order,
+                        bit: candidate.bit,
+                        static_position: candidate.static_position,
+                        parent_origin: candidate.parent_origin,
+                        question: tree.cache(candidate.node).final_key(),
+                        location: placed.location,
+                        layout_hash: placed.layout.bits_hash(),
+                        scrollable_overflow_rect: placed.scrollable_overflow_rect,
+                        oof: placed.oof,
+                    });
+                }
+                placed
+            }
+        };
+        let (location, size) = (placed.location, placed.layout.size);
         // Measured from the scroll origin: the inline-start edge, the right one in RTL.
         let relative = if rtl {
             Point { x: geometry.area_size.width - (location.x - geometry.area_offset.x) - size.width, y: location.y - geometry.area_offset.y }
@@ -310,10 +495,10 @@ fn lay_out<T: LayoutTree + CacheAccess + ?Sized>(
         if candidate.bit & adds_overflow != 0 {
             overflow = union(
                 overflow,
-                scrollable_overflow_contribution(relative, size, placed.output.scrollable_overflow_rect, placed.overflow, placed.contain, is_scroll_container),
+                scrollable_overflow_contribution(relative, size, placed.scrollable_overflow_rect, placed.overflow, placed.contain, is_scroll_container),
             );
         }
-        let inner = placed.output.oof;
+        let inner = placed.oof;
         if inner & !claims != 0 {
             *bits |= inner & !claims;
             if let Some(surfaced) = surfaced.as_deref_mut() {
@@ -335,17 +520,55 @@ fn lay_out<T: LayoutTree + CacheAccess + ?Sized>(
     overflow
 }
 
+/// The placement `previous` recorded for `candidate`, when nothing it was made from changed: the
+/// box as placed, read back, and the record to keep.
+fn keep_placement<T: LayoutTree + CacheAccess + ?Sized>(tree: &T, candidate: &Candidate, previous: &mut Previous<'_>) -> Option<(Placed, Placement)> {
+    let record = previous.get(candidate.node)?;
+    if !record.places(candidate) {
+        return None;
+    }
+    // The box still answers the question it answered, or is still a leaf answering from its style.
+    let question = tree.cache(candidate.node).final_key();
+    if question != record.question || (question.is_none() && !tree.query_meta(candidate.node).cheap_leaf) {
+        return None;
+    }
+    // Nothing has placed the box since, as another containing block would while it held it.
+    let layout = tree.unrounded_layout(candidate.node)?;
+    if layout.bits_hash() != record.layout_hash {
+        return None;
+    }
+    let style = tree.style(candidate.node);
+    let placed = Placed {
+        location: record.location,
+        layout,
+        scrollable_overflow_rect: record.scrollable_overflow_rect,
+        oof: record.oof,
+        overflow: style.overflow,
+        contain: style.contain,
+    };
+    Some((placed, *record))
+}
+
 /// The last pass of a root layout: lays out every candidate `root` passes on (`bits`) against the
 /// initial containing block, `area_size` at `area_offset` from the root's border box. Their
 /// overflow is nobody's.
 pub(crate) fn initial_containing_block_pass<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, root: NodeId, bits: u8, geometry: &OofGeometry) {
     let mut work: Scratch<Candidate> = Scratch::take();
-    if let Some(context) = tree.absolute_context(root) {
-        collect(tree, &context.entries, bits, Point::ZERO, &mut work);
-        collect(tree, &context.surfaced, bits, Point::ZERO, &mut work);
-    }
+    let Some(context) = tree.absolute_context(root) else { return };
+    collect(tree, &context.entries, bits, Point::ZERO, &mut work);
+    collect(tree, &context.surfaced, bits, Point::ZERO, &mut work);
+    // The root's record keeps this pass's placements too.
+    let keeps = tree.keeps_placements();
+    let mut context = if keeps { tree.take_absolute_context(root) } else { None };
+    let previous = context.as_mut().map(|c| core::mem::take(&mut c.viewport)).unwrap_or_default();
+    let mut placed = if keeps { Vec::with_capacity(work.len()) } else { Vec::new() };
+    let mut pass = Pass { previous: Previous::new(&previous, geometry), placed: &mut placed, keeps };
     let mut rest = 0;
-    lay_out(tree, None, &mut work, OOF_ALL, 0, geometry, &mut rest, None);
+    lay_out(tree, None, &mut work, OOF_ALL, 0, geometry, &mut rest, None, &mut pass);
+    if let Some(mut context) = context {
+        context.viewport = Placements::new(geometry, placed);
+        tree.set_absolute_context(root, context);
+    }
 }
 
 /// Lays out the root itself when it is out of flow: against the initial containing block, with its
@@ -367,7 +590,7 @@ pub(crate) fn layout_root<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, ro
         },
         parent_origin: Point::ZERO,
     };
-    layout_oof_box(tree, None, candidate, geometry).output
+    layout_oof_box(tree, None, candidate, geometry).1
 }
 
 /// Self-alignment of an out-of-flow box in one axis, relative to its containing block's writing
@@ -582,20 +805,23 @@ impl OofAxis {
 struct Placed {
     /// Relative to the containing block's border box.
     location: Point<f32>,
-    size: Size<f32>,
-    output: LayoutOutput,
+    /// The layout stored, relative to the parent.
+    layout: Layout,
+    /// What the pass reads of the box's answer.
+    scrollable_overflow_rect: Rect<f32>,
+    oof: u8,
     overflow: Point<Overflow>,
     contain: crate::style::Contain,
 }
 
 /// Sizes and places one out-of-flow box against its containing block `cb` (`None`: the initial
-/// containing block) and stores its layout, relative to its parent.
+/// containing block) and stores its layout, relative to its parent; returns it and its answer.
 fn layout_oof_box<T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     cb: Option<NodeId>,
     candidate: Candidate,
     geometry: &OofGeometry,
-) -> Placed {
+) -> (Placed, LayoutOutput) {
     let node = candidate.node;
     let direction = geometry.direction;
     #[allow(unused_mut)]
@@ -828,21 +1054,27 @@ fn layout_oof_box<T: LayoutTree + CacheAccess + ?Sized>(
         height: if overflow.x == Overflow::Scroll { scrollbar_width } else { 0.0 },
     };
     let origin = candidate.parent_origin;
-    tree.set_unrounded_layout(
-        node,
-        &Layout {
-            order: candidate.order,
-            location: Point { x: location.x - origin.x, y: location.y - origin.y },
-            size: final_size,
-            scrollable_overflow_rect: output.scrollable_overflow_rect,
-            scrollbar_size,
-            border,
-            padding,
-            margin: resolved_margin,
-        },
-    );
+    let layout = Layout {
+        order: candidate.order,
+        location: Point { x: location.x - origin.x, y: location.y - origin.y },
+        size: final_size,
+        scrollable_overflow_rect: output.scrollable_overflow_rect,
+        scrollbar_size,
+        border,
+        padding,
+        margin: resolved_margin,
+    };
+    tree.set_unrounded_layout(node, &layout);
     let _ = candidate.bit;
-    Placed { location, size: final_size, output, overflow, contain }
+    let placed = Placed {
+        location,
+        layout,
+        scrollable_overflow_rect: output.scrollable_overflow_rect,
+        oof: output.oof,
+        overflow,
+        contain,
+    };
+    (placed, output)
 }
 
 /// `min-content`, `max-content`, `fit-content` and `stretch` sizes of an out-of-flow box.

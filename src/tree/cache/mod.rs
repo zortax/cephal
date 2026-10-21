@@ -276,6 +276,12 @@ impl NodeCache {
         self.0.as_deref()?.final_entry.as_ref().map(|e| e.key.into_input(RunMode::PerformLayout))
     }
 
+    /// The key of the cached final-layout answer, if any.
+    #[inline]
+    pub fn final_key(&self) -> Option<CacheKey> {
+        self.0.as_deref()?.final_entry.as_ref().map(|e| e.key)
+    }
+
     /// Replaces the cached final-layout answer in place.
     #[inline]
     pub fn set_final_output(&mut self, output: LayoutOutput) {

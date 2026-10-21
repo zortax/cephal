@@ -18,6 +18,24 @@ pub struct Layout {
 }
 
 impl Layout {
+    /// A hash of the layout's bits, telling `-0.0` from `0.0`.
+    pub(crate) fn bits_hash(&self) -> u64 {
+        use core::hash::Hasher;
+        let mut h = crate::hash::FxHasher::default();
+        h.write_u32(self.order);
+        let rect = |r: Rect<f32>| [r.left, r.right, r.top, r.bottom];
+        let pair = |a: f32, b: f32| (a.to_bits() as u64) << 32 | b.to_bits() as u64;
+        h.write_u64(pair(self.location.x, self.location.y));
+        h.write_u64(pair(self.size.width, self.size.height));
+        h.write_u64(pair(self.scrollbar_size.width, self.scrollbar_size.height));
+        for r in [self.scrollable_overflow_rect, self.border, self.padding, self.margin] {
+            let [a, b, c, d] = rect(r);
+            h.write_u64(pair(a, b));
+            h.write_u64(pair(c, d));
+        }
+        h.finish()
+    }
+
     pub const ZERO: Self = Self {
         order: 0,
         location: Point::ZERO,

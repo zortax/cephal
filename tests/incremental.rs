@@ -512,6 +512,152 @@ fn sized(width: f32, height: f32) -> cephal::Style {
     s
 }
 
+/// An out-of-flow pass keeps a box's placement from the last pass only while nothing it was
+/// placed from changed: each step below changes one such input, alone or together with an edit
+/// that re-runs the containing block's in-flow layout.
+#[test]
+fn kept_placements_follow_every_input() {
+    let mut tree: Tree<Text> = Tree::new();
+    let before = tree.new_leaf(sized(50.0, 20.0));
+    // Laid out by the initial containing block: no ancestor is positioned.
+    let mut boxed = cephal::Style::DEFAULT;
+    boxed.position = Position::Absolute;
+    boxed.inset.left = LengthPercentageAuto::length(0.0);
+    boxed.inset.right = LengthPercentageAuto::length(0.0);
+    boxed.size.width = Dimension::length(60.0);
+    let text = tree.new_leaf_with_context(cephal::Style::DEFAULT, Text(3));
+    let abs = tree.new_with_children(boxed, &[text]);
+    // Placed at its static position in the flow.
+    let mut auto = cephal::Style::DEFAULT;
+    auto.position = Position::Absolute;
+    let static_box = tree.new_leaf_with_context(auto, Text(2));
+    // A leaf answering from its style alone, never cached, sized by its containing block.
+    let mut leaf = sized(10.0, 10.0);
+    leaf.position = Position::Absolute;
+    leaf.padding.left = cephal::style::LengthPercentage::percent(0.1);
+    let cheap = tree.new_leaf(leaf);
+    let mut leaf = sized(10.0, 10.0);
+    leaf.position = Position::Absolute;
+    leaf.inset.top = LengthPercentageAuto::length(5.0);
+    let plain = tree.new_leaf(leaf);
+    let wrapper = tree.new_with_children(cephal::Style::DEFAULT, &[plain]);
+    let parent = tree.new_with_children(cephal::Style::DEFAULT, &[abs, static_box, cheap, wrapper]);
+    let after = tree.new_leaf(sized(30.0, 20.0));
+    let mut row = cephal::Style::DEFAULT;
+    row.display = Display::Flex;
+    let root = tree.new_with_children(row, &[before, parent, after]);
+    check(&mut tree, root, "initial");
+
+    // The containing block's in-flow layout re-runs; nothing the boxes read changes.
+    tree.patch_style(after, |s| s.size.width = Dimension::length(31.0));
+    check(&mut tree, root, "a later sibling resized");
+    // Static positions move.
+    tree.patch_style(before, |s| s.size.width = Dimension::length(70.0));
+    check(&mut tree, root, "an earlier sibling resized");
+    tree.patch_style(before, |s| s.display = Display::None);
+    check(&mut tree, root, "an earlier sibling hidden");
+    tree.patch_style(before, |s| s.display = Display::Block);
+    check(&mut tree, root, "an earlier sibling shown");
+    // Self-alignment, which only the box's placement reads, with and without a re-run.
+    tree.patch_style(abs, |s| s.justify_self = Some(AlignItems::CENTER));
+    check(&mut tree, root, "justify-self alone");
+    tree.patch_style(abs, |s| s.justify_self = Some(AlignItems::END));
+    tree.patch_style(after, |s| s.size.width = Dimension::length(32.0));
+    check(&mut tree, root, "justify-self with a re-run");
+    tree.patch_style(static_box, |s| s.align_self = Some(AlignItems::CENTER));
+    tree.patch_style(after, |s| s.size.width = Dimension::length(33.0));
+    check(&mut tree, root, "align-self of a box at its static position with a re-run");
+    // Insets, alone and with a re-run.
+    tree.patch_style(abs, |s| s.inset.left = LengthPercentageAuto::length(10.0));
+    check(&mut tree, root, "inset alone");
+    tree.patch_style(abs, |s| s.inset.left = LengthPercentageAuto::length(20.0));
+    tree.patch_style(after, |s| s.size.width = Dimension::length(34.0));
+    check(&mut tree, root, "inset with a re-run");
+    // The box's own answers, through its content.
+    tree.set_context(text, Some(Text(40)));
+    check(&mut tree, root, "content of the box");
+    tree.set_context(static_box, Some(Text(9)));
+    tree.patch_style(after, |s| s.size.width = Dimension::length(35.0));
+    check(&mut tree, root, "content of the static box with a re-run");
+    // The containing block changes: the parent becomes positioned, then static again, and the
+    // boxes placed meanwhile by the parent are placed by the initial containing block again.
+    tree.patch_style(parent, |s| s.position = Position::Relative);
+    check(&mut tree, root, "parent positioned");
+    tree.patch_style(after, |s| s.size.width = Dimension::length(36.0));
+    check(&mut tree, root, "re-run inside the positioned parent");
+    tree.patch_style(parent, |s| s.position = Position::Static);
+    check(&mut tree, root, "parent static");
+    // The root itself, which keeps its record (and the initial containing block's) meanwhile.
+    tree.patch_style(root, |s| s.position = Position::Sticky);
+    check(&mut tree, root, "root sticky");
+    tree.patch_style(after, |s| s.size.width = Dimension::length(36.5));
+    check(&mut tree, root, "re-run inside the sticky root");
+    tree.patch_style(root, |s| s.position = Position::Static);
+    check(&mut tree, root, "root static");
+    // Boxes edited while detached, alone or in a subtree, then put back where they were, with or
+    // without a layout in between.
+    let cases = [(cheap, cheap, false, "edited while detached"), (plain, wrapper, false, "edited in a detached subtree")];
+    for (width, (node, top, between, step)) in [12.0, 14.0, 16.0].into_iter().zip(cases.into_iter().chain([(plain, wrapper, true, "laid out while detached")])) {
+        let at = tree.children(parent).position(|c| c == top).unwrap();
+        tree.remove_child(parent, top);
+        tree.patch_style(node, |s| s.size.width = Dimension::length(width));
+        if between {
+            check(&mut tree, root, "detached");
+        }
+        tree.insert_child_at(parent, at, top);
+        check(&mut tree, root, step);
+    }
+    // An inset, which neither the box's answers nor its static position show, edited in a
+    // subtree detached and put back in one frame.
+    tree.remove_child(parent, wrapper);
+    tree.patch_style(plain, |s| s.inset.top = LengthPercentageAuto::length(9.0));
+    tree.append_child(parent, wrapper);
+    check(&mut tree, root, "inset edited in a detached subtree");
+    // A box of the initial containing block hidden and shown, among others it keeps.
+    tree.patch_style(static_box, |s| s.display = Display::None);
+    check(&mut tree, root, "a box hidden");
+    tree.patch_style(static_box, |s| s.display = Display::Block);
+    check(&mut tree, root, "a box shown");
+    tree.patch_style(plain, |s| s.display = Display::None);
+    check(&mut tree, root, "a plain leaf hidden");
+    tree.patch_style(plain, |s| s.display = Display::Block);
+    check(&mut tree, root, "a plain leaf shown");
+    // The box moves to another parent at the same offset, and to fixed.
+    let other = tree.new_leaf(cephal::Style::DEFAULT);
+    tree.append_child(root, other);
+    tree.remove_child(parent, abs);
+    tree.append_child(other, abs);
+    check(&mut tree, root, "moved to another parent");
+    tree.patch_style(abs, |s| s.position = Position::Fixed);
+    check(&mut tree, root, "made fixed");
+    tree.patch_style(abs, |s| s.position = Position::Absolute);
+    tree.patch_style(after, |s| s.size.width = Dimension::length(37.0));
+    check(&mut tree, root, "absolute again with a re-run");
+    // A grid containing block places a box by its grid lines, which a block parent never reads.
+    let mut grid = cephal::Style::DEFAULT;
+    grid.display = Display::Grid;
+    grid.position = Position::Relative;
+    grid.grid_mut().template_columns = vec![cephal::style::TrackSizingFunction::length(50.0).into(); 3];
+    let mut placed = sized(10.0, 10.0);
+    placed.position = Position::Absolute;
+    placed.grid_column = Line { start: GridPlacement::Line(2), end: GridPlacement::Auto };
+    placed.inset.left = LengthPercentageAuto::length(0.0);
+    let in_grid = tree.new_leaf(placed);
+    let block = tree.new_with_children(cephal::Style::DEFAULT, &[in_grid]);
+    let grid = tree.new_with_children(grid, &[block]);
+    tree.append_child(root, grid);
+    check(&mut tree, root, "a box placed by a grid's lines");
+    tree.patch_style(in_grid, |s| s.grid_column.start = GridPlacement::Line(3));
+    check(&mut tree, root, "its grid column");
+    tree.patch_style(in_grid, |s| s.grid_column.start = GridPlacement::Line(1));
+    tree.patch_style(after, |s| s.size.width = Dimension::length(38.0));
+    check(&mut tree, root, "its grid column with a re-run");
+    // The viewport changes the containing block's geometry.
+    let viewport = Size { width: AvailableSpace::Definite(500.0), height: AvailableSpace::Definite(300.0) };
+    tree.compute_layout_with_measure(root, viewport, measure);
+    check(&mut tree, root, "viewport back after a resize");
+}
+
 /// A hidden subtree laid out hidden again is left alone only while nothing under it changed.
 #[test]
 fn hidden_subtrees_are_zeroed_after_every_edit_below() {

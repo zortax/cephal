@@ -64,6 +64,8 @@ pub struct Scheduler {
     scratch: Vec<(LayoutInput, LayoutOutput, u8)>,
     /// The initial containing block's pass must re-run (see [`Self::take_initial_containing_block`]).
     initial_containing_block: bool,
+    /// The root during [`Self::run`].
+    root: Option<NodeId>,
 }
 
 /// How a node's answers changed, as its parent sees them.
@@ -124,13 +126,24 @@ impl Scheduler {
         }
     }
 
+    /// Marks the containing block `cb` of the out-of-flow `node` for its out-of-flow pass because
+    /// `node`'s answers changed, forgetting the placement `cb`'s record keeps of it (the root's
+    /// record for the initial containing block).
+    fn mark_box_changed<T: Incremental + ?Sized>(&mut self, tree: &mut T, node: NodeId, cb: Option<NodeId>) {
+        if let Some(holder) = cb.or(self.root) {
+            tree.forget_placement(holder, node);
+        }
+        self.mark_containing_block(tree, cb);
+    }
+
     /// Whether the initial containing block's pass must re-run, and forgets it: pass it to
     /// [`crate::compute::compute_root_layout_incremental`] after [`Self::run`].
     pub fn take_initial_containing_block(&mut self) -> bool {
         core::mem::take(&mut self.initial_containing_block)
     }
 
-    /// Marks the boxes claiming the out-of-flow candidates of `bits` that leave `node`.
+    /// Marks the boxes claiming the out-of-flow candidates of `bits` that leave `node`: static
+    /// positions below it may have moved.
     pub fn mark_claiming_blocks<T: Incremental + ?Sized>(&mut self, tree: &mut T, node: NodeId, bits: u8) {
         for bit in [OOF_ABSOLUTE, OOF_FIXED] {
             if bits & bit == 0 {
@@ -149,7 +162,14 @@ impl Scheduler {
     }
 
     /// Recomputes every dirty node bottom-up. Returns whether the root's answer may have changed.
-    pub fn run<T: Incremental + ?Sized>(&mut self, tree: &mut T, _root: NodeId, root_query_changed: bool) -> bool {
+    pub fn run<T: Incremental + ?Sized>(&mut self, tree: &mut T, root: NodeId, root_query_changed: bool) -> bool {
+        self.root = Some(root);
+        let root_changed = self.run_queue(tree, root_query_changed);
+        self.root = None;
+        root_changed
+    }
+
+    fn run_queue<T: Incremental + ?Sized>(&mut self, tree: &mut T, root_query_changed: bool) -> bool {
         let mut root_changed = root_query_changed;
         // Nodes queued with [`OOF_PASS`] whose in-flow overflow must be gathered again.
         let mut inflow_pending = FxHashSet::default();
@@ -189,7 +209,7 @@ impl Scheduler {
                 if placed_by_containing_block {
                     // Only its containing block asks it anything.
                     let cb = tree.containing_block(node);
-                    self.mark_containing_block(tree, cb);
+                    self.mark_box_changed(tree, node, cb);
                 } else {
                     match parent {
                         // The parent's in-flow layout reads a child's overflow only to gather its
@@ -239,7 +259,7 @@ impl Scheduler {
         let (absolute, bits) = if inflow && claims == 0 {
             (Rect::ZERO, old.oof)
         } else {
-            let mut context = tree.absolute_context(node)?.clone();
+            let mut context = tree.take_absolute_context(node)?;
             let result = crate::compute::oof::run_pass(tree, node, &mut context, claims);
             tree.set_absolute_context(node, context);
             result

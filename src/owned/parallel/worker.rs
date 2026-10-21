@@ -167,6 +167,9 @@ impl<Ctx: Send + Sync + 'static, F: SyncMeasureFn<Ctx>> LayoutTree for Worker<'_
             self.log.absolute.push((self.index(node) as u32, None));
         }
     }
+    fn keeps_placements(&self) -> bool {
+        true
+    }
     fn absolute_context(&self, node: NodeId) -> Option<&AbsoluteContext> {
         let i = self.index(node) as u32;
         match self.log.absolute(i) {

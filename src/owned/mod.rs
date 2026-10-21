@@ -287,6 +287,8 @@ impl<Ctx> Tree<Ctx> {
         if self.rounded_valid {
             self.attached.push(child);
         }
+        // The subtree may hold out-of-flow boxes that containing blocks above placed before.
+        self.forget_placements_above(p);
         self.mark_dirty_index(p);
     }
 
@@ -532,6 +534,7 @@ impl<Ctx> Tree<Ctx> {
             && !old_style.position.offsets_in_flow()
             && !old_style.position.is_out_of_flow()
             && same_except_insets(old_style, &style);
+        let position_changed = old_style.position != style.position;
         let old_meta = self.flags[i] & META_MASK;
         let new = self.styles.intern(style);
         self.styles.release(old);
@@ -557,6 +560,13 @@ impl<Ctx> Tree<Ctx> {
                 self.mark_containing_block_of(i);
             }
             StyleEdit::Own => self.mark_dirty_with_parent(i),
+        }
+        // What the out-of-flow passes keep of a box rests on its style; which containing block
+        // holds which box below rests on `position`.
+        if position_changed {
+            self.forget_placements_above(i);
+        } else if out_of_flow && !matches!(edit, StyleEdit::Ignored) {
+            self.forget_box(i);
         }
     }
 
@@ -949,6 +959,44 @@ impl<Ctx> Tree<Ctx> {
     /// The record `node` keeps of out-of-flow boxes below it, from its last layout.
     pub fn absolute_context(&self, node: NodeId) -> Option<&crate::tree::AbsoluteContext> {
         self.absolute_contexts.get(&(self.index(node) as u32))
+    }
+
+    /// Forgets the placement of `node` that the record of node index `i` keeps.
+    pub(crate) fn forget_placement_at(&mut self, i: u32, node: NodeId) {
+        if let Some(context) = self.absolute_contexts.get_mut(&i) {
+            context.placed.forget(node);
+            context.viewport.forget(node);
+        }
+    }
+
+    /// Forgets the placements of node index `i` in the records of all its ancestors, which hold
+    /// every containing block that may have placed it.
+    fn forget_box(&mut self, i: usize) {
+        if self.absolute_contexts.is_empty() {
+            return;
+        }
+        let node = self.id_of(i);
+        let mut at = self.links[i].parent;
+        while at != NONE {
+            self.forget_placement_at(at, node);
+            at = self.links[at as usize].parent;
+        }
+    }
+
+    /// Forgets every placement recorded by node index `i` and its ancestors: which containing
+    /// block holds which box below may have changed.
+    fn forget_placements_above(&mut self, i: usize) {
+        if self.absolute_contexts.is_empty() {
+            return;
+        }
+        let mut at = i as u32;
+        while at != NONE {
+            if let Some(context) = self.absolute_contexts.get_mut(&at) {
+                context.placed.clear();
+                context.viewport.clear();
+            }
+            at = self.links[at as usize].parent;
+        }
     }
 
     /// Cached answers of `node`, for inspection.

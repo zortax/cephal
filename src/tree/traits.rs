@@ -233,6 +233,25 @@ pub trait LayoutTree {
         None
     }
 
+    /// Removes and returns `node`'s record, which the caller stores again; never called while
+    /// speculating. Trees that can move the record out should, rather than clone it.
+    fn take_absolute_context(&mut self, node: NodeId) -> Option<AbsoluteContext> {
+        self.absolute_context(node).cloned()
+    }
+
+    /// Whether out-of-flow passes record what they placed and keep a box's placement when nothing
+    /// it was placed from changed (see [`crate::compute::oof`]). A tree that says so must
+    /// [forget](Self::forget_placement) a box's records whenever its style changes, and every record
+    /// of a box and its ancestors when the box's `position` changes or a subtree is attached below
+    /// it; the scheduler forgets a box's record in its containing block when its answers change.
+    fn keeps_placements(&self) -> bool {
+        false
+    }
+
+    /// Forgets the placement of the out-of-flow `node` that `holder`'s record keeps: in the passes
+    /// `holder` runs as a containing block and, on the root, against the initial containing block.
+    fn forget_placement(&mut self, _holder: NodeId, _node: NodeId) {}
+
     /// Which out-of-flow descendants `node` is the containing block of, as a set of
     /// [`crate::compute::oof::OOF_ABSOLUTE`] and [`crate::compute::oof::OOF_FIXED`]. The default is
     /// CSS's: a positioned box contains absolutely positioned boxes, and only the initial

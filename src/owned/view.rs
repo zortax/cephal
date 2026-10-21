@@ -146,6 +146,20 @@ impl<Ctx, F: MeasureFn<Ctx>, E: Executor<Ctx>, A: TreeSlot<Ctx>> LayoutTree for 
         self.tree.get().absolute_contexts.get(&(self.tree.get().index(node) as u32))
     }
 
+    fn take_absolute_context(&mut self, node: NodeId) -> Option<crate::tree::AbsoluteContext> {
+        let i = self.tree.get().index(node) as u32;
+        self.tree.get_mut().absolute_contexts.remove(&i)
+    }
+
+    fn keeps_placements(&self) -> bool {
+        true
+    }
+
+    fn forget_placement(&mut self, holder: NodeId, node: NodeId) {
+        let i = self.tree.get().index(holder) as u32;
+        self.tree.get_mut().forget_placement_at(i, node);
+    }
+
     fn compute_child_layout(&mut self, node: NodeId, inputs: LayoutInput, block_ctx: Option<&mut BlockContext<'_>>) -> LayoutOutput {
         crate::compute::compute_child_layout(self, node, inputs, block_ctx)
     }
