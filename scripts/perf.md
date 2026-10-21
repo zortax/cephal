@@ -100,7 +100,10 @@ layout asks, and appends them to `target/bench/stats.csv` (`CEPHAL_BENCH_STATS`)
   (`src/compute/flex/fused.rs`) and those that needed the general algorithm, with the reasons
   `flex_miss_*`: `wrap` (`wrap-reverse` or `balance`), `no_plan` (an item's lengths are relative),
   `aspect_ratio`, `auto_margin`, `basis` (`content`, keyword or relative), `size_keyword`,
-  `baseline` and `empty`; `flex_wrap` counts the multi-line runs, fused or not.
+  `baseline` and `empty`; `flex_wrap` counts the multi-line runs, fused or not;
+- `inflow_gathered` and `inflow_fallback`: incremental passes that gathered a container's overflow
+  from its children's stored layouts after a child's answer changed only in its overflow, and those
+  that had to run the container's algorithm instead (scroll containers, `-0.0` contributions).
 
 ## Fast paths
 
