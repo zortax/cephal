@@ -73,6 +73,11 @@ impl<Ctx, F: MeasureFn<Ctx>, E: Executor<Ctx>, A: TreeSlot<Ctx>> LayoutTree for 
         self.tree.get().context_slot[self.tree.get().index(node)] == NONE
     }
 
+    #[inline]
+    fn is_measured_leaf(&self, node: NodeId) -> bool {
+        self.tree.get().context_slot[self.tree.get().index(node)] != NONE
+    }
+
     /// Inlined, so a caller reading part of an empty leaf's answer computes only that part.
     #[inline(always)]
     fn compute_leaf(&mut self, node: NodeId, inputs: LayoutInput, _: Option<&mut BlockContext<'_>>) -> LayoutOutput {

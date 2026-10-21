@@ -146,6 +146,13 @@ pub trait LayoutTree {
         false
     }
 
+    /// Whether a childless `node` is content the host measures, which its display does not change:
+    /// a childless grid is otherwise sized by its tracks.
+    #[inline]
+    fn is_measured_leaf(&self, _node: NodeId) -> bool {
+        false
+    }
+
     /// Overridable leaf algorithm; the default applies the box model around [`LayoutTree::measure`].
     fn compute_leaf(&mut self, node: NodeId, inputs: LayoutInput, _block_ctx: Option<&mut BlockContext<'_>>) -> LayoutOutput {
         crate::compute::leaf::compute_leaf_layout(self, node, inputs)
