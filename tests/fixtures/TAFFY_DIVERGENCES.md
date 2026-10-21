@@ -141,6 +141,16 @@ overflow, is placed as for `flex-start` (css-align-3 §4.3), which in a `wrap-re
 is the bottom: a line taller than the container overflows past its top (Chrome). Taffy keeps it
 at the top.
 
+## Percentages inside a column flex container of content-based width
+
+Census categories `PercentPadding`, `PercentMargins` or `unexplained` (other percentages).
+Fixture `flex_column_width_before_items`.
+
+A column flex container whose width comes from its content (here a flex item that is not
+stretched) has its width found first and its items laid out at it (Chrome), so their percentage
+padding, margins and widths resolve against that width. Taffy measures the container's height
+with its items' percentages resolved against nothing, and keeps that height.
+
 ## The root (both engines, by design)
 
 Not a divergence between the engines, but where both differ from a browser's root element,

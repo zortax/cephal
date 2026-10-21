@@ -1624,6 +1624,98 @@
     </node>
   </expectations>
 </test>
+<test name="flex_column_width_before_items__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="ltr" position="absolute" width="632px">
+      <div display="flex" direction="ltr" position="relative" flex-direction="column">
+        <div display="flex" direction="ltr" position="relative" flex-direction="column" align-self="center">
+          <text display="block" direction="ltr" position="relative" padding-bottom="50%">
+            X​X
+          </text>
+        </div>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="632" height="20">
+      <node x="0" y="0" width="632" height="20">
+        <node x="306" y="0" width="20" height="20">
+          <node x="0" y="0" width="20" height="20"/>
+        </node>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_column_width_before_items__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="rtl" position="absolute" width="632px">
+      <div display="flex" direction="rtl" position="relative" flex-direction="column">
+        <div display="flex" direction="rtl" position="relative" flex-direction="column" align-self="center">
+          <text display="block" direction="rtl" position="relative" padding-bottom="50%">
+            X​X
+          </text>
+        </div>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="632" height="20">
+      <node x="0" y="0" width="632" height="20">
+        <node x="306" y="0" width="20" height="20">
+          <node x="0" y="0" width="20" height="20"/>
+        </node>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_column_width_before_items__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" position="absolute" width="632px">
+      <div display="flex" box-sizing="content-box" direction="ltr" position="relative" flex-direction="column">
+        <div display="flex" box-sizing="content-box" direction="ltr" position="relative" flex-direction="column" align-self="center">
+          <text display="block" box-sizing="content-box" direction="ltr" position="relative" padding-bottom="50%">
+            X​X
+          </text>
+        </div>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="632" height="20">
+      <node x="0" y="0" width="632" height="20">
+        <node x="306" y="0" width="20" height="20">
+          <node x="0" y="0" width="20" height="20"/>
+        </node>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_column_width_before_items__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" position="absolute" width="632px">
+      <div display="flex" box-sizing="content-box" direction="rtl" position="relative" flex-direction="column">
+        <div display="flex" box-sizing="content-box" direction="rtl" position="relative" flex-direction="column" align-self="center">
+          <text display="block" box-sizing="content-box" direction="rtl" position="relative" padding-bottom="50%">
+            X​X
+          </text>
+        </div>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="632" height="20">
+      <node x="0" y="0" width="632" height="20">
+        <node x="306" y="0" width="20" height="20">
+          <node x="0" y="0" width="20" height="20"/>
+        </node>
+      </node>
+    </node>
+  </expectations>
+</test>
 <test name="flex_column_wrap_item_breaks_at_its_size__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
