@@ -74,18 +74,23 @@ pub(super) struct ItemPrep {
     overflow: Point<Overflow>,
     contain: crate::style::Contain,
     scrollbar_width: f32,
+    /// The height came from a content keyword (`fit-content` and the like): not definite for the
+    /// percentages inside (CSS 2.2 §10.5).
+    content_height: bool,
 }
 
 impl ItemPrep {
     /// The final-layout question for this item.
     pub fn request(&self) -> ChildRequest {
-        layout_request(
+        let mut request = layout_request(
             self.node,
             self.size,
             self.grid_area_size.map(Some),
             self.area_minus_margins.map(AvailableSpace::Definite),
             SizingMode::InherentSize,
-        )
+        );
+        request.input.known_dimensions_are_definite.height = !self.content_height;
+        request
     }
 }
 
@@ -222,6 +227,8 @@ pub(super) fn prepare_item<T: LayoutTree + CacheAccess + ?Sized>(
     let Size { width, height } = Size { width, height: inherent_size.height }.maybe_apply_aspect_ratio(aspect_ratio);
     // A content-sized height is found at the used width, min and max sizes applied.
     let used_width = width.maybe_clamp(min_size.width, max_size.width);
+    let content_height = height.is_none()
+        && matches!(keyword_height, Some(Some(SizingKeywordResolution::Measure(_))));
     let height = match height {
         Some(h) => Some(h),
         None => 'h: {
@@ -274,6 +281,7 @@ pub(super) fn prepare_item<T: LayoutTree + CacheAccess + ?Sized>(
         overflow,
         contain,
         scrollbar_width,
+        content_height,
     }
 }
 

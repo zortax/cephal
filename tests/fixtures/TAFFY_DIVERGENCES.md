@@ -195,6 +195,15 @@ Chrome itself does not use the flex base size in a shrink-to-fit width (an empty
 `flex-basis: 197px` in an absolutely positioned row container gives it width 0, while
 `width: max-content` gives it 197px); cephal follows the latter (§9.9.1) in both.
 
+## Percentages inside a grid item of content-keyword height
+
+Census categories `PercentGaps` or `unexplained`. Fixture
+`grid_item_content_keyword_height_indefinite`.
+
+A grid item's `height: fit-content` (or `min-content`, `max-content`) comes from its content, so
+it is not definite for the percentages inside (CSS 2.2 §10.5): percentage heights behave as
+`auto`, a percentage row gap is zero. Taffy resolves them against the height measured.
+
 ## The root (both engines, by design)
 
 Not a divergence between the engines, but where both differ from a browser's root element,

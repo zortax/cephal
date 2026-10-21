@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    A grid item's `height: fit-content` comes from its content, so it is not definite for the
+    percentages inside: its percentage row gap is zero and its items' percentage heights behave
+    as auto
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: grid; width: 157px;">
+  <div style="display: flex; height: fit-content; row-gap: 30%; flex-wrap: wrap;">
+    <div style="display: block; width: 100px; height: 10px;"></div>
+    <div style="display: block; width: 100px; height: 20px;"></div>
+  </div>
+  <div style="display: block; height: fit-content;">
+    <div style="display: block; height: 50%;">X</div>
+    <div style="display: block; height: 30px;"></div>
+  </div>
+</div>
+
+</body>
+</html>
