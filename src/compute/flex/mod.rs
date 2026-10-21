@@ -754,4 +754,16 @@ fn item_known_dimension_definiteness<D: FlexDir>(c: &AlgoConstants<D>, item: &Fl
     Size::TRUE.with_main(dir, main_is_definite).with_cross(dir, cross_is_definite)
 }
 
+/// An item's min or max sizes with the missing axis filled from the other through its aspect
+/// ratio, only where the ratio gives the size of that axis (its own size is automatic).
+#[inline]
+fn transfer_limits(limits: Size<Option<f32>>, item: &FlexItem) -> Size<Option<f32>> {
+    let Some(ratio) = item.aspect_ratio else { return limits };
+    let transferred = limits.maybe_apply_aspect_ratio(Some(ratio));
+    Size {
+        width: if item.size_style.width.is_auto() { transferred.width } else { limits.width },
+        height: if item.size_style.height.is_auto() { transferred.height } else { limits.height },
+    }
+}
+
 crate::compute::scratch::pooled!(FlexItem, FlexLine);

@@ -34,8 +34,8 @@ pub(super) fn determine_flex_base_size<D: FlexDir, T: LayoutTree + CacheAccess +
     for child in items.iter_mut() {
         let style = tree.style(child.node);
         let calc = |id, basis| tree.resolve_calc(id, basis);
-        let transferred_min_size = child.min_size.maybe_apply_aspect_ratio(child.aspect_ratio);
-        let transferred_max_size = child.max_size.maybe_apply_aspect_ratio(child.aspect_ratio);
+        let transferred_min_size = super::transfer_limits(child.min_size, child);
+        let transferred_max_size = super::transfer_limits(child.max_size, child);
 
         let plan = tree.style_plan(child.node);
         // The item's padding and border resolve against the container's inline size on all four
@@ -305,8 +305,8 @@ pub(super) fn indefinite_stretch_cross<D: FlexDir, T: LayoutTree + CacheAccess +
     let mut measured = 0;
     let mut outer = 0.0f32;
     for item in items {
-        let min = item.min_size.maybe_apply_aspect_ratio(item.aspect_ratio).cross(dir);
-        let max = item.max_size.maybe_apply_aspect_ratio(item.aspect_ratio).cross(dir);
+        let min = super::transfer_limits(item.min_size, item).cross(dir);
+        let max = super::transfer_limits(item.max_size, item).cross(dir);
         let padding_border = (item.padding + item.border).cross_axis_sum(dir);
         let inner = match item.size.cross(dir) {
             Some(size) => size,

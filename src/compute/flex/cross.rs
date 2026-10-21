@@ -47,10 +47,16 @@ pub(super) fn determine_hypothetical_cross_size<D: FlexDir, T: LayoutTree + Cach
     let mut pending: Scratch<CrossPending> = Scratch::take();
     for (index, child) in items.iter_mut().enumerate() {
         let padding_border_sum = (child.padding + child.border).cross_axis_sum(dir);
-        let transferred_min_cross = child.min_size.maybe_apply_aspect_ratio(child.aspect_ratio).cross(dir);
-        let transferred_max_cross = child.max_size.maybe_apply_aspect_ratio(child.aspect_ratio).cross(dir);
-        let child_cross =
-            child.size.cross(dir).maybe_clamp(transferred_min_cross, transferred_max_cross).maybe_max(padding_border_sum);
+        let transferred_min_cross = super::transfer_limits(child.min_size, child).cross(dir);
+        let transferred_max_cross = super::transfer_limits(child.max_size, child).cross(dir);
+        // A cross size the aspect ratio gave from the item's own main size is worked out below.
+        let ratio_given = child.aspect_ratio.is_some() && child.size_style.cross(dir).is_auto();
+        let child_cross = child
+            .size
+            .cross(dir)
+            .filter(|_| !ratio_given)
+            .maybe_clamp(transferred_min_cross, transferred_max_cross)
+            .maybe_max(padding_border_sum);
         let known = child_cross.or_else(|| {
             // A stretched item in a column whose width was found first takes that width, as it
             // does in the final layout, and needs no measurement.
@@ -73,7 +79,9 @@ pub(super) fn determine_hypothetical_cross_size<D: FlexDir, T: LayoutTree + Cach
         // An automatic cross size follows the used main size through the aspect ratio; with an
         // automatic minimum, the content can make it larger (css-sizing-4 §5.2.1), unless the
         // item scrolls.
-        let ratio_cross = child.aspect_ratio.filter(|_| child.size_style.cross(dir).is_auto()).map(|ratio| {
+        let cross_style = child.size_style.cross(dir);
+        let content_cross = cross_style.is_auto() || (cross_style.is_sizing_keyword() && !cross_style.is_stretch());
+        let ratio_cross = child.aspect_ratio.filter(|_| content_cross).map(|ratio| {
             let main = child.target_size.main(dir);
             (if c.is_row { main / ratio } else { main * ratio }).maybe_clamp(transferred_min_cross, transferred_max_cross).max(padding_border_sum)
         });

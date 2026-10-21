@@ -2575,10 +2575,21 @@
           X​X​X​X​X​X​X​X​X​X​X​X​X​X​X​X​X​X​X​X
         </text>
       </div>
+      <div display="flex" direction="ltr" position="relative" width="16px">
+        <text display="block" direction="ltr" position="relative" width="59%" aspect-ratio="2">
+          X
+        </text>
+      </div>
+      <div display="flex" direction="ltr" position="relative" width="156px">
+        <div display="block" direction="ltr" position="relative" overflow-y="scroll" scrollbar-width="15" height="fit-content" aspect-ratio="0.5"/>
+      </div>
+      <div display="flex" direction="ltr" position="relative" width="fit-content">
+        <div display="block" direction="ltr" position="relative" height="84px" max-width="20px" aspect-ratio="1"/>
+      </div>
     </div>
   </input>
   <expectations>
-    <node x="0" y="0" width="300" height="172">
+    <node x="0" y="0" width="300" height="296">
       <node x="0" y="0" width="26" height="52">
         <node x="0" y="0" width="26" height="52"/>
       </node>
@@ -2587,6 +2598,15 @@
       </node>
       <node x="0" y="72" width="26" height="100">
         <node x="0" y="0" width="26" height="100"/>
+      </node>
+      <node x="0" y="172" width="16" height="10">
+        <node x="0" y="0" width="9" height="10"/>
+      </node>
+      <node x="0" y="182" width="156" height="30">
+        <node x="0" y="0" width="15" height="30" scroll_width="0" scroll_height="0"/>
+      </node>
+      <node x="0" y="212" width="20" height="84">
+        <node x="0" y="0" width="20" height="84"/>
       </node>
     </node>
   </expectations>
@@ -2606,10 +2626,21 @@
           X​X​X​X​X​X​X​X​X​X​X​X​X​X​X​X​X​X​X​X
         </text>
       </div>
+      <div display="flex" direction="rtl" position="relative" width="16px">
+        <text display="block" direction="rtl" position="relative" width="59%" aspect-ratio="2">
+          X
+        </text>
+      </div>
+      <div display="flex" direction="rtl" position="relative" width="156px">
+        <div display="block" direction="rtl" position="relative" overflow-y="scroll" scrollbar-width="15" height="fit-content" aspect-ratio="0.5"/>
+      </div>
+      <div display="flex" direction="rtl" position="relative" width="fit-content">
+        <div display="block" direction="rtl" position="relative" height="84px" max-width="20px" aspect-ratio="1"/>
+      </div>
     </div>
   </input>
   <expectations>
-    <node x="0" y="0" width="300" height="172">
+    <node x="0" y="0" width="300" height="296">
       <node x="274" y="0" width="26" height="52">
         <node x="0" y="0" width="26" height="52"/>
       </node>
@@ -2618,6 +2649,15 @@
       </node>
       <node x="274" y="72" width="26" height="100">
         <node x="0" y="0" width="26" height="100"/>
+      </node>
+      <node x="284" y="172" width="16" height="10">
+        <node x="7" y="0" width="9" height="10"/>
+      </node>
+      <node x="144" y="182" width="156" height="30">
+        <node x="141" y="0" width="15" height="30" scroll_width="0" scroll_height="0"/>
+      </node>
+      <node x="280" y="212" width="20" height="84">
+        <node x="0" y="0" width="20" height="84"/>
       </node>
     </node>
   </expectations>
@@ -2637,10 +2677,21 @@
           X​X​X​X​X​X​X​X​X​X​X​X​X​X​X​X​X​X​X​X
         </text>
       </div>
+      <div display="flex" box-sizing="content-box" direction="ltr" position="relative" width="16px">
+        <text display="block" box-sizing="content-box" direction="ltr" position="relative" width="59%" aspect-ratio="2">
+          X
+        </text>
+      </div>
+      <div display="flex" box-sizing="content-box" direction="ltr" position="relative" width="156px">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" overflow-y="scroll" scrollbar-width="15" height="fit-content" aspect-ratio="0.5"/>
+      </div>
+      <div display="flex" box-sizing="content-box" direction="ltr" position="relative" width="fit-content">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="84px" max-width="20px" aspect-ratio="1"/>
+      </div>
     </div>
   </input>
   <expectations>
-    <node x="0" y="0" width="300" height="172">
+    <node x="0" y="0" width="300" height="296">
       <node x="0" y="0" width="26" height="52">
         <node x="0" y="0" width="26" height="52"/>
       </node>
@@ -2649,6 +2700,15 @@
       </node>
       <node x="0" y="72" width="26" height="100">
         <node x="0" y="0" width="26" height="100"/>
+      </node>
+      <node x="0" y="172" width="16" height="10">
+        <node x="0" y="0" width="9" height="10"/>
+      </node>
+      <node x="0" y="182" width="156" height="30">
+        <node x="0" y="0" width="15" height="30" scroll_width="0" scroll_height="0"/>
+      </node>
+      <node x="0" y="212" width="20" height="84">
+        <node x="0" y="0" width="20" height="84"/>
       </node>
     </node>
   </expectations>
@@ -2668,10 +2728,21 @@
           X​X​X​X​X​X​X​X​X​X​X​X​X​X​X​X​X​X​X​X
         </text>
       </div>
+      <div display="flex" box-sizing="content-box" direction="rtl" position="relative" width="16px">
+        <text display="block" box-sizing="content-box" direction="rtl" position="relative" width="59%" aspect-ratio="2">
+          X
+        </text>
+      </div>
+      <div display="flex" box-sizing="content-box" direction="rtl" position="relative" width="156px">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" overflow-y="scroll" scrollbar-width="15" height="fit-content" aspect-ratio="0.5"/>
+      </div>
+      <div display="flex" box-sizing="content-box" direction="rtl" position="relative" width="fit-content">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="84px" max-width="20px" aspect-ratio="1"/>
+      </div>
     </div>
   </input>
   <expectations>
-    <node x="0" y="0" width="300" height="172">
+    <node x="0" y="0" width="300" height="296">
       <node x="274" y="0" width="26" height="52">
         <node x="0" y="0" width="26" height="52"/>
       </node>
@@ -2680,6 +2751,15 @@
       </node>
       <node x="274" y="72" width="26" height="100">
         <node x="0" y="0" width="26" height="100"/>
+      </node>
+      <node x="284" y="172" width="16" height="10">
+        <node x="7" y="0" width="9" height="10"/>
+      </node>
+      <node x="144" y="182" width="156" height="30">
+        <node x="141" y="0" width="15" height="30" scroll_width="0" scroll_height="0"/>
+      </node>
+      <node x="280" y="212" width="20" height="84">
+        <node x="0" y="0" width="20" height="84"/>
       </node>
     </node>
   </expectations>
