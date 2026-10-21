@@ -500,8 +500,14 @@ fn build(w: &Workload, size: usize, o: &Options, csv: &mut Csv) {
 fn sites(tree: &mut Tree<Text>, root: NodeId, scenario: Scenario) -> Vec<NodeId> {
     const SITES: usize = 8;
     match scenario {
-        Scenario::EditText | Scenario::HoverWidth | Scenario::AlignSelf | Scenario::RelativeInset => {
-            workloads::spread(&workloads::text_leaves(tree, root), SITES)
+        Scenario::EditText | Scenario::HoverWidth | Scenario::AlignSelf => workloads::spread(&workloads::text_leaves(tree, root), SITES),
+        // Insets move only relatively positioned boxes; a static site would make the edit a no-op.
+        Scenario::RelativeInset => {
+            let sites = workloads::spread(&workloads::text_leaves(tree, root), SITES);
+            for &n in &sites {
+                tree.patch_style(n, |s| s.position = cephal::style::Position::Relative);
+            }
+            sites
         }
         Scenario::ToggleDisplay | Scenario::InsertRemove => workloads::containers(tree, root, SITES),
         Scenario::MoveAbsolute => {
