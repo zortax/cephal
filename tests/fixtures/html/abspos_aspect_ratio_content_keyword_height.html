@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    An absolutely positioned box with an aspect ratio and a content-based height keyword takes
+    its height from its width (stretched between its insets) through the ratio
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; position: relative; width: 298px; height: 300px;">
+  <div style="display: block; position: absolute; height: fit-content; aspect-ratio: 1; left: 0%; right: 9%;"></div>
+  <div style="display: block; position: absolute; height: max-content; aspect-ratio: 2; left: 10px; right: 188px;">X</div>
+</div>
+
+</body>
+</html>

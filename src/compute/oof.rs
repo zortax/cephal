@@ -693,6 +693,12 @@ fn layout_oof_box<T: LayoutTree + CacheAccess + ?Sized>(
     }
     let available_space = available_space.maybe_clamp(min_size, max_size).map(AvailableSpace::Definite);
 
+    // With an aspect ratio, a content-based height keyword behaves as `auto`: the ratio gives it
+    // (as Chrome).
+    let mut size_style = size_style;
+    if aspect_ratio.is_some() && size_style.height.is_sizing_keyword() && !size_style.height.is_stretch() {
+        size_style.height = Dimension::AUTO;
+    }
     // Sizing keywords: an explicitly sized axis takes precedence over the automatic size. A
     // content-sized height waits for the automatic width (CSS 2.2 §10.3.7 before §10.6.4).
     let defer_height = size_style.height.is_sizing_keyword()

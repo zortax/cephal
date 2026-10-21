@@ -48,7 +48,7 @@
 92 unexplained
 93 PercentPadding+PercentMargins+GridItemMargins+GridItemPaddingBorder+LeafInsets
 94 [RootSizingKeywords]
-96 [InitialContainingBlockGridPlacement]
+96 unexplained
 97 unexplained
 98 unexplained
 99 unexplained
@@ -114,7 +114,7 @@
 199 [BlockAlignContent]
 201 [PercentGaps]
 203 FlexWrap+FlexCrossAlignment+LeafInsets
-206 [PercentTracks]
+206 RootSizingKeywords+Absolute+PercentTracks
 207 unexplained
 208 unexplained
 209 unexplained
@@ -138,6 +138,7 @@
 237 unexplained
 240 unexplained
 241 [BlockAlignContent]
+244 Absolute+BlockAlignContent+FlexCrossAlignment
 246 [RootMinMaxWidth]
 247 [RootMinMaxWidth]
 248 unexplained
@@ -145,12 +146,12 @@
 253 [RootSizingKeywords]
 254 unexplained
 255 unexplained
-257 FlexWrap+FlexCrossAlignment+LeafInsets
+257 Absolute+FlexWrap+FlexCrossAlignment+LeafInsets
 260 unexplained
 261 unexplained
 264 RootSizingKeywords+LeafInsets
 266 [RootSizingKeywords]
-268 [PercentMargins,PercentTracks,GridItemMargins]
+268 Absolute+PercentMargins+BlockAlignContent
 269 RootSizingKeywords+PercentMargins
 270 [Absolute,InitialContainingBlockGridPlacement]
 272 [RootMinMaxWidth,SpaceBetween]
@@ -295,7 +296,7 @@
 514 unexplained
 515 unexplained
 516 unexplained
-518 RootSizingKeywords+FlexWrap+LeafInsets
+518 RootSizingKeywords+Absolute+FlexWrap+LeafInsets
 519 unexplained
 522 FlexWrap+LeafInsets
 523 unexplained
@@ -324,7 +325,7 @@
 560 unexplained
 561 RootSizingKeywords+FlexWrap+FlexCrossAlignment
 562 unexplained
-563 [Absolute,InitialContainingBlockGridPlacement]
+563 [Absolute]
 565 [SpaceBetween]
 566 unexplained
 567 [RootMinMaxWidth]
@@ -348,7 +349,7 @@
 595 Positioned+PercentPadding
 598 [BlockAlignContent]
 600 unexplained
-601 [PercentPadding,LeafInsets]
+601 GridItemPaddingBorder+LeafInsets
 602 unexplained
 605 [PercentPadding]
 608 unexplained
@@ -507,7 +508,7 @@
 847 [WrapReverse,FlexWrap]
 848 [PercentMargins]
 852 [PercentTracks]
-853 [PercentMargins]
+853 RootMinMaxWidth+Absolute+PercentMargins
 854 unexplained
 855 [RootMinMaxWidth,GridItemPaddingBorder]
 856 unexplained
