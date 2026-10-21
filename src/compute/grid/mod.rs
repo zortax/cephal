@@ -34,7 +34,28 @@ use crate::tree::{
     LayoutTree, NodeId, RequestedAxis, RunMode, SizingMode,
 };
 
-pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, node: NodeId, inputs: LayoutInput) -> LayoutOutput {
+pub fn compute_grid_layout<T: LayoutTree + CacheAccess + ?Sized>(tree: &mut T, node: NodeId, mut inputs: LayoutInput) -> LayoutOutput {
+    // A grid of automatic width in less definite space than its content wants is shrink-to-fit
+    // (CSS 2.2 §10.3.5): as wide as the space unless its min-content width is wider.
+    if let (None, AvailableSpace::Definite(space)) = (inputs.known_dimensions.width, inputs.available_space.width) {
+        let style = tree.style(node);
+        if style.size.width.is_auto() && style.aspect_ratio.is_none() {
+            let content_width = |tree: &mut T, available: AvailableSpace| {
+                tree.measure_child_size(
+                    node,
+                    Size { width: None, height: inputs.known_dimensions.height },
+                    inputs.parent_size,
+                    Size { width: available, height: inputs.available_space.height },
+                    inputs.sizing_mode,
+                    AbsoluteAxis::Horizontal,
+                    inputs.vertical_margins_are_collapsible,
+                )
+            };
+            if content_width(tree, AvailableSpace::MaxContent) > space {
+                inputs.known_dimensions.width = Some(space.max(content_width(tree, AvailableSpace::MinContent)));
+            }
+        }
+    }
     let LayoutInput { known_dimensions, parent_size, mut available_space, run_mode, .. } = inputs;
     // The min-content block size equals the max-content block size (CSS Sizing 3 §5.1). Rows sized
     // under a min-content constraint get no free space, so rows of scroll-container items would

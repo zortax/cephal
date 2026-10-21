@@ -204,6 +204,14 @@ A grid item's `height: fit-content` (or `min-content`, `max-content`) comes from
 it is not definite for the percentages inside (CSS 2.2 §10.5): percentage heights behave as
 `auto`, a percentage row gap is zero. Taffy resolves them against the height measured.
 
+## Shrink-to-fit width of a grid container
+
+Census category `unexplained`. Fixture `grid_shrink_to_fit`.
+
+A grid container of automatic width in shrink-to-fit space (absolutely positioned, a
+`fit-content` parent) is no wider than the space unless its min-content width is (CSS 2.2
+§10.3.5); taffy gives it its max-content width.
+
 ## The root (both engines, by design)
 
 Not a divergence between the engines, but where both differ from a browser's root element,

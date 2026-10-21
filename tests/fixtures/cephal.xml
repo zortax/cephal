@@ -3688,6 +3688,122 @@
     </node>
   </expectations>
 </test>
+<test name="grid_shrink_to_fit__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="ltr" position="relative" width="54px" height="100px">
+      <div display="grid" direction="ltr" position="absolute" grid-template-columns="3fr">
+        <text display="block" direction="ltr" position="relative" margin-right="14px">
+          X​X​X​X​X
+        </text>
+      </div>
+      <div display="grid" direction="ltr" position="absolute" top="40px" grid-template-columns="30px 3fr">
+        <div display="block" direction="ltr" position="relative" width="40px"/>
+        <text display="block" direction="ltr" position="relative">
+          X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="54" height="100">
+      <node x="0" y="0" width="54" height="20" resolved-rows="20px" resolved-columns="54px">
+        <node x="0" y="0" width="40" height="20"/>
+      </node>
+      <node x="0" y="40" width="40" height="10" resolved-rows="10px" resolved-columns="30px 10px">
+        <node x="0" y="0" width="40" height="10"/>
+        <node x="30" y="0" width="10" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="grid_shrink_to_fit__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="rtl" position="relative" width="54px" height="100px">
+      <div display="grid" direction="rtl" position="absolute" grid-template-columns="3fr">
+        <text display="block" direction="rtl" position="relative" margin-right="14px">
+          X​X​X​X​X
+        </text>
+      </div>
+      <div display="grid" direction="rtl" position="absolute" top="40px" grid-template-columns="30px 3fr">
+        <div display="block" direction="rtl" position="relative" width="40px"/>
+        <text display="block" direction="rtl" position="relative">
+          X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="54" height="100">
+      <node x="0" y="0" width="54" height="20" resolved-rows="20px" resolved-columns="54px">
+        <node x="0" y="0" width="40" height="20"/>
+      </node>
+      <node x="14" y="40" width="40" height="10" resolved-rows="10px" resolved-columns="30px 10px">
+        <node x="0" y="0" width="40" height="10"/>
+        <node x="0" y="0" width="10" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="grid_shrink_to_fit__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" position="relative" width="54px" height="100px">
+      <div display="grid" box-sizing="content-box" direction="ltr" position="absolute" grid-template-columns="3fr">
+        <text display="block" box-sizing="content-box" direction="ltr" position="relative" margin-right="14px">
+          X​X​X​X​X
+        </text>
+      </div>
+      <div display="grid" box-sizing="content-box" direction="ltr" position="absolute" top="40px" grid-template-columns="30px 3fr">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" width="40px"/>
+        <text display="block" box-sizing="content-box" direction="ltr" position="relative">
+          X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="54" height="100">
+      <node x="0" y="0" width="54" height="20" resolved-rows="20px" resolved-columns="54px">
+        <node x="0" y="0" width="40" height="20"/>
+      </node>
+      <node x="0" y="40" width="40" height="10" resolved-rows="10px" resolved-columns="30px 10px">
+        <node x="0" y="0" width="40" height="10"/>
+        <node x="30" y="0" width="10" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="grid_shrink_to_fit__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" position="relative" width="54px" height="100px">
+      <div display="grid" box-sizing="content-box" direction="rtl" position="absolute" grid-template-columns="3fr">
+        <text display="block" box-sizing="content-box" direction="rtl" position="relative" margin-right="14px">
+          X​X​X​X​X
+        </text>
+      </div>
+      <div display="grid" box-sizing="content-box" direction="rtl" position="absolute" top="40px" grid-template-columns="30px 3fr">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" width="40px"/>
+        <text display="block" box-sizing="content-box" direction="rtl" position="relative">
+          X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="54" height="100">
+      <node x="0" y="0" width="54" height="20" resolved-rows="20px" resolved-columns="54px">
+        <node x="0" y="0" width="40" height="20"/>
+      </node>
+      <node x="14" y="40" width="40" height="10" resolved-rows="10px" resolved-columns="30px 10px">
+        <node x="0" y="0" width="40" height="10"/>
+        <node x="0" y="0" width="10" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
 <test name="leaf_known_width_is_border_box__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
