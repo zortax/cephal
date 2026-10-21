@@ -12,6 +12,9 @@
 #include "clay.h"
 #include "tree.h"
 
+/* CEPHAL_BENCH_READ: read every box inside the timed frame, as the Rust suite does. */
+static bool g_read;
+
 static Clay_Dimensions clay_measure_text(Clay_StringSlice text, Clay_TextElementConfig *config, void *user) {
     (void)text;
     (void)config;
@@ -74,6 +77,8 @@ static const char *declare(const Tree *t, Clay_ElementDeclaration *decls) {
         Clay_ElementDeclaration *d = &decls[i];
         memset(d, 0, sizeof *d);
         d->id = Clay__HashString(CLAY_STRING("n"), (uint32_t)i, 0);
+        /* A box Clay reports through a render command, so timed reads read every box. */
+        if (g_read) d->backgroundColor = (Clay_Color){255, 255, 255, 255};
         if (n->grid) return "grid";
         if (n->text) return "text";
         if (n->child_count > 0 && strcmp(n->display, "flex") != 0) return "non-flex container";
@@ -144,7 +149,14 @@ static void frame(const Tree *t, const Clay_ElementDeclaration *decls, int *stac
             at = top > 0 ? t->nodes[done].next_sibling : -1;
         }
     }
-    Clay_EndLayout();
+    Clay_RenderCommandArray commands = Clay_EndLayout();
+    /* Under CEPHAL_BENCH_READ, read every box as the Rust suite reads every layout. */
+    if (g_read) {
+        float sum = 0;
+        for (int32_t i = 0; i < commands.length; i++) sum += commands.internalArray[i].boundingBox.x;
+        volatile float sink = sum;
+        (void)sink;
+    }
 }
 
 static void run(const Tree *t, double secs, FILE *csv) {
@@ -207,6 +219,7 @@ static void run(const Tree *t, double secs, FILE *csv) {
 }
 
 int main(int argc, char **argv) {
+    g_read = getenv("CEPHAL_BENCH_READ") != NULL;
     double secs = 1.0;
     FILE *csv = NULL;
     for (int i = 1; i < argc; i++) {

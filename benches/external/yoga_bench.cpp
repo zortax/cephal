@@ -168,6 +168,18 @@ static void layout(const Tree &, YGNodeRef root, float width) {
 
 static float viewport_width(const Tree &t) { return isnan(t.viewport[0]) ? YGUndefined : t.viewport[0]; }
 
+// Reads every node's position, as the Rust suite does under CEPHAL_BENCH_READ, so the cost of
+// getting layouts out of the engine is timed alike.
+static bool g_read = getenv("CEPHAL_BENCH_READ") != nullptr;
+
+static void read_all(const std::vector<YGNodeRef> &nodes) {
+    if (!g_read) return;
+    float sum = 0;
+    for (YGNodeRef y : nodes) sum += YGNodeLayoutGetLeft(y);
+    volatile float sink = sum;
+    (void)sink;
+}
+
 static void run(const Tree &t, double secs, bool rounding, FILE *csv) {
     std::string why = unsupported(t);
     if (!why.empty()) {
@@ -215,6 +227,7 @@ static void run(const Tree &t, double secs, bool rounding, FILE *csv) {
         }
         double start = now_ns();
         layout(t, warm.root, viewport_width(t));
+        read_all(warm.nodes);
         double ns = now_ns() - start;
         if (warmup >= 3) samples.push_back(ns);
     }
@@ -276,6 +289,7 @@ static void run(const Tree &t, double secs, bool rounding, FILE *csv) {
                 w = (isnan(t.viewport[0]) ? 1000.0f : t.viewport[0]) + (on ? 100.0f : 0.0f);
             }
             layout(t, c.root, w);
+            read_all(c.nodes);
             double ns = now_ns() - start;
             if (frame > 3) frames.push_back(ns);
         }

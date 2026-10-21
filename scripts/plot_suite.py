@@ -216,8 +216,10 @@ def overview_heatmap(rows, meta, out):
     for i, w in enumerate(order):
         starts.setdefault(group_of(next(iter(c[(w, rep[w])].values()))["tags"]), []).append(i)
     for g, idx in starts.items():
-        ax.annotate(group_label(g), xy=(1.01, (idx[0] + idx[-1]) / 2), xycoords=("axes fraction", "data"), rotation=-90,
-                    va="center", ha="left", fontsize=8, color="#52514e", annotation_clip=False)
+        # A group of a few rows has no room for its name along the edge; write it across.
+        tall = len(idx) >= 4
+        ax.annotate(group_label(g), xy=(1.01, (idx[0] + idx[-1]) / 2), xycoords=("axes fraction", "data"), rotation=-90 if tall else 0,
+                    va="center", ha="left", fontsize=8 if tall else 6.5, color="#52514e", annotation_clip=False)
     sm = plt.cm.ScalarMappable(cmap=cmap, norm=TwoSlopeNorm(vcenter=0, vmin=-lim, vmax=lim))
     cb = fig.colorbar(sm, ax=ax, fraction=0.04, pad=0.09)
     cb.set_label("time relative to cephal (log scale)")
@@ -357,9 +359,10 @@ def fastpath_pairs(rows, meta, out):
         ax.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
         ax.grid(True, alpha=0.3)
         ax.set_ylabel("ns/node, cold")
-        ax.set_title(f"{name}: taking the path (bold) vs. missing it", fontsize=9)
+        ax.set_title(name, fontsize=9)
         ax.legend(fontsize=7)
-    fig.suptitle("what each fast path is worth: one property changes, labels give the cost relative to the path", fontsize=10)
+    fig.suptitle("what each fast path is worth: the workload in bold takes the path, each other one misses it by one property;\n"
+                 "labels give the cost relative to the path", fontsize=10)
     fig.tight_layout(rect=(0, 0.015, 1, 0.95))
     footer(fig, meta)
     path = out / "fastpath_pairs.png"
@@ -375,7 +378,7 @@ def incremental_frames(rows, meta, out):
         return None
     scenarios = sorted({r["scenario"] for r in inc}, key=lambda s: ["edit_text", "hover_width", "align_self", "relative_inset", "move_absolute", "toggle_display", "insert_remove", "resize_root", "idle"].index(s) if s in ["edit_text", "hover_width", "align_self", "relative_inset", "move_absolute", "toggle_display", "insert_remove", "resize_root", "idle"] else 99)
     workloads = sorted({r["workload"] for r in inc})
-    styles = ["-", "--", ":", "-."]
+    styles = ["-", "--", ":", "-.", (0, (5, 1, 1, 1, 1, 1)), (0, (1, 3))]
     cols = 3
     nrows = math.ceil((len(scenarios) + 1) / cols)
     fig, axes = plt.subplots(nrows, cols, figsize=(5.2 * cols, 3.6 * nrows), squeeze=False)
