@@ -19,6 +19,14 @@ its minimum size, so it is floored the same way. Taffy takes a definite preferre
 `width: 2px` with `padding-left: 10px` as a minimum contribution of 2px, and so sizes an
 `auto`-minimum track smaller than the item.
 
+## A block's flex or grid child below its padding and border
+
+Census category `unexplained`. Fixture `block_child_size_floored_by_padding_border`.
+
+The same floor (CSS 2.2 §10.2) for a block container's flex and grid children whose max-width or
+max-height clamps their size below their padding and border: taffy gives the flex container the
+clamped size.
+
 ## A measured leaf of known size measured at its border-box size
 
 Census category `LeafInsets`. Fixture `leaf_known_width_is_border_box`.
@@ -220,6 +228,16 @@ A flex item with an aspect ratio and an automatic cross size takes its cross siz
 main size through the ratio, or from its content where that is larger (its automatic minimum,
 css-sizing-4 §5.2.1). Taffy measures the content only, so an empty item of `aspect-ratio: 0.5`
 grown to 26px is 0px tall instead of 52px.
+
+## Content taller than a block's aspect-ratio height
+
+Census category `unexplained`. Fixture `block_aspect_ratio_automatic_minimum`.
+
+The automatic minimum height of a box whose height comes from its width through `aspect-ratio`
+is its content height, capped by its max-height, unless it is a scroll container or has a
+min-height (css-sizing-4 §5.2.1). Min and max sizes transfer through the ratio only to the axis
+the ratio sizes, so a definite height stays when max-width narrows the box. Taffy keeps the
+ratio's height in both cases.
 
 ## The root (both engines, by design)
 

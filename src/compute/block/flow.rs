@@ -268,6 +268,8 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
                 .map_width(|w| Some(w.or(keyword_width).unwrap_or(stretch_width).maybe_clamp(item.min_size.width, item.max_size.width)))
                 .map_height(|h| h.or(keyword_height))
                 .maybe_clamp(item.min_size, item.max_size)
+                // The border box never gets smaller than the padding and border.
+                .maybe_max(item.padding_border_sum.map(Some))
         };
 
         let mut inputs = LayoutInput {

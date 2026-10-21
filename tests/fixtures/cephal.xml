@@ -1288,6 +1288,122 @@
     </node>
   </expectations>
 </test>
+<test name="block_child_size_floored_by_padding_border__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="ltr" position="absolute" width="362px">
+      <div display="flex" direction="ltr" position="relative" max-width="1px" padding-right="7.000000000000001%">
+        <div display="block" direction="ltr" position="relative"/>
+      </div>
+      <div display="flex" direction="ltr" position="relative" flex-direction="column" height="66px" max-height="0px" padding-bottom="8px">
+        <div display="block" direction="ltr" position="relative"/>
+      </div>
+      <div display="grid" direction="ltr" position="relative" max-width="2px" border-left="6px">
+        <div display="block" direction="ltr" position="relative" height="5px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="362" height="13">
+      <node x="0" y="0" width="25" height="0">
+        <node x="0" y="0" width="0" height="0"/>
+      </node>
+      <node x="0" y="0" width="362" height="8">
+        <node x="0" y="0" width="362" height="0"/>
+      </node>
+      <node x="0" y="8" width="6" height="5" resolved-rows="5px" resolved-columns="0px">
+        <node x="6" y="0" width="0" height="5"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="block_child_size_floored_by_padding_border__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="rtl" position="absolute" width="362px">
+      <div display="flex" direction="rtl" position="relative" max-width="1px" padding-right="7.000000000000001%">
+        <div display="block" direction="rtl" position="relative"/>
+      </div>
+      <div display="flex" direction="rtl" position="relative" flex-direction="column" height="66px" max-height="0px" padding-bottom="8px">
+        <div display="block" direction="rtl" position="relative"/>
+      </div>
+      <div display="grid" direction="rtl" position="relative" max-width="2px" border-left="6px">
+        <div display="block" direction="rtl" position="relative" height="5px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="362" height="13">
+      <node x="337" y="0" width="25" height="0">
+        <node x="0" y="0" width="0" height="0"/>
+      </node>
+      <node x="0" y="0" width="362" height="8">
+        <node x="0" y="0" width="362" height="0"/>
+      </node>
+      <node x="356" y="8" width="6" height="5" resolved-rows="5px" resolved-columns="0px">
+        <node x="6" y="0" width="0" height="5"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="block_child_size_floored_by_padding_border__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" position="absolute" width="362px">
+      <div display="flex" box-sizing="content-box" direction="ltr" position="relative" max-width="1px" padding-right="7.000000000000001%">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative"/>
+      </div>
+      <div display="flex" box-sizing="content-box" direction="ltr" position="relative" flex-direction="column" height="66px" max-height="0px" padding-bottom="8px">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative"/>
+      </div>
+      <div display="grid" box-sizing="content-box" direction="ltr" position="relative" max-width="2px" border-left="6px">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="5px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="362" height="13">
+      <node x="0" y="0" width="26" height="0">
+        <node x="0" y="0" width="0" height="0"/>
+      </node>
+      <node x="0" y="0" width="362" height="8">
+        <node x="0" y="0" width="362" height="0"/>
+      </node>
+      <node x="0" y="8" width="8" height="5" resolved-rows="5px" resolved-columns="2px">
+        <node x="6" y="0" width="2" height="5"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="block_child_size_floored_by_padding_border__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" position="absolute" width="362px">
+      <div display="flex" box-sizing="content-box" direction="rtl" position="relative" max-width="1px" padding-right="7.000000000000001%">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative"/>
+      </div>
+      <div display="flex" box-sizing="content-box" direction="rtl" position="relative" flex-direction="column" height="66px" max-height="0px" padding-bottom="8px">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative"/>
+      </div>
+      <div display="grid" box-sizing="content-box" direction="rtl" position="relative" max-width="2px" border-left="6px">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="5px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="362" height="13">
+      <node x="336" y="0" width="26" height="0">
+        <node x="1" y="0" width="0" height="0"/>
+      </node>
+      <node x="0" y="0" width="362" height="8">
+        <node x="0" y="0" width="362" height="0"/>
+      </node>
+      <node x="354" y="8" width="8" height="5" resolved-rows="5px" resolved-columns="2px">
+        <node x="6" y="0" width="2" height="5"/>
+      </node>
+    </node>
+  </expectations>
+</test>
 <test name="block_intrinsic_width_percentage_margins__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
