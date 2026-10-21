@@ -390,11 +390,8 @@ fn incremental_matches_cold_layout() {
 /// Edits that often change answers only in their overflow (relative insets, text outgrowing fixed
 /// boxes), under containers of both directions, clipped and contained ones, flow roots and floats,
 /// which the shared random styles leave out. Floated text is asked speculatively for its size
-/// (`speculate`), so its parent depends on answers its cache does not record.
-///
-/// Floats are only leaves of flow roots whose children are all leaves: a block container beside a
-/// float that changes size can still reuse an answer cached under the same float count
-/// (`BlockContext::key`), a known gap this test leaves out.
+/// (`speculate`), so its parent depends on answers its cache does not record. Floats sit beside
+/// block containers too, whose answers depend on the floats' geometry.
 #[test]
 fn overflow_edits_match_cold_layout() {
     use cephal::style::{Contain, Direction, Float, LengthPercentage, Overflow};
@@ -410,14 +407,14 @@ fn overflow_edits_match_cold_layout() {
         // Parents come first, so a leaf sees whether its parent became a flow root.
         for &n in &nodes {
             let container = tree.child_count(n) > 0;
-            let in_flow_root = tree.parent(n).is_some_and(|p| tree.style(p).display == Display::FlowRoot && tree.children(p).all(|c| tree.child_count(c) == 0));
+            let in_flow_root = tree.parent(n).is_some_and(|p| tree.style(p).display == Display::FlowRoot);
             let (rtl, float, clip, contain, border, flow_root, relative) =
                 (rng.chance(1, 3), rng.below(3), rng.chance(1, 10), rng.below(12), rng.chance(1, 8), rng.chance(1, 2), rng.chance(1, 3));
             tree.patch_style(n, |s| {
                 if rtl {
                     s.direction = Direction::Rtl;
                 }
-                if in_flow_root && !container && !s.position.is_out_of_flow() {
+                if in_flow_root && !s.position.is_out_of_flow() {
                     s.float = match float {
                         0 => Float::Left,
                         1 => Float::Right,

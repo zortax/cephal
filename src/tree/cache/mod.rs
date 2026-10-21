@@ -139,7 +139,9 @@ impl NodeCache {
         match run_mode {
             RunMode::PerformLayout => {
                 let e = c.final_entry.as_ref()?;
-                if e.key == *key {
+                // A key beside floats counts the floats placed so far, not their geometry, so it
+                // stands for the same float state only within the pass that stored it.
+                if e.key == *key && !(key.depends_on_floats() && e.generation() != generation) {
                     e.touch(generation);
                     Some((e.output, e.observed))
                 } else {
@@ -150,7 +152,7 @@ impl NodeCache {
                 if c.len == 0 {
                     return None;
                 }
-                if let Some(i) = c.find(key) {
+                if let Some(i) = c.find(key).filter(|&i| !(key.depends_on_floats() && c.generation(i) != generation)) {
                     c.touch(i, generation);
                     let (_, output, observed) = c.get(i);
                     return Some((output, observed));

@@ -174,3 +174,50 @@ fn measuring_a_block_keeps_margins_collapsing_through_sized_children() {
     assert_eq!(tree.layout(children[2]).location.y, 20.0);
     assert_eq!(tree.layout(item).size.height, 30.0);
 }
+
+/// A block beside a float is asked under a key that counts the floats placed before it, not their
+/// geometry; after a float resizes, the next pass must not serve the answer it got beside the old one.
+#[test]
+fn a_resized_float_reaches_the_blocks_beside_it() {
+    #[derive(Clone, Copy)]
+    struct Text(u32);
+    fn measure(t: &mut Text, input: cephal::tree::MeasureInput, _: &Style) -> cephal::tree::MeasureOutput {
+        let width = input.known_dimensions.width.unwrap_or(match input.available_space.width {
+            AvailableSpace::MinContent => 10.0,
+            AvailableSpace::MaxContent => t.0 as f32 * 10.0,
+            AvailableSpace::Definite(w) => w.min(t.0 as f32 * 10.0).max(10.0),
+        });
+        let lines = (t.0 as f32 / (width / 10.0).floor().max(1.0)).ceil();
+        cephal::tree::MeasureOutput::from_size(Size { width, height: input.known_dimensions.height.unwrap_or(lines * 10.0) })
+    }
+    let mut tree: Tree<Text> = Tree::new();
+    let mut root = block();
+    root.display = Display::FlowRoot;
+    root.size.width = Dimension::length(200.0);
+    let root = tree.new_leaf(root);
+    let mut float = block();
+    float.float = Float::Left;
+    float.size = Size { width: Dimension::length(50.0), height: Dimension::length(30.0) };
+    let float = tree.new_leaf(float);
+    // Same formatting context as the float: its own content avoids it.
+    let wrapper = tree.new_leaf(block());
+    let mut avoiding = block();
+    avoiding.overflow = cephal::geometry::Point { x: cephal::style::Overflow::Hidden, y: cephal::style::Overflow::Hidden };
+    let avoiding = tree.new_leaf_with_context(avoiding, Text(30));
+    tree.append_child(root, float);
+    tree.append_child(root, wrapper);
+    tree.append_child(wrapper, avoiding);
+    let space = Size { width: AvailableSpace::Definite(400.0), height: AvailableSpace::MaxContent };
+    tree.disable_rounding();
+    tree.compute_layout_with_measure(root, space, measure);
+    for width in [120.0, 50.0, 90.0] {
+        tree.patch_style(float, |s| s.size.width = Dimension::length(width));
+        tree.compute_layout_with_measure(root, space, measure);
+        let mut cold = tree.clone_cold();
+        cold.disable_rounding();
+        cold.compute_layout_with_measure(root, space, measure);
+        for node in [root, float, wrapper, avoiding] {
+            assert_eq!(format!("{:?}", tree.unrounded_layout(node)), format!("{:?}", cold.unrounded_layout(node)), "float width {width}");
+        }
+    }
+}

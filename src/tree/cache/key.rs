@@ -67,6 +67,13 @@ fn avail_from_bits(b: u32) -> AvailableSpace {
 }
 
 impl CacheKey {
+    /// Whether the question was asked inside a shared block formatting context with floats, whose
+    /// answer depends on float state the key only versions within one layout pass.
+    #[inline(always)]
+    pub fn depends_on_floats(&self) -> bool {
+        low(self.rest) != 0
+    }
+
     /// A placeholder for unused slots.
     pub const EMPTY: Self = Self { known: 0, avail: 0, parent: 0, rest: 0 };
 
