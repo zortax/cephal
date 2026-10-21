@@ -20,6 +20,8 @@ use crate::tree::{
     RequestedAxis, RunMode, SizingMode,
 };
 
+pub(crate) use items::ratio_height_is_minimum;
+
 pub fn compute_block_layout<T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     node: NodeId,
@@ -46,7 +48,7 @@ pub fn compute_block_layout<T: LayoutTree + CacheAccess + ?Sized>(
     let max_size = resolve_size(style.max_size.map(|v| v.raw()), parent_size, &calc)
         .maybe_apply_aspect_ratio(aspect_ratio)
         .maybe_add(box_sizing_adjustment);
-    let clamped_style_size = if inputs.sizing_mode == SizingMode::InherentSize {
+    let mut clamped_style_size = if inputs.sizing_mode == SizingMode::InherentSize {
         resolve_size(style.size.map(|v| v.raw()), parent_size, &calc)
             .maybe_apply_aspect_ratio(aspect_ratio)
             .maybe_add(box_sizing_adjustment)
@@ -54,6 +56,10 @@ pub fn compute_block_layout<T: LayoutTree + CacheAccess + ?Sized>(
     } else {
         Size::NONE
     };
+    // A height the ratio gives is only a minimum (see `compute_inner`).
+    if items::ratio_height_is_minimum(style, Size::NONE) {
+        clamped_style_size.height = None;
+    }
 
     // `max <= min` pins the size.
     let min_max_definite_size = min_size.zip_map(max_size, |min, max| match (min, max) {
@@ -143,13 +149,19 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
         .maybe_add(box_sizing_adjustment);
 
     // A definite size in one axis transfers through `aspect-ratio`; only a newly filled axis is clamped.
-    let known_dimensions = {
-        let derived = known_dimensions.maybe_apply_aspect_ratio(aspect_ratio).maybe_clamp(min_size, max_size);
-        Size { width: known_dimensions.width.or(derived.width), height: known_dimensions.height.or(derived.height) }
-    };
+    let derived = known_dimensions.maybe_apply_aspect_ratio(aspect_ratio).maybe_clamp(min_size, max_size);
+    let mut known_dimensions =
+        Size { width: known_dimensions.width.or(derived.width), height: known_dimensions.height.or(derived.height) };
+    // A height so derived is a minimum the content may exceed (its automatic minimum size); it is
+    // still the basis of the percentages inside.
+    let mut ratio_height = None;
+    if inputs.known_dimensions.height.is_none() && items::ratio_height_is_minimum(style, Size::NONE) {
+        ratio_height = derived.height;
+        known_dimensions.height = None;
+    }
     let percentage_basis = Size {
         width: known_dimensions.width,
-        height: known_dimensions.height.filter(|_| inputs.known_dimensions_are_definite.height),
+        height: known_dimensions.height.filter(|_| inputs.known_dimensions_are_definite.height).or(ratio_height),
     };
     let container_content_box_size = percentage_basis.maybe_sub(content_box_inset.sum_axes());
 
@@ -245,7 +257,7 @@ fn compute_inner<T: LayoutTree + CacheAccess + ?Sized>(
 
     let container_outer_height = known_dimensions
         .height
-        .unwrap_or(intrinsic_outer_height.maybe_clamp(min_size.height, max_size.height))
+        .unwrap_or(intrinsic_outer_height.maybe_max(ratio_height).maybe_clamp(min_size.height, max_size.height))
         .maybe_max(Some(padding_border_size.height));
     let final_outer_size = Size { width: container_outer_width, height: container_outer_height };
 

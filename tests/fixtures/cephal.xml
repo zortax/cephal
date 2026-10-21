@@ -1100,6 +1100,194 @@
     </node>
   </expectations>
 </test>
+<test name="block_aspect_ratio_automatic_minimum__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="ltr" position="absolute" width="300px">
+      <div display="block" direction="ltr" position="relative" width="0%" aspect-ratio="0.5">
+        <div display="block" direction="ltr" position="relative" border-top="3px" border-left="3px" border-bottom="3px" border-right="3px"/>
+      </div>
+      <div display="block" direction="ltr" position="relative" width="24%" aspect-ratio="1">
+        <div display="block" direction="ltr" position="relative" height="181px"/>
+      </div>
+      <text display="block" direction="ltr" position="relative" width="0px" aspect-ratio="1">
+        X
+      </text>
+      <div display="block" direction="ltr" position="relative" width="20px" max-height="30px" aspect-ratio="1">
+        <div display="block" direction="ltr" position="relative" height="50px"/>
+      </div>
+      <div display="block" direction="ltr" position="relative" overflow-x="hidden" overflow-y="hidden" scrollbar-width="15" width="20px" aspect-ratio="1">
+        <div display="block" direction="ltr" position="relative" height="50px"/>
+      </div>
+      <div display="block" direction="ltr" position="relative" width="20px" min-height="5px" aspect-ratio="1">
+        <div display="block" direction="ltr" position="relative" height="50px"/>
+      </div>
+      <div display="block" direction="ltr" position="relative" height="195px" max-width="11%" aspect-ratio="1"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="300" height="462">
+      <node x="0" y="0" width="0" height="6">
+        <node x="0" y="0" width="6" height="6"/>
+      </node>
+      <node x="0" y="6" width="72" height="181">
+        <node x="0" y="0" width="72" height="181"/>
+      </node>
+      <node x="0" y="187" width="0" height="10"/>
+      <node x="0" y="197" width="20" height="30">
+        <node x="0" y="0" width="20" height="50"/>
+      </node>
+      <node x="0" y="227" width="20" height="20" scroll_width="0" scroll_height="30">
+        <node x="0" y="0" width="20" height="50"/>
+      </node>
+      <node x="0" y="247" width="20" height="20">
+        <node x="0" y="0" width="20" height="50"/>
+      </node>
+      <node x="0" y="267" width="33" height="195"/>
+    </node>
+  </expectations>
+</test>
+<test name="block_aspect_ratio_automatic_minimum__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="rtl" position="absolute" width="300px">
+      <div display="block" direction="rtl" position="relative" width="0%" aspect-ratio="0.5">
+        <div display="block" direction="rtl" position="relative" border-top="3px" border-left="3px" border-bottom="3px" border-right="3px"/>
+      </div>
+      <div display="block" direction="rtl" position="relative" width="24%" aspect-ratio="1">
+        <div display="block" direction="rtl" position="relative" height="181px"/>
+      </div>
+      <text display="block" direction="rtl" position="relative" width="0px" aspect-ratio="1">
+        X
+      </text>
+      <div display="block" direction="rtl" position="relative" width="20px" max-height="30px" aspect-ratio="1">
+        <div display="block" direction="rtl" position="relative" height="50px"/>
+      </div>
+      <div display="block" direction="rtl" position="relative" overflow-x="hidden" overflow-y="hidden" scrollbar-width="15" width="20px" aspect-ratio="1">
+        <div display="block" direction="rtl" position="relative" height="50px"/>
+      </div>
+      <div display="block" direction="rtl" position="relative" width="20px" min-height="5px" aspect-ratio="1">
+        <div display="block" direction="rtl" position="relative" height="50px"/>
+      </div>
+      <div display="block" direction="rtl" position="relative" height="195px" max-width="11%" aspect-ratio="1"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="300" height="462">
+      <node x="300" y="0" width="0" height="6">
+        <node x="-6" y="0" width="6" height="6"/>
+      </node>
+      <node x="228" y="6" width="72" height="181">
+        <node x="0" y="0" width="72" height="181"/>
+      </node>
+      <node x="300" y="187" width="0" height="10"/>
+      <node x="280" y="197" width="20" height="30">
+        <node x="0" y="0" width="20" height="50"/>
+      </node>
+      <node x="280" y="227" width="20" height="20" scroll_width="0" scroll_height="30">
+        <node x="0" y="0" width="20" height="50"/>
+      </node>
+      <node x="280" y="247" width="20" height="20">
+        <node x="0" y="0" width="20" height="50"/>
+      </node>
+      <node x="267" y="267" width="33" height="195"/>
+    </node>
+  </expectations>
+</test>
+<test name="block_aspect_ratio_automatic_minimum__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" position="absolute" width="300px">
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" width="0%" aspect-ratio="0.5">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" border-top="3px" border-left="3px" border-bottom="3px" border-right="3px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" width="24%" aspect-ratio="1">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="181px"/>
+      </div>
+      <text display="block" box-sizing="content-box" direction="ltr" position="relative" width="0px" aspect-ratio="1">
+        X
+      </text>
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" width="20px" max-height="30px" aspect-ratio="1">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="50px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" overflow-x="hidden" overflow-y="hidden" scrollbar-width="15" width="20px" aspect-ratio="1">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="50px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" width="20px" min-height="5px" aspect-ratio="1">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="50px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="195px" max-width="11%" aspect-ratio="1"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="300" height="462">
+      <node x="0" y="0" width="0" height="6">
+        <node x="0" y="0" width="6" height="6"/>
+      </node>
+      <node x="0" y="6" width="72" height="181">
+        <node x="0" y="0" width="72" height="181"/>
+      </node>
+      <node x="0" y="187" width="0" height="10"/>
+      <node x="0" y="197" width="20" height="30">
+        <node x="0" y="0" width="20" height="50"/>
+      </node>
+      <node x="0" y="227" width="20" height="20" scroll_width="0" scroll_height="30">
+        <node x="0" y="0" width="20" height="50"/>
+      </node>
+      <node x="0" y="247" width="20" height="20">
+        <node x="0" y="0" width="20" height="50"/>
+      </node>
+      <node x="0" y="267" width="33" height="195"/>
+    </node>
+  </expectations>
+</test>
+<test name="block_aspect_ratio_automatic_minimum__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" position="absolute" width="300px">
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" width="0%" aspect-ratio="0.5">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" border-top="3px" border-left="3px" border-bottom="3px" border-right="3px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" width="24%" aspect-ratio="1">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="181px"/>
+      </div>
+      <text display="block" box-sizing="content-box" direction="rtl" position="relative" width="0px" aspect-ratio="1">
+        X
+      </text>
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" width="20px" max-height="30px" aspect-ratio="1">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="50px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" overflow-x="hidden" overflow-y="hidden" scrollbar-width="15" width="20px" aspect-ratio="1">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="50px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" width="20px" min-height="5px" aspect-ratio="1">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="50px"/>
+      </div>
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="195px" max-width="11%" aspect-ratio="1"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="300" height="462">
+      <node x="300" y="0" width="0" height="6">
+        <node x="-6" y="0" width="6" height="6"/>
+      </node>
+      <node x="228" y="6" width="72" height="181">
+        <node x="0" y="0" width="72" height="181"/>
+      </node>
+      <node x="300" y="187" width="0" height="10"/>
+      <node x="280" y="197" width="20" height="30">
+        <node x="0" y="0" width="20" height="50"/>
+      </node>
+      <node x="280" y="227" width="20" height="20" scroll_width="0" scroll_height="30">
+        <node x="0" y="0" width="20" height="50"/>
+      </node>
+      <node x="280" y="247" width="20" height="20">
+        <node x="0" y="0" width="20" height="50"/>
+      </node>
+      <node x="267" y="267" width="33" height="195"/>
+    </node>
+  </expectations>
+</test>
 <test name="block_intrinsic_width_percentage_margins__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>

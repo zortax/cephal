@@ -99,9 +99,13 @@ pub(super) fn generate_item_list<T: LayoutTree + ?Sized>(
             clear: style.clear,
             justify_self,
             size_style: style.size,
-            size: size.maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment),
-            min_size: min_size.maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment),
-            max_size: max_size.maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment),
+            // A height the aspect ratio would give is left to the child, for whom it is only a
+            // minimum when the content is taller (its automatic minimum size).
+            size: if aspect_ratio.is_none() || ratio_height_is_minimum(style, size) { size } else { size.maybe_apply_aspect_ratio(aspect_ratio) }
+                .maybe_add(box_sizing_adjustment),
+            // Limits transfer through the ratio only to an axis the ratio gives the size of.
+            min_size: transfer_limits(min_size, size, aspect_ratio).maybe_add(box_sizing_adjustment),
+            max_size: transfer_limits(max_size, size, aspect_ratio).maybe_add(box_sizing_adjustment),
             overflow,
             contain,
             scrollbar_width: style.scrollbar_width,
@@ -123,3 +127,29 @@ pub(super) fn generate_item_list<T: LayoutTree + ?Sized>(
 }
 
 crate::compute::scratch::pooled!(BlockItem);
+
+/// Whether a height the aspect ratio gives from the width is only a minimum, the content's height
+/// winning when larger (css-sizing-4 §5.2.1): an automatic height and min-height, no scrolling.
+#[inline]
+pub(crate) fn ratio_height_is_minimum(style: &crate::style::Style, size: Size<Option<f32>>) -> bool {
+    style.aspect_ratio.is_some()
+        && size.height.is_none()
+        && style.size.height.is_auto()
+        && style.min_size.height.is_auto()
+        && !style.is_scroll_container()
+        && !style.item_is_replaced
+}
+
+/// `limits` with the missing axis filled from the other through `ratio`, where `size` leaves that
+/// axis to the ratio.
+#[inline]
+fn transfer_limits(limits: Size<Option<f32>>, size: Size<Option<f32>>, ratio: Option<f32>) -> Size<Option<f32>> {
+    if ratio.is_none() {
+        return limits;
+    }
+    let transferred = limits.maybe_apply_aspect_ratio(ratio);
+    Size {
+        width: if size.width.is_some() { limits.width } else { transferred.width },
+        height: if size.height.is_some() { limits.height } else { transferred.height },
+    }
+}

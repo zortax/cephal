@@ -55,7 +55,7 @@
 101 [PercentPadding]
 102 unexplained
 103 unexplained
-106 RootSizingKeywords+InitialContainingBlockGridPlacement+PercentBasis+MinContentTracks+FlexCrossAlignment
+106 unexplained
 107 [PercentMargins,FlexCrossAlignment]
 110 unexplained
 111 [FlexWrap]
@@ -120,6 +120,7 @@
 210 unexplained
 212 [FlexWrap]
 215 [RootSizingKeywords]
+218 unexplained
 219 [RootSizingKeywords]
 220 FlexWrap+FlexCrossAlignment
 222 [PercentPadding]
@@ -137,6 +138,7 @@
 240 unexplained
 241 [BlockAlignContent]
 246 [RootMinMaxWidth]
+248 unexplained
 250 unexplained
 253 [RootSizingKeywords]
 254 unexplained
@@ -256,7 +258,7 @@
 452 [PercentMargins]
 453 unexplained
 454 unexplained
-456 RootMinMaxWidth+RootSizingKeywords
+456 RootMinMaxWidth+RootSizingKeywords+FlexCrossAlignment
 457 unexplained
 459 [RootSizingKeywords]
 461 [RootSizingKeywords]
@@ -264,7 +266,7 @@
 467 unexplained
 468 unexplained
 469 unexplained
-470 [Absolute,InitialContainingBlockGridPlacement]
+470 [InitialContainingBlockGridPlacement]
 471 unexplained
 475 unexplained
 476 unexplained
@@ -356,6 +358,7 @@
 616 [RootSizingKeywords]
 618 [RootSizingKeywords]
 619 BlockAlignContent+LeafInsets
+621 [RootMinMaxWidth]
 624 unexplained
 625 unexplained
 626 [GridItemPaddingBorder]
@@ -415,7 +418,7 @@
 706 [RootSizingKeywords]
 708 [FlexWrap,LeafInsets]
 709 unexplained
-710 unexplained
+710 RootMinMaxWidth+RootSizingKeywords+SpaceBetween
 711 RootMinMaxWidth+RootSizingKeywords+BlockAlignContent
 712 PercentPadding+PercentMargins
 714 unexplained
@@ -450,10 +453,11 @@
 762 unexplained
 763 unexplained
 764 [RootSizingKeywords]
+765 [LeafInsets]
 766 [FlexCrossAlignment]
 767 unexplained
 768 unexplained
-769 [LeafInsets]
+769 unexplained
 770 unexplained
 771 unexplained
 773 unexplained
@@ -585,7 +589,7 @@
 976 [RootMinMaxWidth,SpaceBetween]
 977 BlockAlignContent+FlexWrap
 978 unexplained
-979 PercentPadding+SpaceBetween+FlexWrap
+979 unexplained
 980 unexplained
 981 unexplained
 984 [RootSizingKeywords]
@@ -596,5 +600,5 @@
 992 unexplained
 993 Absolute+PercentMargins+FlexWrap+FlexCrossAlignment
 994 [RootSizingKeywords]
-996 RootSizingKeywords+Absolute+BlockAlignContent
+996 unexplained
 997 unexplained

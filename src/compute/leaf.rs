@@ -72,11 +72,16 @@ fn resolve_box(style: &crate::style::Style, parent_size: Size<Option<f32>>, calc
     let pb_sum = (padding + border).sum_axes();
     let box_sizing_adjustment = if style.box_sizing == BoxSizing::ContentBox { pb_sum } else { Size::ZERO };
     let aspect_ratio = style.aspect_ratio;
-    let size = Size {
+    let raw_size = Size {
         width: style.size.width.resolve(parent_size.width, calc),
         height: style.size.height.resolve(parent_size.height, calc),
+    };
+    // A height the ratio gives is only a minimum the content may exceed (see `compute_leaf_layout_with`).
+    let size = if crate::compute::block::ratio_height_is_minimum(style, raw_size) {
+        raw_size
+    } else {
+        raw_size.maybe_apply_aspect_ratio(aspect_ratio)
     }
-    .maybe_apply_aspect_ratio(aspect_ratio)
     .maybe_add(box_sizing_adjustment);
     let min_size = Size {
         width: style.min_size.width.resolve(parent_size.width, calc),
@@ -280,7 +285,7 @@ pub fn compute_leaf_layout_with<T: LayoutTree + ?Sized>(
         .maybe_clamp(node_min_size, node_max_size);
     let size = Size {
         width: clamped.width,
-        height: clamped.height.max(aspect_ratio.map_or(0.0, |r| clamped.width / r)),
+        height: clamped.height.max(aspect_ratio.map_or(0.0, |r| (clamped.width / r).maybe_min(node_max_size.height))),
     }
     .f32_max(pb_sum);
 
