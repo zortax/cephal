@@ -500,10 +500,33 @@ fn compute_in_flow_root_layout<T: LayoutTree + CacheAccess + ?Sized>(
             (Some(min), Some(max)) if max <= min => Some(min),
             _ => None,
         });
+        // Sizing keywords: `stretch` fills the viewport less the margins, a content-based width
+        // is measured against it; a content-based height is the automatic one.
+        use common::sizing_keyword::{SizingKeywordResolution, resolve_sizing_keyword};
+        let (size_style, root_available_height) = (style.size, root_available_space.height);
+        let keyword_width = match resolve_sizing_keyword(size_style.width.raw(), root_available_space.width.into_option(), parent_size.width) {
+            Some(SizingKeywordResolution::Exact(w)) => Some(w),
+            Some(SizingKeywordResolution::Measure(avail)) => Some(tree.measure_child_size(
+                root,
+                Size::NONE,
+                parent_size,
+                Size { width: avail, height: root_available_height },
+                SizingMode::InherentSize,
+                crate::geometry::AbsoluteAxis::Horizontal,
+                Line::FALSE,
+            )),
+            None => None,
+        };
+        let keyword_height = match resolve_sizing_keyword(size_style.height.raw(), root_available_height.into_option(), parent_size.height) {
+            Some(SizingKeywordResolution::Exact(h)) => Some(h),
+            _ => None,
+        };
+        let keyword_size = Size { width: keyword_width, height: keyword_height }.maybe_clamp(min_size, max_size);
         // A block root stretches to a definite available width less its margins.
         let available_space_based_size = Size { width: root_available_space.width.into_option(), height: None };
         known_dimensions = min_max_definite_size
             .or(clamped_style_size)
+            .or(keyword_size)
             .or(available_space_based_size)
             .maybe_max(padding_border_size.map(Some));
     }

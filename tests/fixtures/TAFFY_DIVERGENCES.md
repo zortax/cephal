@@ -123,6 +123,15 @@ Census category `SpaceBetween`. Fixture `flex_space_between_overflow_reversed`.
 `row-reverse` or `column-reverse` container that is the end edge, so overflowing items stick out
 past the start edge (Chrome). Taffy falls back to `start` and lets them overflow at the end.
 
+## Sizing keywords on a block root
+
+Census category `RootSizingKeywords`. Fixtures `root_width_fit_content`, `root_height_stretch`.
+
+A block root's `width: fit-content` (or `min-content`, `max-content`) shrinks it to its content,
+and `stretch` fills the viewport less the margins (css-sizing-3 §3.1), as for any block-level
+box. Taffy takes them as `auto`: the root fills the viewport's width and takes its content
+height.
+
 ## The root (both engines, by design)
 
 Not a divergence between the engines, but where both differ from a browser's root element,

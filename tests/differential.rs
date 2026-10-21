@@ -20,6 +20,8 @@ fn run(seed: u64, relaxed: bool) -> Vec<String> {
 enum Strip {
     /// Margins and insets of the root.
     RootOffsets,
+    /// Sizing keywords of the root's size: taffy takes them as `auto`.
+    RootSizingKeywords,
     /// Out-of-flow positioning: such boxes become static.
     Absolute,
     /// `align-self` / `justify-self` of absolutely positioned boxes.
@@ -67,6 +69,7 @@ enum Strip {
 }
 
 const STRIPS: &[Strip] = &[
+    Strip::RootSizingKeywords,
     Strip::RootOffsets,
     Strip::Absolute,
     Strip::AbsoluteSelfAlignment,
@@ -99,6 +102,13 @@ fn strip(tree: &mut Tree<Text>, root: cephal::tree::NodeId, what: Strip) {
         let is_text = tree.context(node).is_some();
         let parent_is_flex = tree.parent(node).is_some_and(|p| tree.style(p).display == Display::Flex);
         tree.patch_style(node, |s| match what {
+            Strip::RootSizingKeywords if node == root => {
+                for d in [&mut s.size.width, &mut s.size.height] {
+                    if d.is_sizing_keyword() {
+                        *d = Dimension::AUTO;
+                    }
+                }
+            }
             Strip::RootOffsets if node == root => {
                 s.margin = cephal::geometry::Rect::splat(LengthPercentageAuto::ZERO);
                 s.inset = cephal::geometry::Rect::splat(LengthPercentageAuto::AUTO);
