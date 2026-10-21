@@ -267,7 +267,7 @@ static void run(const Tree &t, double secs, bool rounding, FILE *csv) {
         while ((now_ns() - begin) < secs * 1e9 || frames.size() < 10) {
             frame++;
             bool on = frame % 2 == 1;
-            int site = sc.sites[(frame / 2) % (unsigned)sc.site_count];
+            int site = sc.sites[((frame - 1) / 2) % (unsigned)sc.site_count];
             const Node &n = t.nodes[site];
             YGNodeRef y = c.nodes[(size_t)site];
             float w = viewport_width(t);

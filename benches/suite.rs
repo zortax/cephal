@@ -593,7 +593,7 @@ fn incremental(w: &Workload, size: usize, scenario: Scenario, o: &Options, execu
         let count = sites.len();
         let mut step = move || {
             frame += 1;
-            (frame % 2 == 1, (frame / 2) % count)
+            (frame % 2 == 1, ((frame - 1) / 2) % count)
         };
         let sites_c = sites;
         let s = match engine.as_str() {
