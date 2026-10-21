@@ -523,7 +523,8 @@ fn compute_in_flow_root_layout<T: LayoutTree + CacheAccess + ?Sized>(
         };
         let keyword_size = Size { width: keyword_width, height: keyword_height }.maybe_clamp(min_size, max_size);
         // A block root stretches to a definite available width less its margins.
-        let available_space_based_size = Size { width: root_available_space.width.into_option(), height: None };
+        let available_space_based_size =
+            Size { width: root_available_space.width.into_option().maybe_clamp(min_size.width, max_size.width), height: None };
         known_dimensions = min_max_definite_size
             .or(clamped_style_size)
             .or(keyword_size)

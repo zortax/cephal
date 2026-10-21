@@ -169,6 +169,13 @@ and resolve against the size found (css-grid-1 §7.2.1). Taffy resolves them aga
 container's min size while sizing it, so a grid whose content is wider than its min-width is
 sized at the min-width.
 
+## A block root's min and max width
+
+Census category `RootMinMaxWidth`. Fixture `root_max_width`.
+
+A block root fills the viewport's width held between its min and max widths (CSS 2.2 §10.4).
+Taffy fills the viewport whatever its `max-width`.
+
 ## The root (both engines, by design)
 
 Not a divergence between the engines, but where both differ from a browser's root element,

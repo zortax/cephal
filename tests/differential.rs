@@ -22,6 +22,8 @@ enum Strip {
     RootOffsets,
     /// Sizing keywords of the root's size: taffy takes them as `auto`.
     RootSizingKeywords,
+    /// Min and max widths of the root: taffy does not clamp a block root's width by them.
+    RootMinMaxWidth,
     /// Out-of-flow positioning: such boxes become static.
     Absolute,
     /// `align-self` / `justify-self` of absolutely positioned boxes.
@@ -71,6 +73,7 @@ enum Strip {
 }
 
 const STRIPS: &[Strip] = &[
+    Strip::RootMinMaxWidth,
     Strip::RootSizingKeywords,
     Strip::RootOffsets,
     Strip::Absolute,
@@ -105,6 +108,10 @@ fn strip(tree: &mut Tree<Text>, root: cephal::tree::NodeId, what: Strip) {
         let is_text = tree.context(node).is_some();
         let parent_is_flex = tree.parent(node).is_some_and(|p| tree.style(p).display == Display::Flex);
         tree.patch_style(node, |s| match what {
+            Strip::RootMinMaxWidth if node == root => {
+                s.min_size.width = LengthPercentageAuto::AUTO;
+                s.max_size.width = LengthPercentageAuto::AUTO;
+            }
             Strip::RootSizingKeywords if node == root => {
                 for d in [&mut s.size.width, &mut s.size.height] {
                     if d.is_sizing_keyword() {

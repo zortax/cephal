@@ -3088,6 +3088,58 @@
     </node>
   </expectations>
 </test>
+<test name="root_max_width__border_box_ltr" use-rounding="true">
+  <viewport width="114px" height="100px"/>
+  <input>
+    <div display="block" direction="ltr" position="relative" max-width="14px">
+      <div display="block" direction="ltr" position="relative" height="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="14" height="10">
+      <node x="0" y="0" width="14" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="root_max_width__border_box_rtl" use-rounding="true">
+  <viewport width="114px" height="100px"/>
+  <input>
+    <div display="block" direction="rtl" position="relative" max-width="14px">
+      <div display="block" direction="rtl" position="relative" height="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="100" y="0" width="14" height="10">
+      <node x="0" y="0" width="14" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="root_max_width__content_box_ltr" use-rounding="true">
+  <viewport width="114px" height="100px"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" position="relative" max-width="14px">
+      <div display="block" box-sizing="content-box" direction="ltr" position="relative" height="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="14" height="10">
+      <node x="0" y="0" width="14" height="10"/>
+    </node>
+  </expectations>
+</test>
+<test name="root_max_width__content_box_rtl" use-rounding="true">
+  <viewport width="114px" height="100px"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" position="relative" max-width="14px">
+      <div display="block" box-sizing="content-box" direction="rtl" position="relative" height="10px"/>
+    </div>
+  </input>
+  <expectations>
+    <node x="100" y="0" width="14" height="10">
+      <node x="0" y="0" width="14" height="10"/>
+    </node>
+  </expectations>
+</test>
 <test name="root_width_fit_content__border_box_ltr" use-rounding="true">
   <viewport width="300px" height="200px"/>
   <input>
