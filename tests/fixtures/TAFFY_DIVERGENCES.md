@@ -132,6 +132,15 @@ and `stretch` fills the viewport less the margins (css-sizing-3 §3.1), as for a
 box. Taffy takes them as `auto`: the root fills the viewport's width and takes its content
 height.
 
+## An overflowing line of a `wrap-reverse` flex container
+
+Census category `WrapReverse`. Fixture `flex_wrap_reverse_overflowing_line`.
+
+`stretch` (and `normal`) distribute nothing once the lines are stretched; space left over, or
+overflow, is placed as for `flex-start` (css-align-3 §4.3), which in a `wrap-reverse` container
+is the bottom: a line taller than the container overflows past its top (Chrome). Taffy keeps it
+at the top.
+
 ## The root (both engines, by design)
 
 Not a divergence between the engines, but where both differ from a browser's root element,

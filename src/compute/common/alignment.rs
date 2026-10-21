@@ -48,7 +48,10 @@ pub fn compute_alignment_offset(
                 if layout_is_reversed { 0.0 } else { free_space }
             }
             AlignContentKeyword::Center => free_space / 2.0,
-            AlignContentKeyword::Stretch => 0.0,
+            // What is left after stretching (none, or overflow) is placed as for `flex-start`.
+            AlignContentKeyword::Stretch => {
+                if layout_is_reversed { free_space } else { 0.0 }
+            }
             AlignContentKeyword::SpaceBetween => 0.0,
             AlignContentKeyword::SpaceEvenly => free_space / (num_items + 1) as f32,
             AlignContentKeyword::SpaceAround => (free_space / num_items as f32) / 2.0,

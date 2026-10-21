@@ -2100,6 +2100,98 @@
     </node>
   </expectations>
 </test>
+<test name="flex_wrap_reverse_overflowing_line__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="ltr" position="absolute" width="200px" height="60px">
+      <div display="flex" direction="ltr" position="relative" flex-wrap="wrap-reverse" height="2px">
+        <div display="block" direction="ltr" position="relative" width="10px" min-height="19px"/>
+      </div>
+      <div display="flex" direction="ltr" position="relative" flex-direction="row-reverse" flex-wrap="wrap-reverse" justify-content="stretch" height="4px">
+        <div display="block" direction="ltr" position="relative" width="10px" height="10px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="200" height="60">
+      <node x="0" y="0" width="200" height="2">
+        <node x="0" y="-17" width="10" height="19"/>
+      </node>
+      <node x="0" y="2" width="200" height="4">
+        <node x="190" y="-6" width="10" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_wrap_reverse_overflowing_line__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" direction="rtl" position="absolute" width="200px" height="60px">
+      <div display="flex" direction="rtl" position="relative" flex-wrap="wrap-reverse" height="2px">
+        <div display="block" direction="rtl" position="relative" width="10px" min-height="19px"/>
+      </div>
+      <div display="flex" direction="rtl" position="relative" flex-direction="row-reverse" flex-wrap="wrap-reverse" justify-content="stretch" height="4px">
+        <div display="block" direction="rtl" position="relative" width="10px" height="10px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="200" height="60">
+      <node x="0" y="0" width="200" height="2">
+        <node x="190" y="-17" width="10" height="19"/>
+      </node>
+      <node x="0" y="2" width="200" height="4">
+        <node x="0" y="-6" width="10" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_wrap_reverse_overflowing_line__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="ltr" position="absolute" width="200px" height="60px">
+      <div display="flex" box-sizing="content-box" direction="ltr" position="relative" flex-wrap="wrap-reverse" height="2px">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" width="10px" min-height="19px"/>
+      </div>
+      <div display="flex" box-sizing="content-box" direction="ltr" position="relative" flex-direction="row-reverse" flex-wrap="wrap-reverse" justify-content="stretch" height="4px">
+        <div display="block" box-sizing="content-box" direction="ltr" position="relative" width="10px" height="10px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="200" height="60">
+      <node x="0" y="0" width="200" height="2">
+        <node x="0" y="-17" width="10" height="19"/>
+      </node>
+      <node x="0" y="2" width="200" height="4">
+        <node x="190" y="-6" width="10" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_wrap_reverse_overflowing_line__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="block" box-sizing="content-box" direction="rtl" position="absolute" width="200px" height="60px">
+      <div display="flex" box-sizing="content-box" direction="rtl" position="relative" flex-wrap="wrap-reverse" height="2px">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" width="10px" min-height="19px"/>
+      </div>
+      <div display="flex" box-sizing="content-box" direction="rtl" position="relative" flex-direction="row-reverse" flex-wrap="wrap-reverse" justify-content="stretch" height="4px">
+        <div display="block" box-sizing="content-box" direction="rtl" position="relative" width="10px" height="10px"/>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="200" height="60">
+      <node x="0" y="0" width="200" height="2">
+        <node x="190" y="-17" width="10" height="19"/>
+      </node>
+      <node x="0" y="2" width="200" height="4">
+        <node x="0" y="-6" width="10" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
 <test name="float_bfc_root_contains_nested_float_padding__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>

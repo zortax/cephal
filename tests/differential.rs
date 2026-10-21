@@ -57,6 +57,8 @@ enum Strip {
     /// `space-between`: taffy falls back to `start` instead of `flex-start` when the items
     /// overflow a reversed flex container.
     SpaceBetween,
+    /// `flex-wrap: wrap-reverse`: taffy places lines that overflow at the cross-end edge.
+    WrapReverse,
     /// Multi-line flex containers: taffy puts the items of one whose main size is not definite on
     /// a single line, whatever size it is laid out at.
     FlexWrap,
@@ -86,6 +88,7 @@ const STRIPS: &[Strip] = &[
     Strip::MinContentTracks,
     Strip::SpaceBetween,
     Strip::BlockAlignContent,
+    Strip::WrapReverse,
     Strip::FlexWrap,
     Strip::FlexCrossAlignment,
     Strip::LeafInsets,
@@ -180,6 +183,7 @@ fn strip(tree: &mut Tree<Text>, root: cephal::tree::NodeId, what: Strip) {
                 }
             }
             Strip::BlockAlignContent if s.display == Display::Block => s.align_content = None,
+            Strip::WrapReverse if s.flex_wrap == cephal::style::FlexWrap::WrapReverse => s.flex_wrap = cephal::style::FlexWrap::Wrap,
             Strip::FlexWrap => s.flex_wrap = cephal::style::FlexWrap::NoWrap,
             Strip::FlexCrossAlignment => {
                 if s.display == Display::Flex {
