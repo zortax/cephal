@@ -387,6 +387,90 @@ fn incremental_matches_cold_layout() {
     }
 }
 
+/// Edits that often change answers only in their overflow (relative insets, text outgrowing fixed
+/// boxes), under containers of both directions, clipped and contained ones, flow roots and floats,
+/// which the shared random styles leave out. Floated text is asked speculatively for its size
+/// (`speculate`), so its parent depends on answers its cache does not record.
+///
+/// Floats are only leaves of flow roots whose children are all leaves: a block container beside a
+/// float that changes size can still reuse an answer cached under the same float count
+/// (`BlockContext::key`), a known gap this test leaves out.
+#[test]
+fn overflow_edits_match_cold_layout() {
+    use cephal::style::{Contain, Direction, Float, LengthPercentage, Overflow};
+    let seeds: u64 = std::env::var("CEPHAL_SEEDS").ok().and_then(|v| v.parse().ok()).unwrap_or(150);
+    let steps: usize = std::env::var("CEPHAL_STEPS").ok().and_then(|v| v.parse().ok()).unwrap_or(25);
+    let start: u64 = std::env::var("CEPHAL_SEED_START").ok().and_then(|v| v.parse().ok()).unwrap_or(1);
+    for seed in start..=seeds {
+        let mut rng = Rng(seed.wrapping_mul(0x2545_F491_4F6C_DD1D) | 1);
+        let mut tree: Tree<Text> = Tree::new();
+        let root = build_subtree(&mut rng, &mut tree, 0);
+        let mut nodes = Vec::new();
+        all_nodes(&tree, root, &mut nodes);
+        // Parents come first, so a leaf sees whether its parent became a flow root.
+        for &n in &nodes {
+            let container = tree.child_count(n) > 0;
+            let in_flow_root = tree.parent(n).is_some_and(|p| tree.style(p).display == Display::FlowRoot && tree.children(p).all(|c| tree.child_count(c) == 0));
+            let (rtl, float, clip, contain, border, flow_root, relative) =
+                (rng.chance(1, 3), rng.below(3), rng.chance(1, 10), rng.below(12), rng.chance(1, 8), rng.chance(1, 2), rng.chance(1, 3));
+            tree.patch_style(n, |s| {
+                if rtl {
+                    s.direction = Direction::Rtl;
+                }
+                if in_flow_root && !container && !s.position.is_out_of_flow() {
+                    s.float = match float {
+                        0 => Float::Left,
+                        1 => Float::Right,
+                        _ => Float::None,
+                    };
+                }
+                if clip {
+                    s.overflow.x = Overflow::Clip;
+                }
+                s.contain = match contain {
+                    0 => Contain::PAINT,
+                    1 => Contain::LAYOUT,
+                    _ => Contain::NONE,
+                };
+                if border {
+                    s.border = Rect::splat(LengthPercentage::percent(0.02));
+                }
+                if flow_root && container && s.display == Display::Block {
+                    s.display = Display::FlowRoot;
+                }
+                if relative && !s.position.is_out_of_flow() {
+                    s.position = Position::Relative;
+                }
+            });
+        }
+        let viewport = Size { width: AvailableSpace::Definite(400.0), height: AvailableSpace::Definite(300.0) };
+        tree.compute_layout_with_measure(root, viewport, measure);
+        for step in 0..steps {
+            let mut nodes = Vec::new();
+            all_nodes(&tree, root, &mut nodes);
+            let target = rng.pick(&nodes);
+            let what = if rng.below(3) < 2 {
+                let n = pick_or(&mut rng, nodes.iter().copied().filter(|&n| n != root && tree.style(n).position == Position::Relative), target);
+                let (left, top) = (rng.below(40) as f32 - 15.0, rng.below(40) as f32 - 15.0);
+                tree.patch_style(n, |s| {
+                    s.inset.left = LengthPercentageAuto::length(left);
+                    s.inset.top = LengthPercentageAuto::length(top);
+                });
+                format!("move {n:?} by {left} {top}")
+            } else {
+                let n = pick_or(&mut rng, nodes.iter().copied().filter(|&n| tree.context(n).is_some()), target);
+                let text = rng.below(30) as u32 + 1;
+                tree.set_context(n, Some(Text(text)));
+                format!("text {n:?} to {text}")
+            };
+            tree.compute_layout_with_measure(root, viewport, measure);
+            let mut cold = tree.clone_cold();
+            cold.compute_layout_with_measure(root, viewport, measure);
+            assert_same(&format!("seed {seed} step {step} ({what})"), &tree, &cold, root);
+        }
+    }
+}
+
 #[test]
 fn wide_containers_are_distributed() {
     let mut rng = Rng(11);

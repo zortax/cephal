@@ -28,6 +28,9 @@ struct Inner {
     len: u8,
     /// Set when a size entry was evicted since the last drain.
     evicted: bool,
+    /// Set when an answer was computed during a speculative pass and not stored: some ancestor's
+    /// answers depend on a question no entry records. Kept until the entries are cleared.
+    unstored: bool,
     inline: Slots<INLINE_SIZE_ENTRIES>,
     /// Kept when the entries are cleared, for the next stores.
     spill: Option<Box<Slots<SPILL_SIZE_ENTRIES>>>,
@@ -35,7 +38,7 @@ struct Inner {
 
 impl Inner {
     const fn empty() -> Self {
-        Self { final_entry: None, len: 0, evicted: false, inline: Slots::empty(), spill: None }
+        Self { final_entry: None, len: 0, evicted: false, unstored: false, inline: Slots::empty(), spill: None }
     }
 
     /// The first live size entry that answers `key`.
@@ -250,6 +253,7 @@ impl NodeCache {
             c.final_entry = None;
             c.len = 0;
             c.evicted = false;
+            c.unstored = false;
         }
     }
 
@@ -279,6 +283,20 @@ impl NodeCache {
             out.push((e.key.into_input(RunMode::PerformLayout), e.output));
         }
         out
+    }
+
+    /// Records that an answer was computed speculatively and not stored (see
+    /// [`crate::compute::speculate`]).
+    #[inline]
+    pub fn note_unstored(&mut self) {
+        self.0.get_or_insert_with(|| Box::new(Inner::empty())).unstored = true;
+    }
+
+    /// Whether an answer was computed speculatively and not stored since the entries were last
+    /// cleared: an ancestor may depend on more than the entries record.
+    #[inline]
+    pub fn has_unstored(&self) -> bool {
+        self.0.as_deref().is_some_and(|c| c.unstored)
     }
 
     /// Whether eviction may have removed an entry the parent relied on.

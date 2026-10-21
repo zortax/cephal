@@ -143,6 +143,8 @@ pub fn compute_child_layout<T: LayoutTree + CacheAccess + ?Sized>(
     }
     if tree.speculation() == 0 {
         tree.cache_mut(node).store_observed(key, inputs.run_mode, output, generation, observed);
+    } else {
+        tree.cache_mut(node).note_unstored();
     }
     tree.observe_answer(node, &inputs, &output, AnswerSource::Computed);
     verify::poison(&inputs, output)

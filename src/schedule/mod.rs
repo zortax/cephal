@@ -224,7 +224,9 @@ impl Scheduler {
             }
         }
         self.scratch.clear();
-        changed
+        // A parent that asked this node questions speculatively depends on answers no entry
+        // records, which may have changed with the recorded ones unchanged.
+        changed || tree.cache(node).has_unstored()
     }
 }
 
