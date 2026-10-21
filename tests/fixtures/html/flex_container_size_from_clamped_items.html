@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    A flex container sized by its content counts its items at their hypothetical main sizes, flex
+    base sizes clamped by the max sizes: here a column flex item of a column flex container
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: flex; flex-direction: column; width: 87px; height: 300px;">
+  <div style="display: flex; flex-direction: column; flex-wrap: wrap-reverse;">
+    <div style="display: block; max-height: 0px;">X</div>
+    <div style="display: block;">X</div>
+  </div>
+</div>
+
+</body>
+</html>

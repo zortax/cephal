@@ -8,10 +8,10 @@ use crate::compute::common::sizing_keyword::SizingKeywordResolution;
 use crate::geometry::{AvailableSpace, Line, MaybeMath, Size};
 use crate::tree::{CacheAccess, LayoutTree, SizingMode};
 
+/// The item's hypothetical outer main size: its flex base size clamped by its min and max sizes.
 #[inline]
 fn item_main_length(child: &FlexItem, dir: impl FlexDir) -> f32 {
-    let padding_border_sum = (child.padding + child.border).main_axis_sum(dir);
-    (child.flex_basis.maybe_max(child.min_size.main(dir)) + child.margin.main_axis_sum(dir)).max(padding_border_sum)
+    child.hypothetical_outer_size.main(dir)
 }
 
 pub(super) fn determine_container_main_size<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(

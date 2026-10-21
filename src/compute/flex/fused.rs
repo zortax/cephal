@@ -577,9 +577,7 @@ fn determine_container_main_size<const WRAP: bool, D: FlexDir, T: LayoutTree + C
                 let line_items = &items[line.start..line.end];
                 line_items
                     .iter()
-                    .map(|ch| {
-                        (ch.flex_basis.maybe_max(ch.min_size.main(dir)) + ch.margin.main_axis_sum(dir)).max(ch.padding_border.main(dir))
-                    })
+                    .map(|ch| ch.hypothetical_outer_main)
                     .sum::<f32>()
                     + sum_axis_gaps(gap, line_items.len())
             })

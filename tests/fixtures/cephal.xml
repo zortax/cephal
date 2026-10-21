@@ -1792,6 +1792,98 @@
     </node>
   </expectations>
 </test>
+<test name="flex_container_size_from_clamped_items__border_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="flex" direction="ltr" position="absolute" flex-direction="column" width="87px" height="300px">
+      <div display="flex" direction="ltr" position="relative" flex-direction="column" flex-wrap="wrap-reverse">
+        <text display="block" direction="ltr" position="relative" max-height="0px">
+          X
+        </text>
+        <text display="block" direction="ltr" position="relative">
+          X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="87" height="300">
+      <node x="0" y="0" width="87" height="10">
+        <node x="0" y="0" width="87" height="0"/>
+        <node x="0" y="0" width="87" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_container_size_from_clamped_items__border_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="flex" direction="rtl" position="absolute" flex-direction="column" width="87px" height="300px">
+      <div display="flex" direction="rtl" position="relative" flex-direction="column" flex-wrap="wrap-reverse">
+        <text display="block" direction="rtl" position="relative" max-height="0px">
+          X
+        </text>
+        <text display="block" direction="rtl" position="relative">
+          X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="87" height="300">
+      <node x="0" y="0" width="87" height="10">
+        <node x="0" y="0" width="87" height="0"/>
+        <node x="0" y="0" width="87" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_container_size_from_clamped_items__content_box_ltr" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="flex" box-sizing="content-box" direction="ltr" position="absolute" flex-direction="column" width="87px" height="300px">
+      <div display="flex" box-sizing="content-box" direction="ltr" position="relative" flex-direction="column" flex-wrap="wrap-reverse">
+        <text display="block" box-sizing="content-box" direction="ltr" position="relative" max-height="0px">
+          X
+        </text>
+        <text display="block" box-sizing="content-box" direction="ltr" position="relative">
+          X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="87" height="300">
+      <node x="0" y="0" width="87" height="10">
+        <node x="0" y="0" width="87" height="0"/>
+        <node x="0" y="0" width="87" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
+<test name="flex_container_size_from_clamped_items__content_box_rtl" use-rounding="true">
+  <viewport width="max-content" height="max-content"/>
+  <input>
+    <div display="flex" box-sizing="content-box" direction="rtl" position="absolute" flex-direction="column" width="87px" height="300px">
+      <div display="flex" box-sizing="content-box" direction="rtl" position="relative" flex-direction="column" flex-wrap="wrap-reverse">
+        <text display="block" box-sizing="content-box" direction="rtl" position="relative" max-height="0px">
+          X
+        </text>
+        <text display="block" box-sizing="content-box" direction="rtl" position="relative">
+          X
+        </text>
+      </div>
+    </div>
+  </input>
+  <expectations>
+    <node x="0" y="0" width="87" height="300">
+      <node x="0" y="0" width="87" height="10">
+        <node x="0" y="0" width="87" height="0"/>
+        <node x="0" y="0" width="87" height="10"/>
+      </node>
+    </node>
+  </expectations>
+</test>
 <test name="flex_item_unstretched_cross_size_indefinite__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
