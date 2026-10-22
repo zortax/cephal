@@ -80,15 +80,15 @@ nanoseconds per node (an empty cell is a tree the engine cannot express):
 
 | Workload (nodes) | cephal | taffy | Yoga | Clay |
 | --- | ---: | ---: | ---: | ---: |
-| 10,000 items in a flex column with gap | 60 | 216 | 349 | 83 |
-| 10,000 wrapping text items in a flex row | 187 | 289 | 1039 | |
-| 100×100 grid of auto tracks holding text | 449 | 604 | | |
-| a grid of flex cards of text (8,751) | 433 | 1044 | | |
-| nested intrinsic flex rows (101,111, `min-width: 0`) | 71 | 323 | 638 | |
+| 10,000 items in a flex column with gap | 59 | 212 | 339 | 84 |
+| 10,000 wrapping text items in a flex row | 184 | 281 | 1034 | |
+| 100×100 grid of auto tracks holding text | 441 | 585 | | |
+| a grid of flex cards of text (8,751) | 429 | 1052 | | |
+| nested intrinsic flex rows (101,111, `min-width: 0`) | 68 | 317 | 640 | |
 
-Laying out in parallel on 16 cores brings the last two rows to 132 and 27 ns per node. On trees
+Laying out in parallel on 16 cores brings the last two rows to 132 and 26 ns per node. On trees
 of about 100,000 nodes (a list, a dashboard, a document), a frame with a single edit (text, a width,
-moving a positioned box) takes 0.12–0.28 ms with cephal and 4.5–6 ms with taffy. Cephal is faster
+moving a positioned box) takes 0.12–0.29 ms with cephal and 4.6–6.1 ms with taffy. Cephal is faster
 in every incremental scenario of the suite.
 
 ```sh
