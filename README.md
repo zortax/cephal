@@ -24,7 +24,9 @@ affected nodes to a dirty queue. The scheduler processes the deepest dirty nodes
 Propagation stops when a recomputed answer stays unchanged.
 
 Clipped overflow changes stay inside the clipping node. An absolute box can move after a
-position-only update without its containing block's in-flow content being laid out again. Pixel snapping processes changed nodes and subtrees whose origin moved.
+position-only update without its containing block's in-flow content being laid
+out again. Pixel snapping processes changed nodes and subtrees whose origin
+moved.
 
 This model follows *Spineless Traversal for Layout Invalidation* by Kirisame, Wang, and
 Panchekha (PLDI 2025). The test suite checks that incremental and parallel results equal a
@@ -74,7 +76,8 @@ Frameworks that own their tree can implement `LayoutTree`, `CacheAccess`, and
 
 ## Performance
 
-Intel Core i9-13900K, one core (parallel: 16 cores), every layout read back after each frame.
+Run on an Intel Core i9-13900K (one core, parallel: 16 cores), every layout
+read back after each frame.
 
 | Cold layout (ns per node) | cephal | cephal (parallel) | taffy 0.15 | Yoga 3.2.1 | Clay 0.14 |
 | --- | ---: | ---: | ---: | ---: | ---: |
