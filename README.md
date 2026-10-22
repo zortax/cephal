@@ -74,43 +74,33 @@ Frameworks that own their tree can implement `LayoutTree`, `CacheAccess`, and
 
 ## Performance
 
-Measured with `benches/suite.rs` on an Intel Core i9-13900K, pinned to one core, against taffy 0.15,
-Yoga 3.2.1 and Clay 0.14 on the same trees, including reading every layout back. Cold layout, in
-nanoseconds per node (an empty cell is a tree the engine cannot express):
+Intel Core i9-13900K, one core (parallel: 16 cores), every layout read back after each frame.
 
-| Workload (nodes) | cephal | taffy | Yoga | Clay |
-| --- | ---: | ---: | ---: | ---: |
-| 10,000 items in a flex column with gap | 59 | 212 | 339 | 84 |
-| 10,000 wrapping text items in a flex row | 184 | 281 | 1034 | |
-| 100×100 grid of auto tracks holding text | 441 | 585 | | |
-| a grid of flex cards of text (8,751) | 429 | 1052 | | |
-| nested intrinsic flex rows (101,111, `min-width: 0`) | 68 | 317 | 640 | |
+| Cold layout (ns per node) | cephal | cephal (parallel) | taffy 0.15 | Yoga 3.2.1 | Clay 0.14 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Flex column with gap (10,001 nodes) | 59 | 88 | 212 | 339 | 84 |
+| Wrapping text in a flex row (10,001 nodes) | 184 | 314 | 281 | 1,034 | – |
+| 100×100 grid of auto tracks with text (10,001 nodes) | 441 | 788 | 585 | – | – |
+| Grid of flex cards with text (8,751 nodes) | 429 | 132 | 1,052 | – | – |
+| Nested intrinsic flex rows (101,111 nodes) | 68 | 26 | 317 | 640 | – |
 
-Laying out in parallel on 16 cores brings the last two rows to 132 and 26 ns per node. On trees
-of about 100,000 nodes (a list, a dashboard, a document), a frame with a single edit (text, a width,
-moving a positioned box) takes 0.12–0.29 ms with cephal and 4.6–6.1 ms with taffy. Cephal is faster
-in every incremental scenario of the suite.
-
-```sh
-taskset -c 2 cargo bench --bench suite [-- <filter>...]   # cephal and taffy
-scripts/external.sh [<filter>...]                         # Yoga and Clay
-python3 scripts/plot_bench.py suite target/bench/suite.csv --out target/bench/plots
-```
-
-`scripts/perf.md` describes the workloads, options and plots.
+| One edit, then layout (about 100,000 nodes) | cephal | taffy 0.15 | Speed-up |
+| --- | ---: | ---: | ---: |
+| Change the text of a list item | 0.14 ms | 6.1 ms | 44× |
+| Change the width of a list item | 0.15 ms | 6.1 ms | 39× |
+| Move an absolutely positioned box in a dashboard | 0.13 ms | 5.5 ms | 41× |
+| Resize the viewport of a text document | 0.26 ms | 4.6 ms | 18× |
+| Change `align-self` in a random tree | 0.15 ms | 17.2 ms | 116× |
+| Move a relatively positioned box in a random tree | 0.17 ms | 17.3 ms | 102× |
 
 ## Tests
 
-- `tests/fixtures.rs` runs 6,504 Chrome-generated fixtures from taffy 0.15
-  (`scripts/update_fixtures.sh` regenerates them) and cephal's own, written as HTML in
-  `tests/fixtures/html` and rendered in Chrome by `scripts/gen_fixtures.sh`.
-- `tests/differential.rs` compares random trees with taffy, apart from the divergences listed in
-  `tests/differential_known.txt`. `scripts/chrome_seeds.sh` renders those trees in Chrome to tell
-  which engine is right.
-- `tests/incremental.rs` compares incremental and parallel results with cold serial layouts.
-
-Use `CEPHAL_SEEDS` and `CEPHAL_STEPS` to set the size of the random test suites. Use
-`CEPHAL_FIXTURE=name` to select fixtures.
+- **Chrome fixtures**: trees whose layout Chrome rendered, taffy's set and cephal's own, must lay
+  out the same in cephal.
+- **Differential testing**: random trees are laid out by cephal and taffy; where they disagree,
+  rendering the tree in Chrome decides which engine is right.
+- **Incremental equivalence**: random edit sequences are applied to random trees, and after every
+  edit the incremental and parallel layouts must equal a cold layout bit for bit.
 
 ## License
 
