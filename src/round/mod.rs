@@ -41,9 +41,10 @@ pub fn round_layout<T: RoundTree + ?Sized>(tree: &mut T, root: NodeId) {
     let mut children = Vec::new();
     while let Some((node, cumulative_x, cumulative_y)) = stack.pop() {
         let unrounded = tree.unrounded(node);
+        let (parent_x, parent_y) = (cumulative_x, cumulative_y);
         let cumulative_x = cumulative_x + unrounded.location.x;
         let cumulative_y = cumulative_y + unrounded.location.y;
-        tree.set_rounded(node, round_one(&unrounded, cumulative_x, cumulative_y));
+        tree.set_rounded(node, round_one(&unrounded, cumulative_x, cumulative_y, parent_x, parent_y));
         children.clear();
         tree.child_ids(node, &mut children);
         for &child in children.iter().rev() {
@@ -52,12 +53,38 @@ pub fn round_layout<T: RoundTree + ?Sized>(tree: &mut T, root: NodeId) {
     }
 }
 
-/// Rounds one layout given the absolute unrounded position of its border box.
-pub fn round_one(u: &Layout, cx: f32, cy: f32) -> Layout {
+/// Rounds one layout given the absolute unrounded positions of its border box and its parent's.
+///
+/// The location is the difference of the two rounded positions, so rounded boxes tile exactly within
+/// their rounded parents.
+pub fn round_one(u: &Layout, cx: f32, cy: f32, px: f32, py: f32) -> Layout {
     let right = cx + u.size.width;
     let bottom = cy + u.size.height;
     let [rcx, rright, rcy, rbottom] = round4([cx, right, cy, bottom]);
-    let [lx, ly, sw, sh] = round4([u.location.x, u.location.y, u.scrollbar_size.width, u.scrollbar_size.height]);
+    let [rpx, rpy, sw, sh] = round4([px, py, u.scrollbar_size.width, u.scrollbar_size.height]);
+    let (lx, ly) = (rcx - rpx, rcy - rpy);
+    // A box without border, padding, margin, scrollbar or overflow: each of those edges rounds to
+    // the border box's own rounded edge, so each extent is exactly zero.
+    let zero = |r: Rect<f32>| r.left == 0.0 && r.right == 0.0 && r.top == 0.0 && r.bottom == 0.0;
+    if zero(u.border)
+        && zero(u.padding)
+        && zero(u.margin)
+        && zero(u.scrollable_overflow_rect)
+        && u.scrollbar_size.width == 0.0
+        && u.scrollbar_size.height == 0.0
+        && (rcx - rright + rcy - rbottom).is_finite()
+    {
+        return Layout {
+            order: u.order,
+            location: Point { x: lx, y: ly },
+            size: Size { width: rright - rcx, height: rbottom - rcy },
+            scrollbar_size: Size::ZERO,
+            border: Rect::ZERO,
+            padding: Rect::ZERO,
+            margin: Rect::ZERO,
+            scrollable_overflow_rect: Rect::ZERO,
+        };
+    }
     let b = round4([cx + u.border.left, right - u.border.right, cy + u.border.top, bottom - u.border.bottom]);
     let p = round4([cx + u.padding.left, right - u.padding.right, cy + u.padding.top, bottom - u.padding.bottom]);
     let m = round4([cx - u.margin.left, right + u.margin.right, cy - u.margin.top, bottom + u.margin.bottom]);

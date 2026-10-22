@@ -9,8 +9,25 @@ use crate::style::{
     AlignItems, AlignItemsKeyword, AlignSelf, BoxSizing, CalcId, Dimension, LengthPercentage, LengthPercentageAuto,
     OriginZeroLine, Overflow, Style,
 };
-use crate::tree::{CacheAccess, LayoutTree, NodeId, SizingMode};
+use crate::tree::{CacheAccess, LayoutTree, NodeId, NodeKind, SizingMode};
 use core::ops::Range;
+
+/// `size`, `min-size` and `max-size` against a grid area, with aspect ratio and box sizing applied.
+#[derive(Clone, Copy)]
+pub(super) struct ResolvedSizes {
+    pub size: Size<Option<f32>>,
+    pub min_size: Size<Option<f32>>,
+    pub max_size: Size<Option<f32>>,
+    /// Padding plus border, which the border box never gets smaller than.
+    pub padding_border: Size<f32>,
+}
+
+/// The minimum contribution as the item's style determines it.
+#[derive(Clone, Copy)]
+enum StyleMinimum {
+    Fixed(f32),
+    MinContent,
+}
 
 pub(super) struct GridItem {
     pub node: NodeId,
@@ -27,6 +44,14 @@ pub(super) struct GridItem {
     pub padding: Rect<LengthPercentage>,
     pub border: Rect<LengthPercentage>,
     pub margin: Rect<LengthPercentageAuto>,
+    /// Set by [`Self::resolve_fixed_lengths`].
+    fixed_lengths_resolved: bool,
+    /// The sizes, when no size, padding or border depends on the grid area.
+    fixed_sizes: Option<ResolvedSizes>,
+    /// The margins, when none depends on the percentage basis.
+    fixed_margin: Option<Rect<f32>>,
+    /// Every margin is zero or `auto`; set by [`Self::resolve_fixed_lengths`].
+    margin_free: bool,
     pub align_self: AlignSelf,
     pub justify_self: AlignSelf,
     pub baseline: Option<f32>,
@@ -54,10 +79,12 @@ impl GridItem {
         col_span: Line<OriginZeroLine>,
         row_span: Line<OriginZeroLine>,
         style: &Style,
-        parent_align_items: AlignItems,
-        parent_justify_items: AlignItems,
+        parent_align_items: Option<AlignItems>,
+        parent_justify_items: Option<AlignItems>,
         source_order: u16,
     ) -> Self {
+        // `normal` stretches, except replaced items, which it sizes as for `start` (css-grid-1 §6.2).
+        let normal = if style.item_is_replaced { AlignSelf::START } else { AlignSelf::STRETCH };
         Self {
             node,
             source_order,
@@ -73,8 +100,12 @@ impl GridItem {
             padding: style.padding,
             border: style.border,
             margin: style.margin,
-            align_self: style.align_self.unwrap_or(parent_align_items),
-            justify_self: style.justify_self.unwrap_or(parent_justify_items),
+            fixed_lengths_resolved: false,
+            fixed_sizes: None,
+            fixed_margin: None,
+            margin_free: false,
+            align_self: style.align_self.or(parent_align_items).unwrap_or(normal),
+            justify_self: style.justify_self.or(parent_justify_items).unwrap_or(normal),
             baseline: None,
             baseline_shim: 0.0,
             row_indexes: Line { start: 0, end: 0 },
@@ -90,6 +121,83 @@ impl GridItem {
             y_position: 0.0,
             last_baseline: 0.0,
             height: 0.0,
+        }
+    }
+
+    /// Resolves, once, the lengths free of percentages and `calc()`: those ignore the basis, so
+    /// the many measurements of track sizing can share them.
+    pub fn resolve_fixed_lengths(&mut self) {
+        if self.fixed_lengths_resolved {
+            return;
+        }
+        self.fixed_lengths_resolved = true;
+        let no_basis = |_: CalcId, _: f32| 0.0;
+        let (size, min, max, padding, border) = (self.size, self.min_size, self.max_size, self.padding, self.border);
+        let sizes = [
+            size.width.raw(),
+            size.height.raw(),
+            min.width.raw(),
+            min.height.raw(),
+            max.width.raw(),
+            max.height.raw(),
+            padding.left.raw(),
+            padding.right.raw(),
+            padding.top.raw(),
+            padding.bottom.raw(),
+            border.left.raw(),
+            border.right.raw(),
+            border.top.raw(),
+            border.bottom.raw(),
+        ];
+        if !sizes.iter().any(|l| l.uses_percentage()) {
+            self.fixed_sizes = Some(self.resolve_sizes(Size::NONE, &no_basis));
+        }
+        let margin = self.margin;
+        if ![margin.left, margin.right, margin.top, margin.bottom].iter().any(|m| m.uses_percentage()) {
+            let resolved = self.resolve_margin(None, &no_basis);
+            self.fixed_margin = Some(resolved);
+            self.margin_free = resolved == Rect::ZERO;
+        }
+    }
+
+    /// Padding plus border, resolved against the grid area's width.
+    fn padding_border(&self, grid_area_width: Option<f32>, calc: &impl Fn(CalcId, f32) -> f32) -> Size<f32> {
+        let padding = self.padding.map(|p| p.resolve_or_zero(grid_area_width, calc));
+        let border = self.border.map(|b| b.resolve_or_zero(grid_area_width, calc));
+        (padding + border).sum_axes()
+    }
+
+    fn resolve_sizes(&self, grid_area_size: Size<Option<f32>>, calc: &impl Fn(CalcId, f32) -> f32) -> ResolvedSizes {
+        let padding_border_size = self.padding_border(grid_area_size.width, calc);
+        let box_sizing_adjustment = if self.box_sizing == BoxSizing::ContentBox { padding_border_size } else { Size::ZERO };
+        let resolve = |s: Size<crate::style::Length>| {
+            crate::compute::block::resolve_size(s, grid_area_size, calc)
+                .maybe_apply_aspect_ratio(self.aspect_ratio)
+                .maybe_add(box_sizing_adjustment)
+        };
+        ResolvedSizes {
+            size: resolve(self.size.map(|v| v.raw())),
+            min_size: resolve(self.min_size.map(|v| v.raw())),
+            max_size: resolve(self.max_size.map(|v| v.raw())),
+            padding_border: padding_border_size,
+        }
+    }
+
+    #[inline]
+    fn sizes(&self, grid_area_size: Size<Option<f32>>, calc: &impl Fn(CalcId, f32) -> f32) -> ResolvedSizes {
+        match self.fixed_sizes {
+            Some(sizes) => sizes,
+            None => self.resolve_sizes(grid_area_size, calc),
+        }
+    }
+
+    /// Inline margins resolve against 0, block margins against the inner width.
+    fn resolve_margin(&self, inner_node_width: Option<f32>, calc: &impl Fn(CalcId, f32) -> f32) -> Rect<f32> {
+        Rect {
+            left: self.margin.left.resolve_or_zero(Some(0.0), calc),
+            right: self.margin.right.resolve_or_zero(Some(0.0), calc),
+            top: self.margin.top.resolve_or_zero(inner_node_width, calc),
+            bottom: self.margin.bottom.resolve_or_zero(inner_node_width, calc),
         }
     }
 
@@ -176,14 +284,7 @@ impl GridItem {
         let calc = |id, basis| tree.resolve_calc(id, basis);
         let margins = self.margins_axis_sums_with_baseline_shims(grid_area_size.width, tree);
         let aspect_ratio = self.aspect_ratio;
-        let padding = self.padding.map(|p| p.resolve_or_zero(grid_area_size.width, &calc));
-        let border = self.border.map(|b| b.resolve_or_zero(grid_area_size.width, &calc));
-        let padding_border_size = (padding + border).sum_axes();
-        let box_sizing_adjustment = if self.box_sizing == BoxSizing::ContentBox { padding_border_size } else { Size::ZERO };
-        let resolve = |s: Size<crate::style::Length>| crate::compute::block::resolve_size(s, grid_area_size, &calc);
-        let inherent_size = resolve(self.size.map(|v| v.raw())).maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment);
-        let min_size = resolve(self.min_size.map(|v| v.raw())).maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment);
-        let max_size = resolve(self.max_size.map(|v| v.raw())).maybe_apply_aspect_ratio(aspect_ratio).maybe_add(box_sizing_adjustment);
+        let ResolvedSizes { size: inherent_size, min_size, max_size, padding_border } = self.sizes(grid_area_size, &calc);
         let grid_area_minus_margins = grid_area_size.maybe_sub(margins).maybe_max(Size::ZERO);
         let width = inherent_size.width.or_else(|| {
             if self.size.width.is_sizing_keyword() {
@@ -192,7 +293,7 @@ impl GridItem {
                     _ => None,
                 };
             }
-            if !self.margin.left.is_auto() && !self.margin.right.is_auto() && self.justify_self == AlignSelf::STRETCH {
+            if !self.margin.left.is_auto() && !self.margin.right.is_auto() && self.justify_self.keyword == AlignItemsKeyword::Stretch {
                 return grid_area_minus_margins.width;
             }
             None
@@ -205,12 +306,13 @@ impl GridItem {
                     _ => None,
                 };
             }
-            if !self.margin.top.is_auto() && !self.margin.bottom.is_auto() && self.align_self == AlignSelf::STRETCH {
+            if !self.margin.top.is_auto() && !self.margin.bottom.is_auto() && self.align_self.keyword == AlignItemsKeyword::Stretch {
                 return grid_area_minus_margins.height;
             }
             None
         });
-        Size { width, height }.maybe_apply_aspect_ratio(aspect_ratio).maybe_clamp(min_size, max_size)
+        // The border box never gets smaller than the padding and border.
+        Size { width, height }.maybe_apply_aspect_ratio(aspect_ratio).maybe_clamp(min_size, max_size).maybe_max(padding_border.map(Some))
     }
 
     /// The item's grid area: definite fixed tracks in `axis`, estimated tracks in the other.
@@ -270,14 +372,43 @@ impl GridItem {
     /// Margin sums; inline margins resolve against 0, block margins against the inner width.
     #[inline]
     pub fn margins_axis_sums_with_baseline_shims<T: LayoutTree + ?Sized>(&self, inner_node_width: Option<f32>, tree: &T) -> Size<f32> {
-        let calc = |id, basis| tree.resolve_calc(id, basis);
-        Rect {
-            left: self.margin.left.resolve_or_zero(Some(0.0), &calc),
-            right: self.margin.right.resolve_or_zero(Some(0.0), &calc),
-            top: self.margin.top.resolve_or_zero(inner_node_width, &calc) + self.baseline_shim,
-            bottom: self.margin.bottom.resolve_or_zero(inner_node_width, &calc),
+        let margin = match self.fixed_margin {
+            Some(margin) => margin,
+            None => self.resolve_margin(inner_node_width, &|id, basis| tree.resolve_calc(id, basis)),
+        };
+        Rect { top: margin.top + self.baseline_shim, ..margin }.sum_axes()
+    }
+
+    /// The space available to the item's border box: its definite margin box space less its
+    /// margins (resolved against the grid area's width, `auto` as zero) and baseline shim.
+    #[inline(always)]
+    fn available_space_minus_margins<T: LayoutTree + ?Sized>(
+        &self,
+        grid_area_size: Size<Option<f32>>,
+        available_space: Size<Option<f32>>,
+        tree: &T,
+    ) -> Size<Option<f32>> {
+        if (self.margin_free && self.baseline_shim == 0.0) || (available_space.width.is_none() && available_space.height.is_none()) {
+            return available_space;
         }
-        .sum_axes()
+        self.subtract_margins(grid_area_size, available_space, tree)
+    }
+
+    #[inline(never)]
+    fn subtract_margins<T: LayoutTree + ?Sized>(
+        &self,
+        grid_area_size: Size<Option<f32>>,
+        available_space: Size<Option<f32>>,
+        tree: &T,
+    ) -> Size<Option<f32>> {
+        let margin = match self.fixed_margin {
+            Some(margin) => margin,
+            None => self.margin.map(|m| m.resolve_or_zero(grid_area_size.width, &|id, basis| tree.resolve_calc(id, basis))),
+        };
+        Size {
+            width: available_space.width.map(|w| (w - margin.horizontal_axis_sum()).max(0.0)),
+            height: available_space.height.map(|h| (h - margin.vertical_axis_sum() - self.baseline_shim).max(0.0)),
+        }
     }
 
     fn keyword_adjusted_available_space<T: LayoutTree + ?Sized>(
@@ -306,7 +437,8 @@ impl GridItem {
         adjusted
     }
 
-    /// The question [`Self::content_contribution`] would ask, for batching ahead of time.
+    /// The question [`Self::content_contribution`] would ask, for batching ahead of time; `None`
+    /// when it asks none.
     pub fn contribution_request<T: LayoutTree + ?Sized>(
         &self,
         axis: AbstractAxis,
@@ -314,14 +446,109 @@ impl GridItem {
         grid_area_size: Size<Option<f32>>,
         available_space: Size<Option<f32>>,
         fallback: AvailableSpace,
-    ) -> crate::tree::ChildRequest {
+    ) -> Option<crate::tree::ChildRequest> {
         let known_dimensions = self.known_dimensions(tree, grid_area_size);
+        if self.known_contribution(axis, tree, known_dimensions, grid_area_size).is_some() {
+            return None;
+        }
         let available = self.keyword_adjusted_available_space(
             grid_area_size,
-            available_space.map(|o| o.map_or(fallback, AvailableSpace::Definite)),
+            self.available_space_minus_margins(grid_area_size, available_space, tree).map(|o| o.map_or(fallback, AvailableSpace::Definite)),
             tree,
         );
-        crate::compute::size_request(self.node, known_dimensions, grid_area_size, available, SizingMode::InherentSize, axis.as_abs().into())
+        Some(crate::compute::size_request(self.node, known_dimensions, grid_area_size, available, SizingMode::InherentSize, axis.as_abs().into()))
+    }
+
+    /// The contribution in `axis` when the item's size there is known, which needs no question.
+    ///
+    /// Every algorithm answers a known size with it clamped by the node's min and max sizes, which
+    /// [`Self::known_dimensions`] already clamped it by, then floored by padding and border: a known
+    /// size above that floor is the answer as is. Not so with an aspect ratio, which a leaf does not
+    /// transfer to its max size; nor for a flex container's height with its width unknown, which
+    /// its algorithm computes back from the inner size; and a leaf of a tree that may override
+    /// `compute_leaf` could answer anything.
+    #[inline(always)]
+    fn known_contribution<T: LayoutTree + ?Sized>(
+        &self,
+        axis: AbstractAxis,
+        tree: &T,
+        known_dimensions: Size<Option<f32>>,
+        grid_area_size: Size<Option<f32>>,
+    ) -> Option<f32> {
+        let size = known_dimensions.get_abstract(axis)?;
+        self.known_size_is_contribution(axis, tree, size, known_dimensions, grid_area_size).then_some(size)
+    }
+
+    #[inline(never)]
+    fn known_size_is_contribution<T: LayoutTree + ?Sized>(
+        &self,
+        axis: AbstractAxis,
+        tree: &T,
+        size: f32,
+        known_dimensions: Size<Option<f32>>,
+        grid_area_size: Size<Option<f32>>,
+    ) -> bool {
+        if self.aspect_ratio.is_some() {
+            return false;
+        }
+        let meta = tree.query_meta(self.node);
+        if meta.hidden || meta.kind == NodeKind::Opaque || (meta.kind.is_flex() && axis == AbstractAxis::Block && known_dimensions.width.is_none()) {
+            return false;
+        }
+        let calc = |id, basis| tree.resolve_calc(id, basis);
+        size > self.padding_border(grid_area_size.width, &calc).get_abstract(axis).max(0.0)
+    }
+
+    /// What the style makes of the minimum contribution (css-grid-1 §11.5, css-sizing-3 §5.2):
+    /// a definite preferred size clamped by the min and max sizes; the min-content contribution
+    /// for a sizing keyword other than `stretch`; else the min size, cyclic percentages against
+    /// zero; else zero for a scroll container; else (`None`) the automatic minimum.
+    fn style_minimum(&self, axis: AbstractAxis, grid_area_size: Size<Option<f32>>, calc: &impl Fn(CalcId, f32) -> f32) -> Option<StyleMinimum> {
+        let sizes = self.sizes(grid_area_size, calc);
+        if let Some(size) = sizes.size.get_abstract(axis) {
+            let size = if self.min_size.get_abstract(axis).is_auto() && self.max_size.get_abstract(axis).is_auto() {
+                size
+            } else {
+                self.clamp_preferred_size(axis, size, grid_area_size, calc)
+            };
+            // The border box never gets smaller than the padding and border.
+            return Some(StyleMinimum::Fixed(size.max(sizes.padding_border.get_abstract(axis))));
+        }
+        let size = self.size.get_abstract(axis);
+        // `fit-content` and `stretch` behave as `auto` here (as Chrome).
+        if size.is_sizing_keyword() && !size.is_stretch() && size.kind() != crate::style::LengthKind::FitContent {
+            return Some(StyleMinimum::MinContent);
+        }
+        let min_size = if self.fixed_sizes.is_some() || grid_area_size.width.is_some() && grid_area_size.height.is_some() {
+            sizes.min_size.get_abstract(axis)
+        } else {
+            self.min_size_against_zero(axis, grid_area_size, calc)
+        };
+        let padding_border = sizes.padding_border.get_abstract(axis);
+        min_size.or_else(|| self.overflow.get(axis.as_abs()).maybe_into_automatic_min_size()).map(|m| StyleMinimum::Fixed(m.max(padding_border)))
+    }
+
+    /// A definite preferred size clamped by the min and max sizes; a compressible replaced element
+    /// resolves an indefinite percentage max size against zero.
+    #[inline(never)]
+    fn clamp_preferred_size(&self, axis: AbstractAxis, size: f32, grid_area_size: Size<Option<f32>>, calc: &impl Fn(CalcId, f32) -> f32) -> f32 {
+        let basis = grid_area_size.get_abstract(axis);
+        let max_basis = if self.is_compressible_replaced { basis.or(Some(0.0)) } else { basis };
+        let adjustment =
+            if self.box_sizing == BoxSizing::ContentBox { self.padding_border(grid_area_size.width, calc).get_abstract(axis) } else { 0.0 };
+        let min = self.min_size.get_abstract(axis).resolve(basis, calc).map(|v| v + adjustment);
+        let max = self.max_size.get_abstract(axis).resolve(max_basis, calc).map(|v| v + adjustment);
+        size.maybe_clamp(min, max)
+    }
+
+    /// The min size with percentages of an indefinite grid area (cyclic) resolved against zero.
+    #[inline(never)]
+    fn min_size_against_zero(&self, axis: AbstractAxis, grid_area_size: Size<Option<f32>>, calc: &impl Fn(CalcId, f32) -> f32) -> Option<f32> {
+        let adjustment = if self.box_sizing == BoxSizing::ContentBox { self.padding_border(grid_area_size.width, calc) } else { Size::ZERO };
+        crate::compute::block::resolve_size(self.min_size.map(|v| v.raw()), grid_area_size.map(|s| Some(s.unwrap_or(0.0))), calc)
+            .maybe_apply_aspect_ratio(self.aspect_ratio)
+            .maybe_add(adjustment)
+            .get_abstract(axis)
     }
 
     /// Whether [`Self::minimum_contribution`] would measure min-content rather than read the style.
@@ -330,31 +557,22 @@ impl GridItem {
         axis: AbstractAxis,
         axis_tracks: &[GridTrack],
         grid_area_size: Size<Option<f32>>,
+        inner_node_size: Size<Option<f32>>,
         calc: &impl Fn(crate::style::CalcId, f32) -> f32,
     ) -> bool {
-        let padding = self.padding.map(|p| p.resolve_or_zero(grid_area_size.width, calc));
-        let border = self.border.map(|b| b.resolve_or_zero(grid_area_size.width, calc));
-        let box_sizing_adjustment = if self.box_sizing == BoxSizing::ContentBox { (padding + border).sum_axes() } else { Size::ZERO };
-        let resolve = |s: Size<crate::style::Length>| crate::compute::block::resolve_size(s, grid_area_size, calc);
-        let explicit = resolve(self.size.map(|v| v.raw()))
-            .maybe_apply_aspect_ratio(self.aspect_ratio)
-            .maybe_add(box_sizing_adjustment)
-            .get_abstract(axis)
-            .or_else(|| {
-                resolve(self.min_size.map(|v| v.raw()))
-                    .maybe_apply_aspect_ratio(self.aspect_ratio)
-                    .maybe_add(box_sizing_adjustment)
-                    .get_abstract(axis)
-            })
-            .or_else(|| self.overflow.get(axis.as_abs()).maybe_into_automatic_min_size());
-        if explicit.is_some() {
-            return false;
+        match self.style_minimum(axis, grid_area_size, calc) {
+            Some(StyleMinimum::Fixed(_)) => false,
+            Some(StyleMinimum::MinContent) => true,
+            None => self.uses_content_based_minimum(axis, axis_tracks, inner_node_size.get_abstract(axis)),
         }
-        let item_axis_tracks = &axis_tracks[self.track_range_excluding_lines(axis)];
-        let spans_auto_min_track = axis_tracks.iter().any(|t| t.min.is_auto());
-        let only_span_one_track = item_axis_tracks.len() == 1;
-        let spans_a_flexible_track = axis_tracks.iter().any(|t| t.max.is_fr());
-        spans_auto_min_track && (only_span_one_track || !spans_a_flexible_track)
+    }
+
+    /// css-grid-1 §6.6: the automatic minimum is content-based when the item spans a track whose
+    /// min sizing function behaves as `auto` and either spans one track or crosses no flexible one.
+    #[inline]
+    fn uses_content_based_minimum(&self, axis: AbstractAxis, axis_tracks: &[GridTrack], axis_inner_node_size: Option<f32>) -> bool {
+        (self.span(axis) == 1 || !self.crosses_flexible_track(axis))
+            && self.spans_track_matching(axis, axis_tracks, |t| t.min_behaves_as_auto(axis_inner_node_size))
     }
 
     /// Drops the "requested" markers a collect pass left in the contribution caches.
@@ -367,6 +585,7 @@ impl GridItem {
         }
     }
 
+    #[inline]
     fn content_contribution<T: LayoutTree + CacheAccess + ?Sized>(
         &self,
         axis: AbstractAxis,
@@ -376,20 +595,42 @@ impl GridItem {
         fallback: AvailableSpace,
     ) -> f32 {
         let known_dimensions = self.known_dimensions(tree, grid_area_size);
+        let known = self.known_contribution(axis, tree, known_dimensions, grid_area_size);
+        #[cfg(feature = "stats")]
+        crate::compute::stats::bump(if known.is_some() { &crate::compute::stats::GRID_MEASURE_ELIDED } else { &crate::compute::stats::GRID_MEASURED });
+        #[cfg(not(feature = "verify-cache"))]
+        if let Some(size) = known {
+            return size;
+        }
+        let measured = self.measure_contribution(axis, tree, known_dimensions, grid_area_size, available_space, fallback);
+        #[cfg(feature = "verify-cache")]
+        if let Some(size) = known {
+            assert!(
+                measured.to_bits() == size.to_bits(),
+                "known grid contribution differs for {:?} on {axis:?}: {size:?}, measured {measured:?}\n known: {known_dimensions:?}",
+                self.node
+            );
+        }
+        measured
+    }
+
+    /// Asks the item for its contribution.
+    #[inline(never)]
+    fn measure_contribution<T: LayoutTree + CacheAccess + ?Sized>(
+        &self,
+        axis: AbstractAxis,
+        tree: &mut T,
+        known_dimensions: Size<Option<f32>>,
+        grid_area_size: Size<Option<f32>>,
+        available_space: Size<Option<f32>>,
+        fallback: AvailableSpace,
+    ) -> f32 {
         let available = self.keyword_adjusted_available_space(
             grid_area_size,
-            available_space.map(|o| o.map_or(fallback, AvailableSpace::Definite)),
+            self.available_space_minus_margins(grid_area_size, available_space, tree).map(|o| o.map_or(fallback, AvailableSpace::Definite)),
             tree,
         );
-        tree.measure_child_size(
-            self.node,
-            known_dimensions,
-            grid_area_size,
-            available,
-            SizingMode::InherentSize,
-            axis.as_abs(),
-            Line::FALSE,
-        )
+        tree.measure_child_size(self.node, known_dimensions, grid_area_size, available, SizingMode::InherentSize, axis.as_abs(), Line::FALSE)
     }
 
     pub fn min_content_contribution<T: LayoutTree + CacheAccess + ?Sized>(
@@ -402,6 +643,7 @@ impl GridItem {
         self.content_contribution(axis, tree, grid_area_size, available_space, AvailableSpace::MinContent)
     }
 
+    #[inline]
     pub fn min_content_contribution_cached<T: LayoutTree + CacheAccess + ?Sized>(
         &mut self,
         axis: AbstractAxis,
@@ -429,6 +671,7 @@ impl GridItem {
         self.content_contribution(axis, tree, grid_area_size, available_space, AvailableSpace::MaxContent)
     }
 
+    #[inline]
     pub fn max_content_contribution_cached<T: LayoutTree + CacheAccess + ?Sized>(
         &mut self,
         axis: AbstractAxis,
@@ -456,44 +699,29 @@ impl GridItem {
         inner_node_size: Size<Option<f32>>,
     ) -> f32 {
         let calc = |id, basis| tree.resolve_calc(id, basis);
-        let padding = self.padding.map(|p| p.resolve_or_zero(grid_area_size.width, &calc));
-        let border = self.border.map(|b| b.resolve_or_zero(grid_area_size.width, &calc));
-        let box_sizing_adjustment = if self.box_sizing == BoxSizing::ContentBox { (padding + border).sum_axes() } else { Size::ZERO };
-        let resolve = |s: Size<crate::style::Length>| crate::compute::block::resolve_size(s, grid_area_size, &calc);
-        let explicit = resolve(self.size.map(|v| v.raw()))
-            .maybe_apply_aspect_ratio(self.aspect_ratio)
-            .maybe_add(box_sizing_adjustment)
-            .get_abstract(axis)
-            .or_else(|| {
-                resolve(self.min_size.map(|v| v.raw()))
-                    .maybe_apply_aspect_ratio(self.aspect_ratio)
-                    .maybe_add(box_sizing_adjustment)
-                    .get_abstract(axis)
-            })
-            .or_else(|| self.overflow.get(axis.as_abs()).maybe_into_automatic_min_size());
-        if let Some(v) = explicit {
-            return v;
+        match self.style_minimum(axis, grid_area_size, &calc) {
+            Some(StyleMinimum::Fixed(v)) => return v,
+            Some(StyleMinimum::MinContent) => return self.min_content_contribution_cached(axis, tree, grid_area_size, grid_area_size),
+            None => {}
         }
-        let item_axis_tracks = &axis_tracks[self.track_range_excluding_lines(axis)];
-        let spans_auto_min_track = axis_tracks.iter().any(|t| t.min.is_auto());
-        let only_span_one_track = item_axis_tracks.len() == 1;
-        let spans_a_flexible_track = axis_tracks.iter().any(|t| t.max.is_fr());
-        let use_content_based_minimum = spans_auto_min_track && (only_span_one_track || !spans_a_flexible_track);
-        if !use_content_based_minimum {
+        if !self.uses_content_based_minimum(axis, axis_tracks, inner_node_size.get_abstract(axis)) {
             return 0.0;
         }
         let mut minimum = self.min_content_contribution_cached(axis, tree, grid_area_size, grid_area_size);
+        let calc = |id, basis| tree.resolve_calc(id, basis);
         if self.is_compressible_replaced {
-            let calc = |id, basis| tree.resolve_calc(id, basis);
             let size = self.size.get_abstract(axis).resolve(Some(0.0), &calc);
             let max_size = self.max_size.get_abstract(axis).resolve(Some(0.0), &calc);
             minimum = minimum.maybe_min(size).maybe_min(max_size);
         }
-        let calc = |id, basis| tree.resolve_calc(id, basis);
+        // The clamp by fixed max track sizing functions is a stretch fit into them: it never
+        // shrinks the item below its padding and border.
         let limit = self.spanned_fixed_track_limit(axis, axis_tracks, inner_node_size.get_abstract(axis), &calc);
-        minimum.maybe_min(limit)
+        let padding_border = self.padding_border(grid_area_size.width, &calc).get_abstract(axis);
+        minimum.maybe_min(limit.map(|l| l.max(padding_border)))
     }
 
+    #[inline]
     pub fn minimum_contribution_cached<T: LayoutTree + CacheAccess + ?Sized>(
         &mut self,
         tree: &mut T,

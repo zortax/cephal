@@ -2,18 +2,18 @@
 <test name="gridflex_column_integration__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div direction="ltr" flex-direction="column">
-      <div display="grid" direction="ltr" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
-        <text direction="ltr">
+    <div direction="ltr" position="absolute" flex-direction="column">
+      <div display="grid" direction="ltr" position="relative" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
+        <text direction="ltr" position="relative">
           HH
         </text>
-        <text direction="ltr">
+        <text direction="ltr" position="relative">
           HH
         </text>
-        <text direction="ltr">
+        <text direction="ltr" position="relative">
           HH
         </text>
-        <text direction="ltr">
+        <text direction="ltr" position="relative">
           HH
         </text>
       </div>
@@ -33,18 +33,18 @@
 <test name="gridflex_column_integration__border_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div direction="rtl" flex-direction="column">
-      <div display="grid" direction="rtl" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
-        <text direction="rtl">
+    <div direction="rtl" position="absolute" flex-direction="column">
+      <div display="grid" direction="rtl" position="relative" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
+        <text direction="rtl" position="relative">
           HH
         </text>
-        <text direction="rtl">
+        <text direction="rtl" position="relative">
           HH
         </text>
-        <text direction="rtl">
+        <text direction="rtl" position="relative">
           HH
         </text>
-        <text direction="rtl">
+        <text direction="rtl" position="relative">
           HH
         </text>
       </div>
@@ -64,18 +64,18 @@
 <test name="gridflex_column_integration__content_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div box-sizing="content-box" direction="ltr" flex-direction="column">
-      <div display="grid" box-sizing="content-box" direction="ltr" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
-        <text box-sizing="content-box" direction="ltr">
+    <div box-sizing="content-box" direction="ltr" position="absolute" flex-direction="column">
+      <div display="grid" box-sizing="content-box" direction="ltr" position="relative" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
+        <text box-sizing="content-box" direction="ltr" position="relative">
           HH
         </text>
-        <text box-sizing="content-box" direction="ltr">
+        <text box-sizing="content-box" direction="ltr" position="relative">
           HH
         </text>
-        <text box-sizing="content-box" direction="ltr">
+        <text box-sizing="content-box" direction="ltr" position="relative">
           HH
         </text>
-        <text box-sizing="content-box" direction="ltr">
+        <text box-sizing="content-box" direction="ltr" position="relative">
           HH
         </text>
       </div>
@@ -95,18 +95,18 @@
 <test name="gridflex_column_integration__content_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div box-sizing="content-box" direction="rtl" flex-direction="column">
-      <div display="grid" box-sizing="content-box" direction="rtl" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
-        <text box-sizing="content-box" direction="rtl">
+    <div box-sizing="content-box" direction="rtl" position="absolute" flex-direction="column">
+      <div display="grid" box-sizing="content-box" direction="rtl" position="relative" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
+        <text box-sizing="content-box" direction="rtl" position="relative">
           HH
         </text>
-        <text box-sizing="content-box" direction="rtl">
+        <text box-sizing="content-box" direction="rtl" position="relative">
           HH
         </text>
-        <text box-sizing="content-box" direction="rtl">
+        <text box-sizing="content-box" direction="rtl" position="relative">
           HH
         </text>
-        <text box-sizing="content-box" direction="rtl">
+        <text box-sizing="content-box" direction="rtl" position="relative">
           HH
         </text>
       </div>
@@ -126,26 +126,26 @@
 <test name="gridflex_kitchen_sink__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div direction="ltr">
-      <div display="grid" direction="ltr" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
-        <div direction="ltr">
-          <div direction="ltr" width="20px"/>
-          <div direction="ltr" flex-grow="1" width="50px">
-            <div display="grid" direction="ltr" grid-template-rows="30% 10%" grid-template-columns="auto 10%">
-              <div direction="ltr" width="20px"/>
-              <div direction="ltr"/>
-              <div direction="ltr"/>
-              <div direction="ltr"/>
+    <div direction="ltr" position="absolute">
+      <div display="grid" direction="ltr" position="relative" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
+        <div direction="ltr" position="relative">
+          <div direction="ltr" position="relative" width="20px"/>
+          <div direction="ltr" position="relative" flex-grow="1" width="50px">
+            <div display="grid" direction="ltr" position="relative" grid-template-rows="30% 10%" grid-template-columns="auto 10%">
+              <div direction="ltr" position="relative" width="20px"/>
+              <div direction="ltr" position="relative"/>
+              <div direction="ltr" position="relative"/>
+              <div direction="ltr" position="relative"/>
             </div>
           </div>
         </div>
-        <text direction="ltr">
+        <text direction="ltr" position="relative">
           HH
         </text>
-        <text direction="ltr">
+        <text direction="ltr" position="relative">
           HH
         </text>
-        <text direction="ltr">
+        <text direction="ltr" position="relative">
           HH
         </text>
       </div>
@@ -175,26 +175,26 @@
 <test name="gridflex_kitchen_sink__border_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div direction="rtl">
-      <div display="grid" direction="rtl" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
-        <div direction="rtl">
-          <div direction="rtl" width="20px"/>
-          <div direction="rtl" flex-grow="1" width="50px">
-            <div display="grid" direction="rtl" grid-template-rows="30% 10%" grid-template-columns="auto 10%">
-              <div direction="rtl" width="20px"/>
-              <div direction="rtl"/>
-              <div direction="rtl"/>
-              <div direction="rtl"/>
+    <div direction="rtl" position="absolute">
+      <div display="grid" direction="rtl" position="relative" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
+        <div direction="rtl" position="relative">
+          <div direction="rtl" position="relative" width="20px"/>
+          <div direction="rtl" position="relative" flex-grow="1" width="50px">
+            <div display="grid" direction="rtl" position="relative" grid-template-rows="30% 10%" grid-template-columns="auto 10%">
+              <div direction="rtl" position="relative" width="20px"/>
+              <div direction="rtl" position="relative"/>
+              <div direction="rtl" position="relative"/>
+              <div direction="rtl" position="relative"/>
             </div>
           </div>
         </div>
-        <text direction="rtl">
+        <text direction="rtl" position="relative">
           HH
         </text>
-        <text direction="rtl">
+        <text direction="rtl" position="relative">
           HH
         </text>
-        <text direction="rtl">
+        <text direction="rtl" position="relative">
           HH
         </text>
       </div>
@@ -224,26 +224,26 @@
 <test name="gridflex_kitchen_sink__content_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div box-sizing="content-box" direction="ltr">
-      <div display="grid" box-sizing="content-box" direction="ltr" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
-        <div box-sizing="content-box" direction="ltr">
-          <div box-sizing="content-box" direction="ltr" width="20px"/>
-          <div box-sizing="content-box" direction="ltr" flex-grow="1" width="50px">
-            <div display="grid" box-sizing="content-box" direction="ltr" grid-template-rows="30% 10%" grid-template-columns="auto 10%">
-              <div box-sizing="content-box" direction="ltr" width="20px"/>
-              <div box-sizing="content-box" direction="ltr"/>
-              <div box-sizing="content-box" direction="ltr"/>
-              <div box-sizing="content-box" direction="ltr"/>
+    <div box-sizing="content-box" direction="ltr" position="absolute">
+      <div display="grid" box-sizing="content-box" direction="ltr" position="relative" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
+        <div box-sizing="content-box" direction="ltr" position="relative">
+          <div box-sizing="content-box" direction="ltr" position="relative" width="20px"/>
+          <div box-sizing="content-box" direction="ltr" position="relative" flex-grow="1" width="50px">
+            <div display="grid" box-sizing="content-box" direction="ltr" position="relative" grid-template-rows="30% 10%" grid-template-columns="auto 10%">
+              <div box-sizing="content-box" direction="ltr" position="relative" width="20px"/>
+              <div box-sizing="content-box" direction="ltr" position="relative"/>
+              <div box-sizing="content-box" direction="ltr" position="relative"/>
+              <div box-sizing="content-box" direction="ltr" position="relative"/>
             </div>
           </div>
         </div>
-        <text box-sizing="content-box" direction="ltr">
+        <text box-sizing="content-box" direction="ltr" position="relative">
           HH
         </text>
-        <text box-sizing="content-box" direction="ltr">
+        <text box-sizing="content-box" direction="ltr" position="relative">
           HH
         </text>
-        <text box-sizing="content-box" direction="ltr">
+        <text box-sizing="content-box" direction="ltr" position="relative">
           HH
         </text>
       </div>
@@ -273,26 +273,26 @@
 <test name="gridflex_kitchen_sink__content_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div box-sizing="content-box" direction="rtl">
-      <div display="grid" box-sizing="content-box" direction="rtl" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
-        <div box-sizing="content-box" direction="rtl">
-          <div box-sizing="content-box" direction="rtl" width="20px"/>
-          <div box-sizing="content-box" direction="rtl" flex-grow="1" width="50px">
-            <div display="grid" box-sizing="content-box" direction="rtl" grid-template-rows="30% 10%" grid-template-columns="auto 10%">
-              <div box-sizing="content-box" direction="rtl" width="20px"/>
-              <div box-sizing="content-box" direction="rtl"/>
-              <div box-sizing="content-box" direction="rtl"/>
-              <div box-sizing="content-box" direction="rtl"/>
+    <div box-sizing="content-box" direction="rtl" position="absolute">
+      <div display="grid" box-sizing="content-box" direction="rtl" position="relative" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
+        <div box-sizing="content-box" direction="rtl" position="relative">
+          <div box-sizing="content-box" direction="rtl" position="relative" width="20px"/>
+          <div box-sizing="content-box" direction="rtl" position="relative" flex-grow="1" width="50px">
+            <div display="grid" box-sizing="content-box" direction="rtl" position="relative" grid-template-rows="30% 10%" grid-template-columns="auto 10%">
+              <div box-sizing="content-box" direction="rtl" position="relative" width="20px"/>
+              <div box-sizing="content-box" direction="rtl" position="relative"/>
+              <div box-sizing="content-box" direction="rtl" position="relative"/>
+              <div box-sizing="content-box" direction="rtl" position="relative"/>
             </div>
           </div>
         </div>
-        <text box-sizing="content-box" direction="rtl">
+        <text box-sizing="content-box" direction="rtl" position="relative">
           HH
         </text>
-        <text box-sizing="content-box" direction="rtl">
+        <text box-sizing="content-box" direction="rtl" position="relative">
           HH
         </text>
-        <text box-sizing="content-box" direction="rtl">
+        <text box-sizing="content-box" direction="rtl" position="relative">
           HH
         </text>
       </div>
@@ -322,9 +322,9 @@
 <test name="gridflex_kitchen_sink_minimise2__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div direction="ltr" flex-grow="1" width="50px">
-      <div display="grid" direction="ltr" grid-template-rows="auto" grid-template-columns="auto">
-        <div direction="ltr" width="20px" height="20px"/>
+    <div direction="ltr" position="absolute" flex-grow="1" width="50px">
+      <div display="grid" direction="ltr" position="relative" grid-template-rows="auto" grid-template-columns="auto">
+        <div direction="ltr" position="relative" width="20px" height="20px"/>
       </div>
     </div>
   </input>
@@ -339,9 +339,9 @@
 <test name="gridflex_kitchen_sink_minimise2__border_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div direction="rtl" flex-grow="1" width="50px">
-      <div display="grid" direction="rtl" grid-template-rows="auto" grid-template-columns="auto">
-        <div direction="rtl" width="20px" height="20px"/>
+    <div direction="rtl" position="absolute" flex-grow="1" width="50px">
+      <div display="grid" direction="rtl" position="relative" grid-template-rows="auto" grid-template-columns="auto">
+        <div direction="rtl" position="relative" width="20px" height="20px"/>
       </div>
     </div>
   </input>
@@ -356,9 +356,9 @@
 <test name="gridflex_kitchen_sink_minimise2__content_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div box-sizing="content-box" direction="ltr" flex-grow="1" width="50px">
-      <div display="grid" box-sizing="content-box" direction="ltr" grid-template-rows="auto" grid-template-columns="auto">
-        <div box-sizing="content-box" direction="ltr" width="20px" height="20px"/>
+    <div box-sizing="content-box" direction="ltr" position="absolute" flex-grow="1" width="50px">
+      <div display="grid" box-sizing="content-box" direction="ltr" position="relative" grid-template-rows="auto" grid-template-columns="auto">
+        <div box-sizing="content-box" direction="ltr" position="relative" width="20px" height="20px"/>
       </div>
     </div>
   </input>
@@ -373,9 +373,9 @@
 <test name="gridflex_kitchen_sink_minimise2__content_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div box-sizing="content-box" direction="rtl" flex-grow="1" width="50px">
-      <div display="grid" box-sizing="content-box" direction="rtl" grid-template-rows="auto" grid-template-columns="auto">
-        <div box-sizing="content-box" direction="rtl" width="20px" height="20px"/>
+    <div box-sizing="content-box" direction="rtl" position="absolute" flex-grow="1" width="50px">
+      <div display="grid" box-sizing="content-box" direction="rtl" position="relative" grid-template-rows="auto" grid-template-columns="auto">
+        <div box-sizing="content-box" direction="rtl" position="relative" width="20px" height="20px"/>
       </div>
     </div>
   </input>
@@ -390,12 +390,12 @@
 <test name="gridflex_kitchen_sink_minimise3__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div direction="ltr" width="50px">
-      <div display="grid" direction="ltr" grid-template-rows="30% 10%" grid-template-columns="auto 10%">
-        <div direction="ltr" width="20px" height="20px"/>
-        <div direction="ltr"/>
-        <div direction="ltr"/>
-        <div direction="ltr"/>
+    <div direction="ltr" position="absolute" width="50px">
+      <div display="grid" direction="ltr" position="relative" grid-template-rows="30% 10%" grid-template-columns="auto 10%">
+        <div direction="ltr" position="relative" width="20px" height="20px"/>
+        <div direction="ltr" position="relative"/>
+        <div direction="ltr" position="relative"/>
+        <div direction="ltr" position="relative"/>
       </div>
     </div>
   </input>
@@ -413,12 +413,12 @@
 <test name="gridflex_kitchen_sink_minimise3__border_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div direction="rtl" width="50px">
-      <div display="grid" direction="rtl" grid-template-rows="30% 10%" grid-template-columns="auto 10%">
-        <div direction="rtl" width="20px" height="20px"/>
-        <div direction="rtl"/>
-        <div direction="rtl"/>
-        <div direction="rtl"/>
+    <div direction="rtl" position="absolute" width="50px">
+      <div display="grid" direction="rtl" position="relative" grid-template-rows="30% 10%" grid-template-columns="auto 10%">
+        <div direction="rtl" position="relative" width="20px" height="20px"/>
+        <div direction="rtl" position="relative"/>
+        <div direction="rtl" position="relative"/>
+        <div direction="rtl" position="relative"/>
       </div>
     </div>
   </input>
@@ -436,12 +436,12 @@
 <test name="gridflex_kitchen_sink_minimise3__content_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div box-sizing="content-box" direction="ltr" width="50px">
-      <div display="grid" box-sizing="content-box" direction="ltr" grid-template-rows="30% 10%" grid-template-columns="auto 10%">
-        <div box-sizing="content-box" direction="ltr" width="20px" height="20px"/>
-        <div box-sizing="content-box" direction="ltr"/>
-        <div box-sizing="content-box" direction="ltr"/>
-        <div box-sizing="content-box" direction="ltr"/>
+    <div box-sizing="content-box" direction="ltr" position="absolute" width="50px">
+      <div display="grid" box-sizing="content-box" direction="ltr" position="relative" grid-template-rows="30% 10%" grid-template-columns="auto 10%">
+        <div box-sizing="content-box" direction="ltr" position="relative" width="20px" height="20px"/>
+        <div box-sizing="content-box" direction="ltr" position="relative"/>
+        <div box-sizing="content-box" direction="ltr" position="relative"/>
+        <div box-sizing="content-box" direction="ltr" position="relative"/>
       </div>
     </div>
   </input>
@@ -459,12 +459,12 @@
 <test name="gridflex_kitchen_sink_minimise3__content_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div box-sizing="content-box" direction="rtl" width="50px">
-      <div display="grid" box-sizing="content-box" direction="rtl" grid-template-rows="30% 10%" grid-template-columns="auto 10%">
-        <div box-sizing="content-box" direction="rtl" width="20px" height="20px"/>
-        <div box-sizing="content-box" direction="rtl"/>
-        <div box-sizing="content-box" direction="rtl"/>
-        <div box-sizing="content-box" direction="rtl"/>
+    <div box-sizing="content-box" direction="rtl" position="absolute" width="50px">
+      <div display="grid" box-sizing="content-box" direction="rtl" position="relative" grid-template-rows="30% 10%" grid-template-columns="auto 10%">
+        <div box-sizing="content-box" direction="rtl" position="relative" width="20px" height="20px"/>
+        <div box-sizing="content-box" direction="rtl" position="relative"/>
+        <div box-sizing="content-box" direction="rtl" position="relative"/>
+        <div box-sizing="content-box" direction="rtl" position="relative"/>
       </div>
     </div>
   </input>
@@ -482,10 +482,10 @@
 <test name="gridflex_kitchen_sink_minimise__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div direction="ltr">
-      <div display="grid" direction="ltr" grid-template-rows="20px" grid-template-columns="1fr 1fr">
-        <div direction="ltr" width="50px"/>
-        <div direction="ltr"/>
+    <div direction="ltr" position="absolute">
+      <div display="grid" direction="ltr" position="relative" grid-template-rows="20px" grid-template-columns="1fr 1fr">
+        <div direction="ltr" position="relative" width="50px"/>
+        <div direction="ltr" position="relative"/>
       </div>
     </div>
   </input>
@@ -501,10 +501,10 @@
 <test name="gridflex_kitchen_sink_minimise__border_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div direction="rtl">
-      <div display="grid" direction="rtl" grid-template-rows="20px" grid-template-columns="1fr 1fr">
-        <div direction="rtl" width="50px"/>
-        <div direction="rtl"/>
+    <div direction="rtl" position="absolute">
+      <div display="grid" direction="rtl" position="relative" grid-template-rows="20px" grid-template-columns="1fr 1fr">
+        <div direction="rtl" position="relative" width="50px"/>
+        <div direction="rtl" position="relative"/>
       </div>
     </div>
   </input>
@@ -520,10 +520,10 @@
 <test name="gridflex_kitchen_sink_minimise__content_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div box-sizing="content-box" direction="ltr">
-      <div display="grid" box-sizing="content-box" direction="ltr" grid-template-rows="20px" grid-template-columns="1fr 1fr">
-        <div box-sizing="content-box" direction="ltr" width="50px"/>
-        <div box-sizing="content-box" direction="ltr"/>
+    <div box-sizing="content-box" direction="ltr" position="absolute">
+      <div display="grid" box-sizing="content-box" direction="ltr" position="relative" grid-template-rows="20px" grid-template-columns="1fr 1fr">
+        <div box-sizing="content-box" direction="ltr" position="relative" width="50px"/>
+        <div box-sizing="content-box" direction="ltr" position="relative"/>
       </div>
     </div>
   </input>
@@ -539,10 +539,10 @@
 <test name="gridflex_kitchen_sink_minimise__content_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div box-sizing="content-box" direction="rtl">
-      <div display="grid" box-sizing="content-box" direction="rtl" grid-template-rows="20px" grid-template-columns="1fr 1fr">
-        <div box-sizing="content-box" direction="rtl" width="50px"/>
-        <div box-sizing="content-box" direction="rtl"/>
+    <div box-sizing="content-box" direction="rtl" position="absolute">
+      <div display="grid" box-sizing="content-box" direction="rtl" position="relative" grid-template-rows="20px" grid-template-columns="1fr 1fr">
+        <div box-sizing="content-box" direction="rtl" position="relative" width="50px"/>
+        <div box-sizing="content-box" direction="rtl" position="relative"/>
       </div>
     </div>
   </input>
@@ -558,12 +558,12 @@
 <test name="gridflex_negative_margin_hidden_grid_item_intrinsic_height__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="flex" direction="ltr" flex-direction="column" width="400px">
-      <div display="flex" direction="ltr" flex-direction="column">
-        <div display="flex" direction="ltr" flex-direction="column" margin-top="-32px">
-          <div display="grid" direction="ltr" grid-template-columns="100px">
-            <div display="flex" direction="ltr" flex-direction="column" overflow-x="hidden" overflow-y="hidden" scrollbar-width="15">
-              <div direction="ltr" width="100px" height="100px"/>
+    <div display="flex" direction="ltr" position="absolute" flex-direction="column" width="400px">
+      <div display="flex" direction="ltr" position="relative" flex-direction="column">
+        <div display="flex" direction="ltr" position="relative" flex-direction="column" margin-top="-32px">
+          <div display="grid" direction="ltr" position="relative" grid-template-columns="100px">
+            <div display="flex" direction="ltr" position="relative" flex-direction="column" overflow-x="hidden" overflow-y="hidden" scrollbar-width="15">
+              <div direction="ltr" position="relative" width="100px" height="100px"/>
             </div>
           </div>
         </div>
@@ -587,12 +587,12 @@
 <test name="gridflex_negative_margin_hidden_grid_item_intrinsic_height__border_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="flex" direction="rtl" flex-direction="column" width="400px">
-      <div display="flex" direction="rtl" flex-direction="column">
-        <div display="flex" direction="rtl" flex-direction="column" margin-top="-32px">
-          <div display="grid" direction="rtl" grid-template-columns="100px">
-            <div display="flex" direction="rtl" flex-direction="column" overflow-x="hidden" overflow-y="hidden" scrollbar-width="15">
-              <div direction="rtl" width="100px" height="100px"/>
+    <div display="flex" direction="rtl" position="absolute" flex-direction="column" width="400px">
+      <div display="flex" direction="rtl" position="relative" flex-direction="column">
+        <div display="flex" direction="rtl" position="relative" flex-direction="column" margin-top="-32px">
+          <div display="grid" direction="rtl" position="relative" grid-template-columns="100px">
+            <div display="flex" direction="rtl" position="relative" flex-direction="column" overflow-x="hidden" overflow-y="hidden" scrollbar-width="15">
+              <div direction="rtl" position="relative" width="100px" height="100px"/>
             </div>
           </div>
         </div>
@@ -616,12 +616,12 @@
 <test name="gridflex_negative_margin_hidden_grid_item_intrinsic_height__content_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="flex" box-sizing="content-box" direction="ltr" flex-direction="column" width="400px">
-      <div display="flex" box-sizing="content-box" direction="ltr" flex-direction="column">
-        <div display="flex" box-sizing="content-box" direction="ltr" flex-direction="column" margin-top="-32px">
-          <div display="grid" box-sizing="content-box" direction="ltr" grid-template-columns="100px">
-            <div display="flex" box-sizing="content-box" direction="ltr" flex-direction="column" overflow-x="hidden" overflow-y="hidden" scrollbar-width="15">
-              <div box-sizing="content-box" direction="ltr" width="100px" height="100px"/>
+    <div display="flex" box-sizing="content-box" direction="ltr" position="absolute" flex-direction="column" width="400px">
+      <div display="flex" box-sizing="content-box" direction="ltr" position="relative" flex-direction="column">
+        <div display="flex" box-sizing="content-box" direction="ltr" position="relative" flex-direction="column" margin-top="-32px">
+          <div display="grid" box-sizing="content-box" direction="ltr" position="relative" grid-template-columns="100px">
+            <div display="flex" box-sizing="content-box" direction="ltr" position="relative" flex-direction="column" overflow-x="hidden" overflow-y="hidden" scrollbar-width="15">
+              <div box-sizing="content-box" direction="ltr" position="relative" width="100px" height="100px"/>
             </div>
           </div>
         </div>
@@ -645,12 +645,12 @@
 <test name="gridflex_negative_margin_hidden_grid_item_intrinsic_height__content_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div display="flex" box-sizing="content-box" direction="rtl" flex-direction="column" width="400px">
-      <div display="flex" box-sizing="content-box" direction="rtl" flex-direction="column">
-        <div display="flex" box-sizing="content-box" direction="rtl" flex-direction="column" margin-top="-32px">
-          <div display="grid" box-sizing="content-box" direction="rtl" grid-template-columns="100px">
-            <div display="flex" box-sizing="content-box" direction="rtl" flex-direction="column" overflow-x="hidden" overflow-y="hidden" scrollbar-width="15">
-              <div box-sizing="content-box" direction="rtl" width="100px" height="100px"/>
+    <div display="flex" box-sizing="content-box" direction="rtl" position="absolute" flex-direction="column" width="400px">
+      <div display="flex" box-sizing="content-box" direction="rtl" position="relative" flex-direction="column">
+        <div display="flex" box-sizing="content-box" direction="rtl" position="relative" flex-direction="column" margin-top="-32px">
+          <div display="grid" box-sizing="content-box" direction="rtl" position="relative" grid-template-columns="100px">
+            <div display="flex" box-sizing="content-box" direction="rtl" position="relative" flex-direction="column" overflow-x="hidden" overflow-y="hidden" scrollbar-width="15">
+              <div box-sizing="content-box" direction="rtl" position="relative" width="100px" height="100px"/>
             </div>
           </div>
         </div>
@@ -674,18 +674,18 @@
 <test name="gridflex_row_integration__border_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div direction="ltr">
-      <div display="grid" direction="ltr" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
-        <text direction="ltr">
+    <div direction="ltr" position="absolute">
+      <div display="grid" direction="ltr" position="relative" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
+        <text direction="ltr" position="relative">
           HH
         </text>
-        <text direction="ltr">
+        <text direction="ltr" position="relative">
           HH
         </text>
-        <text direction="ltr">
+        <text direction="ltr" position="relative">
           HH
         </text>
-        <text direction="ltr">
+        <text direction="ltr" position="relative">
           HH
         </text>
       </div>
@@ -705,18 +705,18 @@
 <test name="gridflex_row_integration__border_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div direction="rtl">
-      <div display="grid" direction="rtl" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
-        <text direction="rtl">
+    <div direction="rtl" position="absolute">
+      <div display="grid" direction="rtl" position="relative" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
+        <text direction="rtl" position="relative">
           HH
         </text>
-        <text direction="rtl">
+        <text direction="rtl" position="relative">
           HH
         </text>
-        <text direction="rtl">
+        <text direction="rtl" position="relative">
           HH
         </text>
-        <text direction="rtl">
+        <text direction="rtl" position="relative">
           HH
         </text>
       </div>
@@ -736,18 +736,18 @@
 <test name="gridflex_row_integration__content_box_ltr" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div box-sizing="content-box" direction="ltr">
-      <div display="grid" box-sizing="content-box" direction="ltr" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
-        <text box-sizing="content-box" direction="ltr">
+    <div box-sizing="content-box" direction="ltr" position="absolute">
+      <div display="grid" box-sizing="content-box" direction="ltr" position="relative" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
+        <text box-sizing="content-box" direction="ltr" position="relative">
           HH
         </text>
-        <text box-sizing="content-box" direction="ltr">
+        <text box-sizing="content-box" direction="ltr" position="relative">
           HH
         </text>
-        <text box-sizing="content-box" direction="ltr">
+        <text box-sizing="content-box" direction="ltr" position="relative">
           HH
         </text>
-        <text box-sizing="content-box" direction="ltr">
+        <text box-sizing="content-box" direction="ltr" position="relative">
           HH
         </text>
       </div>
@@ -767,18 +767,18 @@
 <test name="gridflex_row_integration__content_box_rtl" use-rounding="true">
   <viewport width="max-content" height="max-content"/>
   <input>
-    <div box-sizing="content-box" direction="rtl">
-      <div display="grid" box-sizing="content-box" direction="rtl" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
-        <text box-sizing="content-box" direction="rtl">
+    <div box-sizing="content-box" direction="rtl" position="absolute">
+      <div display="grid" box-sizing="content-box" direction="rtl" position="relative" grid-template-rows="1fr 1fr" grid-template-columns="1fr 1fr">
+        <text box-sizing="content-box" direction="rtl" position="relative">
           HH
         </text>
-        <text box-sizing="content-box" direction="rtl">
+        <text box-sizing="content-box" direction="rtl" position="relative">
           HH
         </text>
-        <text box-sizing="content-box" direction="rtl">
+        <text box-sizing="content-box" direction="rtl" position="relative">
           HH
         </text>
-        <text box-sizing="content-box" direction="rtl">
+        <text box-sizing="content-box" direction="rtl" position="relative">
           HH
         </text>
       </div>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    A block with an aspect ratio and automatic heights is at least as tall as its content
+    (css-sizing-4 §5.2.1), capped by its max-height; a scroll container or an explicit min-height
+    (even a percentage of an indefinite height) keeps the ratio; a definite height keeps it
+    whatever max-width does to the width
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; width: 300px;">
+  <div style="display: block; width: 0%; aspect-ratio: 0.5;">
+    <div style="display: block; border: 3px solid;"></div>
+  </div>
+  <div style="display: block; width: 24%; aspect-ratio: 1;">
+    <div style="display: block; height: 181px;"></div>
+  </div>
+  <div style="display: block; width: 0px; aspect-ratio: 1;">X</div>
+  <div style="display: block; width: 20px; aspect-ratio: 1; max-height: 30px;">
+    <div style="display: block; height: 50px;"></div>
+  </div>
+  <div style="display: block; width: 20px; aspect-ratio: 1; overflow: hidden;">
+    <div style="display: block; height: 50px;"></div>
+  </div>
+  <div style="display: block; width: 20px; aspect-ratio: 1; min-height: 5px;">
+    <div style="display: block; height: 50px;"></div>
+  </div>
+  <div style="display: block; height: 195px; max-width: 11%; aspect-ratio: 1;"></div>
+  <div style="display: block; max-width: 23px; min-height: 8%; aspect-ratio: 1;">X&#8203;X&#8203;X&#8203;X&#8203;X</div>
+</div>
+
+</body>
+</html>

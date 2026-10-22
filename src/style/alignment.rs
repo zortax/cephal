@@ -50,7 +50,10 @@ impl AlignContentKeyword {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[repr(u8)]
 pub enum AlignmentSafety {
+    /// No overflow-position keyword: unsafe, except that an absolutely positioned box is kept from
+    /// overflowing its containing block where it can be (css-align-3 §4.4).
     #[default]
+    Default,
     Unsafe,
     Safe,
 }
@@ -68,6 +71,9 @@ pub type JustifySelf = AlignItems;
 
 impl AlignItems {
     const fn new(keyword: AlignItemsKeyword) -> Self {
+        Self { keyword, safety: AlignmentSafety::Default }
+    }
+    const fn unsafe_(keyword: AlignItemsKeyword) -> Self {
         Self { keyword, safety: AlignmentSafety::Unsafe }
     }
     const fn safe(keyword: AlignItemsKeyword) -> Self {
@@ -89,6 +95,13 @@ impl AlignItems {
     pub const SAFE_CENTER: Self = Self::safe(AlignItemsKeyword::Center);
     pub const SAFE_SELF_START: Self = Self::safe(AlignItemsKeyword::SelfStart);
     pub const SAFE_SELF_END: Self = Self::safe(AlignItemsKeyword::SelfEnd);
+    pub const UNSAFE_START: Self = Self::unsafe_(AlignItemsKeyword::Start);
+    pub const UNSAFE_END: Self = Self::unsafe_(AlignItemsKeyword::End);
+    pub const UNSAFE_FLEX_START: Self = Self::unsafe_(AlignItemsKeyword::FlexStart);
+    pub const UNSAFE_FLEX_END: Self = Self::unsafe_(AlignItemsKeyword::FlexEnd);
+    pub const UNSAFE_CENTER: Self = Self::unsafe_(AlignItemsKeyword::Center);
+    pub const UNSAFE_SELF_START: Self = Self::unsafe_(AlignItemsKeyword::SelfStart);
+    pub const UNSAFE_SELF_END: Self = Self::unsafe_(AlignItemsKeyword::SelfEnd);
 
     #[inline]
     pub const fn is_safe(self) -> bool {
@@ -126,6 +139,9 @@ pub type JustifyContent = AlignContent;
 
 impl AlignContent {
     const fn new(keyword: AlignContentKeyword) -> Self {
+        Self { keyword, safety: AlignmentSafety::Default }
+    }
+    const fn unsafe_(keyword: AlignContentKeyword) -> Self {
         Self { keyword, safety: AlignmentSafety::Unsafe }
     }
     const fn safe(keyword: AlignContentKeyword) -> Self {
@@ -145,6 +161,11 @@ impl AlignContent {
     pub const SAFE_FLEX_START: Self = Self::safe(AlignContentKeyword::FlexStart);
     pub const SAFE_FLEX_END: Self = Self::safe(AlignContentKeyword::FlexEnd);
     pub const SAFE_CENTER: Self = Self::safe(AlignContentKeyword::Center);
+    pub const UNSAFE_START: Self = Self::unsafe_(AlignContentKeyword::Start);
+    pub const UNSAFE_END: Self = Self::unsafe_(AlignContentKeyword::End);
+    pub const UNSAFE_FLEX_START: Self = Self::unsafe_(AlignContentKeyword::FlexStart);
+    pub const UNSAFE_FLEX_END: Self = Self::unsafe_(AlignContentKeyword::FlexEnd);
+    pub const UNSAFE_CENTER: Self = Self::unsafe_(AlignContentKeyword::Center);
 
     #[inline]
     pub const fn is_safe(self) -> bool {

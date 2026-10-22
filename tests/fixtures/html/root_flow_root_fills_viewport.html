@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    A `flow-root` root is a block container, so it fills a definite viewport width as a `block`
+    root does
+  </title>
+</head>
+<body>
+
+<div class="viewport" style="display: block; width: 200px; height: 100px;">
+  <div id="test-root" style="display: flow-root; padding: 5px;">
+    <div style="display: block; height: 10px;"></div>
+  </div>
+</div>
+
+</body>
+</html>

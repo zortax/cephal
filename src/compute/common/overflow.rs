@@ -1,7 +1,7 @@
 //! Scrollable overflow contributions.
 
 use crate::geometry::{Point, Rect, Size};
-use crate::style::{Contain, Overflow, Position};
+use crate::style::{Contain, Overflow};
 
 /// The rectangle a child adds to its parent's scrollable overflow, in scroll-origin coordinates.
 ///
@@ -39,13 +39,6 @@ pub fn scrollable_overflow_contribution(
     } else {
         contribution
     }
-}
-
-/// What an out-of-flow child adds to its container's scrollable overflow, given what its box covers;
-/// a fixed box scrolls with nothing and adds nothing.
-#[inline]
-pub fn out_of_flow_contribution(position: Position, contribution: Rect<f32>) -> Rect<f32> {
-    if position == Position::Fixed { Rect::ZERO } else { contribution }
 }
 
 /// Union of two overflow rects; both always contain the origin.

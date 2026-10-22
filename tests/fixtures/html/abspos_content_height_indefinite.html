@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    The height of an absolutely positioned box found from its content is not definite for the
+    percentages inside (CSS 2.2 §10.5): percentage heights behave as auto and a percentage row
+    gap is zero; a height between two insets, or transferred from the width through the aspect
+    ratio (also for a `fit-content` height, which behaves as auto then), is definite
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; position: relative; width: 300px; height: 200px;">
+  <div style="display: block; position: absolute;">
+    <div style="display: block; height: 50%; width: 10px;"></div>
+    <div style="display: block; height: 20px; width: 10px;"></div>
+  </div>
+  <div style="display: flex; position: absolute; left: 50px;">
+    <div style="display: block; height: 50%; width: 10px;"></div>
+    <div style="display: block; height: 20px; width: 10px;"></div>
+  </div>
+  <div style="display: flex; flex-direction: column; row-gap: 10%; position: absolute; left: 100px;">
+    <div style="display: block; height: 20px; width: 10px;"></div>
+    <div style="display: block; height: 20px; width: 10px;"></div>
+  </div>
+  <div style="display: flex; flex-direction: column; row-gap: 10%; position: absolute; left: 150px; top: 0; bottom: 100px;">
+    <div style="display: block; height: 50%; width: 10px;"></div>
+    <div style="display: block; height: 20px; width: 10px;"></div>
+  </div>
+  <div style="display: block; position: absolute; left: 200px; aspect-ratio: 1;">
+    <div style="display: block; width: 50px; max-height: 50%;">
+      <div style="display: block; height: 40px;"></div>
+    </div>
+  </div>
+  <div style="display: block; position: absolute; left: 250px; height: fit-content; aspect-ratio: 1;">
+    <div style="display: block; width: 40px; max-height: 50%;">
+      <div style="display: block; height: 40px;"></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

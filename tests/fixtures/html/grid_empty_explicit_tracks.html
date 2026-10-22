@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    A grid container without items is as large as its explicit tracks and gaps: here the
+    shrink-to-fit width of an absolutely positioned box, and a flex item's content size
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; position: relative; width: 300px; height: 100px;">
+  <div style="display: block; position: absolute;">
+    <div style="display: grid; grid-template-columns: 124px;"></div>
+  </div>
+  <div style="display: flex; align-items: start;">
+    <div style="display: grid; grid-template-columns: 50px 30px; grid-template-rows: 10px 15px; gap: 5px;"></div>
+  </div>
+</div>
+
+</body>
+</html>

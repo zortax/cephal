@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    A multi-line flex container breaks its lines at the main size it is laid out at, also where
+    that size is not definite for percentages: here a column flex item of a column flex container
+    of auto height, held to 25px by its max-height
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: flex; flex-direction: column; width: 200px;">
+  <div style="display: flex; flex-direction: column; flex-wrap: wrap; max-height: 25px;">
+    <div style="display: block; width: 30px; height: 20px;"></div>
+    <div style="display: block; width: 30px; height: 20px;"></div>
+  </div>
+</div>
+
+</body>
+</html>

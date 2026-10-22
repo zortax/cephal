@@ -19,28 +19,40 @@ pub(super) struct Worker<'a, Ctx, F> {
     pool: &'a Pool,
     log: Log,
     speculation: u32,
+    observed: u8,
 }
 
 impl<'a, Ctx: Send + Sync, F> Worker<'a, Ctx, F> {
     pub fn new(tree: &'a Arc<Tree<Ctx>>, measure: &'a Arc<F>, config: Config, pool: &'a Pool, nodes: usize) -> Self {
         let mut log = Log::default();
-        log.touched.reserve(nodes);
-        Self { tree, measure, config, pool, log, speculation: 0 }
+        // Workers lay out cold subtrees, whose nodes have no layout yet.
+        log.fresh.reserve(nodes);
+        Self { tree, measure, config, pool, log, speculation: 0, observed: 0 }
     }
 
     pub fn into_log(self) -> Log {
         self.log
     }
 
-    /// Records the output of the batch request `r`.
-    pub fn answered(&mut self, r: usize, output: LayoutOutput) {
-        self.log.answers.push((r, output));
+    /// Records the output of the batch request `r` and the axes it observed.
+    pub fn answered(&mut self, r: usize, output: LayoutOutput, observed: u8) {
+        self.log.answers.push((r, output, observed));
     }
 
     #[inline]
     fn index(&self, node: NodeId) -> usize {
         self.tree.index(node)
     }
+}
+
+/// A leaf with a context, kept out of line so that inlining `compute_leaf` stays small.
+#[inline(never)]
+fn measured_leaf<Ctx: Send + Sync + 'static, F: SyncMeasureFn<Ctx>>(
+    worker: &mut Worker<'_, Ctx, F>,
+    node: NodeId,
+    inputs: LayoutInput,
+) -> LayoutOutput {
+    crate::compute::leaf::compute_leaf_layout(worker, node, inputs)
 }
 
 impl<Ctx: Send + Sync + 'static, F: SyncMeasureFn<Ctx>> LayoutTree for Worker<'_, Ctx, F> {
@@ -70,8 +82,8 @@ impl<Ctx: Send + Sync + 'static, F: SyncMeasureFn<Ctx>> LayoutTree for Worker<'_
         self.tree.query_meta(node)
     }
     #[inline]
-    fn leaf_box(&self, node: NodeId) -> Option<crate::compute::leaf::LeafBox> {
-        self.tree.leaf_box(node)
+    fn style_plan(&self, node: NodeId) -> Option<&crate::compute::plan::StylePlan> {
+        self.tree.style_plan(node)
     }
     #[inline]
     fn resolve_calc(&self, id: CalcId, basis: f32) -> f32 {
@@ -84,6 +96,20 @@ impl<Ctx: Send + Sync + 'static, F: SyncMeasureFn<Ctx>> LayoutTree for Worker<'_
     #[inline]
     fn leaf_is_cheap(&self, node: NodeId) -> bool {
         self.tree.context_slot[self.tree.index(node)] == NONE
+    }
+
+    #[inline]
+    fn is_measured_leaf(&self, node: NodeId) -> bool {
+        self.tree.context_slot[self.tree.index(node)] != NONE
+    }
+
+    /// Inlined, so a caller reading part of an empty leaf's answer computes only that part.
+    #[inline(always)]
+    fn compute_leaf(&mut self, node: NodeId, inputs: LayoutInput, _: Option<&mut BlockContext<'_>>) -> LayoutOutput {
+        if self.tree.context_slot[self.tree.index(node)] == NONE {
+            return crate::compute::leaf::compute_empty_leaf_layout(self, node, inputs);
+        }
+        measured_leaf(self, node, inputs)
     }
 
     fn measure(&mut self, node: NodeId, input: MeasureInput) -> MeasureOutput {
@@ -104,13 +130,16 @@ impl<Ctx: Send + Sync + 'static, F: SyncMeasureFn<Ctx>> LayoutTree for Worker<'_
         let i = self.index(node);
         // SAFETY: `node` lies in this worker's subtree (see `column`).
         let (slot, touched_gen) = unsafe { (self.tree.unrounded.slot(i), self.tree.touched_gen.slot(i)) };
-        if *slot != *layout {
-            if *touched_gen != self.tree.generation {
-                *touched_gen = self.tree.generation;
-                self.log.touched.push((node, *slot));
-            }
-            *slot = *layout;
+        // As `Tree::write_unrounded`.
+        if *touched_gen == self.tree.generation {
+        } else if *touched_gen == 0 {
+            *touched_gen = self.tree.generation;
+            self.log.fresh.push(i as u32);
+        } else if *slot != *layout {
+            *touched_gen = self.tree.generation;
+            self.log.touched.push((node, *slot));
         }
+        *slot = *layout;
     }
     fn unrounded_layout(&self, node: NodeId) -> Option<Layout> {
         Some(*self.tree.unrounded.get(self.index(node)))
@@ -126,16 +155,46 @@ impl<Ctx: Send + Sync + 'static, F: SyncMeasureFn<Ctx>> LayoutTree for Worker<'_
 
     fn set_absolute_context(&mut self, node: NodeId, context: AbsoluteContext) {
         if self.speculation == 0 {
-            self.log.absolute.push((self.index(node) as u32, context));
+            self.log.absolute.push((self.index(node) as u32, Some(context)));
         }
     }
-    fn absolute_context(&self, node: NodeId) -> Option<AbsoluteContext> {
+    #[inline]
+    fn clear_absolute_context(&mut self, node: NodeId) {
+        if self.speculation > 0 || (self.tree.absolute_contexts.is_empty() && self.log.absolute.is_empty()) {
+            return;
+        }
+        if self.absolute_context(node).is_some() {
+            self.log.absolute.push((self.index(node) as u32, None));
+        }
+    }
+    fn keeps_placements(&self) -> bool {
+        true
+    }
+    fn absolute_context(&self, node: NodeId) -> Option<&AbsoluteContext> {
         let i = self.index(node) as u32;
-        self.log.absolute(i).or_else(|| self.tree.absolute_contexts.get(&i).cloned())
+        match self.log.absolute(i) {
+            Some(context) => context,
+            None => self.tree.absolute_contexts.get(&i),
+        }
     }
 
     fn compute_child_layout(&mut self, node: NodeId, inputs: LayoutInput, block_ctx: Option<&mut BlockContext<'_>>) -> LayoutOutput {
         crate::compute::compute_child_layout(self, node, inputs, block_ctx)
+    }
+
+    #[inline]
+    fn take_observed(&mut self) -> u8 {
+        core::mem::take(&mut self.observed)
+    }
+
+    #[inline]
+    fn note_observed(&mut self, axes: u8) {
+        self.observed |= axes;
+    }
+
+    #[inline]
+    fn measure_ignores_available_height(&self) -> bool {
+        self.tree.measure_ignores_available_height
     }
 
     #[inline]

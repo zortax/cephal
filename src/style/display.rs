@@ -30,13 +30,21 @@ pub enum Direction {
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Position {
+    /// In flow; insets are ignored. The initial value.
     #[default]
+    Static,
+    /// In flow, offset by its insets; the containing block of absolutely positioned descendants.
     Relative,
+    /// Out of flow, placed against its containing block: the nearest positioned ancestor, or the
+    /// initial containing block (the viewport).
     Absolute,
-    /// Placed exactly like [`Position::Absolute`], against the parent; the host anchors the box to
-    /// the viewport, through where it parents it or how it composes scroll offsets. A fixed box
-    /// scrolls with nothing, so it adds no scrollable overflow to its container.
+    /// Placed like [`Position::Absolute`], against the initial containing block (or an ancestor a
+    /// tree's [`crate::tree::LayoutTree::containing_block_claims`] says contains it), whose
+    /// overflow scrolls nothing; the host anchors the viewport.
     Fixed,
+    /// Laid out as [`Position::Static`] (sticky offsets need scroll positions, which layout does not
+    /// have), but the containing block of absolutely positioned descendants.
+    Sticky,
 }
 
 impl Position {
@@ -44,6 +52,18 @@ impl Position {
     #[inline]
     pub fn is_out_of_flow(self) -> bool {
         matches!(self, Position::Absolute | Position::Fixed)
+    }
+
+    /// Whether the box is positioned, that is anything but `static`.
+    #[inline]
+    pub fn is_positioned(self) -> bool {
+        self != Position::Static
+    }
+
+    /// Whether an in-flow box is offset by its insets.
+    #[inline]
+    pub fn offsets_in_flow(self) -> bool {
+        self == Position::Relative
     }
 }
 

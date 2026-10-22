@@ -1,6 +1,6 @@
 [package]
 name = "cephal"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 authors = ["Leonard Seibold <git@zrtx.de>"]
 rust-version = "1.90"
@@ -20,13 +20,14 @@ grid = []
 serde = ["dep:serde"]
 # Counters of queries, hits and measures, for profiling.
 stats = []
+# Recomputes every shortcut and cache hit whose key differs from the question and asserts the
+# answers are identical; poisons the unrequested axis of single-axis answers. Slow; for tests.
+verify-cache = []
 taffy-compat = ["dep:taffy"]
 
 [dependencies]
 serde = { version = "1", features = ["derive", "rc"], optional = true }
-# Local builds use the main revision the vendored fixtures were generated from; the published
-# crate depends on the 0.14 release, which the conversions also compile against.
-taffy = { version = "0.14", git = "https://github.com/DioxusLabs/taffy", rev = "a1c3f8fb3e2c978c3a4f062873bdb16d5eaf6cfd", optional = true, default-features = false, features = [
+taffy = { version = "0.15", optional = true, default-features = false, features = [
   "std",
   "taffy_tree",
   "flexbox",
@@ -36,7 +37,6 @@ taffy = { version = "0.14", git = "https://github.com/DioxusLabs/taffy", rev = "
   "float_layout",
   "calc",
   "content_size",
-  "detailed_layout_info",
 ] }
 
 [dev-dependencies]
@@ -45,7 +45,7 @@ roxmltree = "0.21"
 serde_json = "1"
 proptest = "1.11"
 criterion = "0.8"
-taffy = { git = "https://github.com/DioxusLabs/taffy", rev = "a1c3f8fb3e2c978c3a4f062873bdb16d5eaf6cfd", default-features = false, features = [
+taffy = { version = "0.15", default-features = false, features = [
   "std",
   "taffy_tree",
   "flexbox",
@@ -55,7 +55,6 @@ taffy = { git = "https://github.com/DioxusLabs/taffy", rev = "a1c3f8fb3e2c978c3a
   "float_layout",
   "calc",
   "content_size",
-  "detailed_layout_info",
 ] }
 
 [profile.bench]
@@ -71,3 +70,7 @@ harness = false
 # Line tables let `perf` attribute samples to source lines.
 [profile.release]
 debug = "line-tables-only"
+
+[[bench]]
+name = "suite"
+harness = false

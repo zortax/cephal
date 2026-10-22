@@ -7,10 +7,10 @@ use super::coordinates::TrackCounts;
 use super::item::GridItem;
 use super::track::GridTrack;
 use crate::compute::LayoutTreeExt;
+use crate::compute::scratch::Scratch;
 use crate::geometry::{AbstractAxis, AvailableSpace, Line, Size};
-use crate::style::{AlignContent, AlignContentKeyword, CalcId};
+use crate::style::{AlignContent, AlignContentKeyword, CalcId, OriginZeroLine};
 use crate::tree::{CacheAccess, LayoutTree, SizingMode};
-use core::cmp::Ordering;
 use distribute::distribute_space_up_to_limits;
 
 /// Size estimate for a track in the other axis during this axis' sizing.
@@ -24,19 +24,59 @@ pub(super) fn estimate_from_base_size(track: &GridTrack, _: Option<f32>, _: &dyn
     Some(track.base_size)
 }
 
-/// Items without flexible tracks first, then by span, then by start line.
-pub(super) fn cmp_by_cross_flex_then_span_then_start(axis: AbstractAxis) -> impl FnMut(&GridItem, &GridItem) -> Ordering {
-    move |a, b| match (a.crosses_flexible_track(axis), b.crosses_flexible_track(axis)) {
-        (false, true) => Ordering::Less,
-        (true, false) => Ordering::Greater,
-        _ => {
-            let (pa, pb) = (a.placement(axis), b.placement(axis));
-            match super::coordinates::span_of(pa).cmp(&super::coordinates::span_of(pb)) {
-                Ordering::Equal => pa.start.cmp(&pb.start),
-                o => o,
+/// Stably sorts `order`, a permutation of `items`, by `key`: the order `sort_by_key` would leave
+/// the items in. Only the indices move.
+pub(super) fn sort_order_by_key(order: &mut [u32], items: &[GridItem], key: impl Fn(&GridItem) -> u64) {
+    if order.is_sorted_by_key(|&i| key(&items[i as usize])) {
+        return;
+    }
+    let mut keyed: Scratch<(u64, u32)> = Scratch::collect(order.iter().map(|&i| (key(&items[i as usize]), i)));
+    if keyed.len() <= 64 {
+        keyed.sort_by_key(|&(k, _)| k);
+    } else {
+        // Least significant digit first radix sort, skipping the bytes every key shares; each
+        // pass is stable, so equal keys keep their order.
+        let (and, or) = keyed.iter().fold((u64::MAX, 0), |(and, or), &(k, _)| (and & k, or | k));
+        let varying = and ^ or;
+        let mut buffer: Scratch<(u64, u32)> = Scratch::collect(keyed.iter().copied());
+        for shift in (0..64).step_by(8) {
+            if (varying >> shift) & 0xFF == 0 {
+                continue;
             }
+            let mut starts = [0u32; 256];
+            for &(k, _) in keyed.iter() {
+                starts[(k >> shift) as usize & 0xFF] += 1;
+            }
+            let mut sum = 0;
+            for start in starts.iter_mut() {
+                (*start, sum) = (sum, sum + *start);
+            }
+            for &(k, i) in keyed.iter() {
+                let start = &mut starts[(k >> shift) as usize & 0xFF];
+                buffer[*start as usize] = (k, i);
+                *start += 1;
+            }
+            core::mem::swap(&mut keyed, &mut buffer);
         }
     }
+    for (slot, &(_, i)) in order.iter_mut().zip(keyed.iter()) {
+        *slot = i;
+    }
+}
+
+/// Sort key in the order of origin-zero lines.
+#[inline]
+pub(super) fn line_key(line: OriginZeroLine) -> u64 {
+    (line.0 as u16 ^ 0x8000) as u64
+}
+
+/// Items without flexible tracks first, then by span, then by start line.
+#[inline]
+pub(super) fn cross_flex_then_span_then_start_key(item: &GridItem, axis: AbstractAxis) -> u64 {
+    let placement = item.placement(axis);
+    ((item.crosses_flexible_track(axis) as u64) << 32)
+        | ((super::coordinates::span_of(placement) as u64) << 16)
+        | line_key(placement.start)
 }
 
 /// Extra gutter space from distributing `align-content` in the other axis.
@@ -106,6 +146,8 @@ pub(super) struct TrackSizingParams<'a> {
     pub axis_tracks: &'a mut [GridTrack],
     pub other_axis_tracks: &'a mut [GridTrack],
     pub items: &'a mut [GridItem],
+    /// The order to visit `items` in, as indices; sorting reorders only these.
+    pub order: &'a mut [u32],
     pub get_track_size_estimate: TrackSizeEstimate,
     pub has_baseline_aligned_item: bool,
     pub run_mode: crate::tree::RunMode,
@@ -123,17 +165,18 @@ pub(super) fn track_sizing_algorithm<T: LayoutTree + CacheAccess + ?Sized>(tree:
         axis_tracks,
         other_axis_tracks,
         items,
+        order,
         get_track_size_estimate,
         has_baseline_aligned_item,
         run_mode,
     } = p;
-    let percentage_basis = inner_node_size.get_abstract(axis).or(axis_min_size);
+    let percentage_basis = inner_node_size.get_abstract(axis);
     initialize_track_sizes(tree, axis_tracks, percentage_basis);
     if has_baseline_aligned_item {
         if run_mode == crate::tree::RunMode::ComputeSize {
-            crate::compute::speculate(tree, |tree| resolve_item_baselines(tree, axis, items, inner_node_size));
+            crate::compute::speculate(tree, |tree| resolve_item_baselines(tree, axis, items, order, inner_node_size));
         } else {
-            resolve_item_baselines(tree, axis, items, inner_node_size);
+            resolve_item_baselines(tree, axis, items, order, inner_node_size);
         }
     }
     // Every track fixed: nothing to size.
@@ -142,6 +185,10 @@ pub(super) fn track_sizing_algorithm<T: LayoutTree + CacheAccess + ?Sized>(tree:
         if axis_tracks.iter().all(|t| t.base_size == t.growth_limit && t.min.definite_value(percentage_basis, &calc).is_some()) {
             return;
         }
+    }
+    // Sizing measures items many times over; resolve what needs no basis once.
+    for item in items.iter_mut() {
+        item.resolve_fixed_lengths();
     }
     let gutter_adjustment = {
         let calc = |id, basis| tree.resolve_calc(id, basis);
@@ -164,6 +211,7 @@ pub(super) fn track_sizing_algorithm<T: LayoutTree + CacheAccess + ?Sized>(tree:
         axis_tracks,
         other_axis_tracks,
         items,
+        order,
         available_grid_space.get_abstract(axis),
         inner_node_size,
         get_track_size_estimate,
@@ -182,13 +230,14 @@ pub(super) fn track_sizing_algorithm<T: LayoutTree + CacheAccess + ?Sized>(tree:
         axis_tracks,
         other_axis_tracks,
         items,
+        order,
         axis_min_size,
         axis_max_size,
         available_for_expansion,
         inner_node_size,
         get_track_size_estimate,
     );
-    if axis_alignment == AlignContent::STRETCH {
+    if axis_alignment.keyword == AlignContentKeyword::Stretch {
         stretch_auto_tracks(axis_tracks, axis_min_size, available_for_expansion);
     }
 }
@@ -209,20 +258,22 @@ fn resolve_item_baselines<T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     axis: AbstractAxis,
     items: &mut [GridItem],
+    order: &mut [u32],
     inner_node_size: Size<Option<f32>>,
 ) {
     let other_axis = axis.other();
-    items.sort_by_key(|item| item.placement(other_axis).start);
-    let mut rest = &mut items[..];
+    sort_order_by_key(order, items, |item| line_key(item.placement(other_axis).start));
+    let mut rest = &order[..];
     while !rest.is_empty() {
-        let current_row = rest[0].placement(other_axis).start;
-        let split = rest.iter().position(|i| i.placement(other_axis).start != current_row).unwrap_or(rest.len());
-        let (row_items, tail) = rest.split_at_mut(split);
+        let current_row = items[rest[0] as usize].placement(other_axis).start;
+        let split = rest.iter().position(|&i| items[i as usize].placement(other_axis).start != current_row).unwrap_or(rest.len());
+        let (row_items, tail) = rest.split_at(split);
         rest = tail;
-        if row_items.iter().filter(|i| i.participates_in_baseline_alignment()).count() <= 1 {
+        if row_items.iter().filter(|&&i| items[i as usize].participates_in_baseline_alignment()).count() <= 1 {
             continue;
         }
-        for item in row_items.iter_mut() {
+        for &i in row_items {
+            let item = &mut items[i as usize];
             if !item.participates_in_baseline_alignment() {
                 continue;
             }
@@ -238,11 +289,15 @@ fn resolve_item_baselines<T: LayoutTree + CacheAccess + ?Sized>(
         }
         let row_max = row_items
             .iter()
+            .map(|&i| &items[i as usize])
             .filter(|i| i.participates_in_baseline_alignment())
             .map(|i| i.baseline.unwrap_or(0.0))
             .fold(f32::NEG_INFINITY, f32::max);
-        for item in row_items.iter_mut().filter(|i| i.participates_in_baseline_alignment()) {
-            item.baseline_shim = row_max - item.baseline.unwrap_or(0.0);
+        for &i in row_items {
+            let item = &mut items[i as usize];
+            if item.participates_in_baseline_alignment() {
+                item.baseline_shim = row_max - item.baseline.unwrap_or(0.0);
+            }
         }
     }
 }
@@ -274,6 +329,7 @@ fn expand_flexible_tracks<T: LayoutTree + CacheAccess + ?Sized>(
     axis_tracks: &mut [GridTrack],
     other_axis_tracks: &[GridTrack],
     items: &mut [GridItem],
+    order: &[u32],
     axis_min_size: Option<f32>,
     axis_max_size: Option<f32>,
     available: AvailableSpace,
@@ -296,15 +352,16 @@ fn expand_flexible_tracks<T: LayoutTree + CacheAccess + ?Sized>(
                 })
                 .fold(0.0f32, f32::max);
             let mut m = intrinsic::Measurer::new(tree, other_axis_tracks, estimate, axis, inner_node_size);
-            let from_items = items
-                .iter_mut()
-                .filter(|i| i.crosses_flexible_track(axis))
-                .map(|i| {
-                    let range = i.track_range_excluding_lines(axis);
-                    let max_content = m.max_content(i, axis_tracks);
-                    find_size_of_fr(&axis_tracks[range], max_content)
-                })
-                .fold(0.0f32, f32::max);
+            let mut from_items = 0.0f32;
+            for &i in order {
+                let item = &mut items[i as usize];
+                if !item.crosses_flexible_track(axis) {
+                    continue;
+                }
+                let range = item.track_range_excluding_lines(axis);
+                let max_content = m.max_content(item, axis_tracks);
+                from_items = f32::max(from_items, find_size_of_fr(&axis_tracks[range], max_content));
+            }
             let flex_fraction = from_tracks.max(from_items);
             let hypothetical: f32 = axis_tracks
                 .iter()

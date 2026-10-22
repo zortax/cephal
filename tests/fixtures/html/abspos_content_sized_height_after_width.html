@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    The content-sized height (`fit-content`, `max-content`) of an absolutely positioned box of
+    automatic width is found at the width the box ends up with (CSS 2.2 §10.3.7 before §10.6.4)
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; position: relative; width: 109px; height: 300px;">
+  <div style="display: flex; flex-direction: column; position: absolute; right: 5%; height: fit-content;">
+    <div style="display: block; width: 183px; flex-grow: 2;"></div>
+    <div style="display: block; width: 52%;">
+      <div style="display: block; margin-bottom: 5%;"></div>
+    </div>
+  </div>
+  <div style="display: flex; flex-direction: column; position: absolute; top: 50px; height: max-content;">
+    <div style="display: block; width: 100px;"></div>
+    <div style="display: block; width: 50%;">
+      <div style="display: block; margin-bottom: 10%;"></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

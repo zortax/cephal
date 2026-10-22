@@ -18,6 +18,24 @@ pub struct Layout {
 }
 
 impl Layout {
+    /// A hash of the layout's bits, telling `-0.0` from `0.0`.
+    pub(crate) fn bits_hash(&self) -> u64 {
+        use core::hash::Hasher;
+        let mut h = crate::hash::FxHasher::default();
+        h.write_u32(self.order);
+        let rect = |r: Rect<f32>| [r.left, r.right, r.top, r.bottom];
+        let pair = |a: f32, b: f32| (a.to_bits() as u64) << 32 | b.to_bits() as u64;
+        h.write_u64(pair(self.location.x, self.location.y));
+        h.write_u64(pair(self.size.width, self.size.height));
+        h.write_u64(pair(self.scrollbar_size.width, self.scrollbar_size.height));
+        for r in [self.scrollable_overflow_rect, self.border, self.padding, self.margin] {
+            let [a, b, c, d] = rect(r);
+            h.write_u64(pair(a, b));
+            h.write_u64(pair(c, d));
+        }
+        h.finish()
+    }
+
     pub const ZERO: Self = Self {
         order: 0,
         location: Point::ZERO,
@@ -57,17 +75,14 @@ impl Layout {
     /// Maximum horizontal scroll offset: reachable content extent less the padding box, floored at zero.
     #[inline]
     pub fn scroll_width(&self) -> f32 {
-        (self.scrollable_overflow_rect.right + self.scrollbar_size.width.min(self.size.width) - self.size.width
-            + self.border.left
-            + self.border.right)
-            .max(0.0)
+        // The scrollport: the padding box less the scrollbar, which never takes more than it has.
+        let client = (self.size.width - self.border.left - self.border.right - self.scrollbar_size.width).max(0.0);
+        (self.scrollable_overflow_rect.right - client).max(0.0)
     }
     #[inline]
     pub fn scroll_height(&self) -> f32 {
-        (self.scrollable_overflow_rect.bottom + self.scrollbar_size.height.min(self.size.height) - self.size.height
-            + self.border.top
-            + self.border.bottom)
-            .max(0.0)
+        let client = (self.size.height - self.border.top - self.border.bottom - self.scrollbar_size.height).max(0.0);
+        (self.scrollable_overflow_rect.bottom - client).max(0.0)
     }
 }
 

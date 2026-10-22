@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    A grid container of automatic width in shrink-to-fit space (absolutely positioned here) is no
+    wider than the space unless its min-content width is: its flexible column fills the space
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; position: relative; width: 54px; height: 100px;">
+  <div style="display: grid; position: absolute; grid-template-columns: 3fr;">
+    <div style="display: block; margin-right: 14px;">X&#8203;X&#8203;X&#8203;X&#8203;X</div>
+  </div>
+  <div style="display: grid; position: absolute; top: 40px; grid-template-columns: 30px 3fr;">
+    <div style="display: block; width: 40px;"></div>
+    <div style="display: block;">X</div>
+  </div>
+</div>
+
+</body>
+</html>

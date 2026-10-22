@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    `align-content: normal` (stretch) places a line that overflows a `wrap-reverse` flex container
+    as `flex-start` does: at the cross-start edge, the bottom, overflowing past the top
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; width: 200px; height: 60px;">
+  <div style="display: flex; height: 2px; flex-wrap: wrap-reverse;">
+    <div style="display: block; width: 10px; min-height: 19px;"></div>
+  </div>
+  <div style="display: flex; height: 4px; flex-wrap: wrap-reverse; flex-direction: row-reverse; justify-content: stretch;">
+    <div style="display: block; width: 10px; height: 10px;"></div>
+  </div>
+</div>
+
+</body>
+</html>

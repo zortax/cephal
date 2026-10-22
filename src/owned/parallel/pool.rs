@@ -1,6 +1,7 @@
 //! A persistent work queue; nested batches share its threads and waiting workers help.
 
 use super::worker::Worker;
+use crate::tree::LayoutTree;
 use super::{Config, Group, Log, SyncMeasureFn};
 use crate::owned::Tree;
 use crate::tree::ChildRequest;
@@ -207,8 +208,10 @@ impl<Ctx: Send + Sync + 'static, F: SyncMeasureFn<Ctx>> Batch<Ctx, F> {
         for group in groups {
             for &r in &group.requests {
                 let req = self.requests[r];
+                worker.take_observed();
                 let output = crate::compute::compute_child_layout(&mut worker, req.node, req.input, None);
-                worker.answered(r, output);
+                let observed = worker.take_observed();
+                worker.answered(r, output, observed);
             }
         }
         let log = worker.into_log();

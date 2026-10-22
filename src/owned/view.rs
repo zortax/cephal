@@ -14,7 +14,19 @@ pub(super) struct View<'a, Ctx, F, E, A> {
     pub measure: F,
     pub executor: &'a E,
     pub speculation: u32,
+    /// See [`LayoutTree::take_observed`].
+    pub observed: u8,
     pub ctx: core::marker::PhantomData<Ctx>,
+}
+
+/// A leaf with a context, kept out of line so that inlining `compute_leaf` stays small.
+#[inline(never)]
+fn measured_leaf<Ctx, F: MeasureFn<Ctx>, E: Executor<Ctx>, A: TreeSlot<Ctx>>(
+    view: &mut View<'_, Ctx, F, E, A>,
+    node: NodeId,
+    inputs: LayoutInput,
+) -> LayoutOutput {
+    crate::compute::leaf::compute_leaf_layout(view, node, inputs)
 }
 
 impl<Ctx, F: MeasureFn<Ctx>, E: Executor<Ctx>, A: TreeSlot<Ctx>> LayoutTree for View<'_, Ctx, F, E, A> {
@@ -39,13 +51,13 @@ impl<Ctx, F: MeasureFn<Ctx>, E: Executor<Ctx>, A: TreeSlot<Ctx>> LayoutTree for 
     fn style(&self, node: NodeId) -> &Style {
         self.tree.get().style(node)
     }
-    #[inline]
+    #[inline(always)]
     fn query_meta(&self, node: NodeId) -> crate::tree::QueryMeta {
         self.tree.get().query_meta(node)
     }
     #[inline]
-    fn leaf_box(&self, node: NodeId) -> Option<crate::compute::leaf::LeafBox> {
-        self.tree.get().leaf_box(node)
+    fn style_plan(&self, node: NodeId) -> Option<&crate::compute::plan::StylePlan> {
+        self.tree.get().style_plan(node)
     }
     #[inline]
     fn resolve_calc(&self, id: CalcId, basis: f32) -> f32 {
@@ -59,6 +71,21 @@ impl<Ctx, F: MeasureFn<Ctx>, E: Executor<Ctx>, A: TreeSlot<Ctx>> LayoutTree for 
     #[inline]
     fn leaf_is_cheap(&self, node: NodeId) -> bool {
         self.tree.get().context_slot[self.tree.get().index(node)] == NONE
+    }
+
+    #[inline]
+    fn is_measured_leaf(&self, node: NodeId) -> bool {
+        self.tree.get().context_slot[self.tree.get().index(node)] != NONE
+    }
+
+    /// Inlined, so a caller reading part of an empty leaf's answer computes only that part.
+    #[inline(always)]
+    fn compute_leaf(&mut self, node: NodeId, inputs: LayoutInput, _: Option<&mut BlockContext<'_>>) -> LayoutOutput {
+        // Without a context there is nothing to measure.
+        if self.tree.get().context_slot[self.tree.get().index(node)] == NONE {
+            return crate::compute::leaf::compute_empty_leaf_layout(self, node, inputs);
+        }
+        measured_leaf(self, node, inputs)
     }
 
     fn measure(&mut self, node: NodeId, input: MeasureInput) -> MeasureOutput {
@@ -106,12 +133,55 @@ impl<Ctx, F: MeasureFn<Ctx>, E: Executor<Ctx>, A: TreeSlot<Ctx>> LayoutTree for 
         self.tree.get_mut().absolute_contexts.insert(i, context);
     }
 
-    fn absolute_context(&self, node: NodeId) -> Option<crate::tree::AbsoluteContext> {
-        self.tree.get().absolute_contexts.get(&(self.tree.get().index(node) as u32)).cloned()
+    #[inline]
+    fn clear_absolute_context(&mut self, node: NodeId) {
+        if self.speculation > 0 || self.tree.get().absolute_contexts.is_empty() {
+            return;
+        }
+        let i = self.tree.get().index(node) as u32;
+        self.tree.get_mut().absolute_contexts.remove(&i);
+    }
+
+    fn absolute_context(&self, node: NodeId) -> Option<&crate::tree::AbsoluteContext> {
+        self.tree.get().absolute_contexts.get(&(self.tree.get().index(node) as u32))
+    }
+
+    fn take_absolute_context(&mut self, node: NodeId) -> Option<crate::tree::AbsoluteContext> {
+        let i = self.tree.get().index(node) as u32;
+        self.tree.get_mut().absolute_contexts.remove(&i)
+    }
+
+    fn keeps_placements(&self) -> bool {
+        true
+    }
+
+    fn forget_placement(&mut self, holder: NodeId, node: NodeId) {
+        let i = self.tree.get().index(holder) as u32;
+        self.tree.get_mut().forget_placement_at(i, node);
     }
 
     fn compute_child_layout(&mut self, node: NodeId, inputs: LayoutInput, block_ctx: Option<&mut BlockContext<'_>>) -> LayoutOutput {
         crate::compute::compute_child_layout(self, node, inputs, block_ctx)
+    }
+
+    #[inline]
+    fn forwards_child_layout(&self) -> bool {
+        true
+    }
+
+    #[inline]
+    fn take_observed(&mut self) -> u8 {
+        core::mem::take(&mut self.observed)
+    }
+
+    #[inline]
+    fn note_observed(&mut self, axes: u8) {
+        self.observed |= axes;
+    }
+
+    #[inline]
+    fn measure_ignores_available_height(&self) -> bool {
+        self.tree.get().measure_ignores_available_height
     }
 
     #[inline]

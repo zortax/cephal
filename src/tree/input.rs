@@ -51,17 +51,20 @@ impl CollapsibleMarginSet {
     pub fn from_margin(margin: f32) -> Self {
         if margin >= 0.0 { Self { positive: margin, negative: 0.0 } } else { Self { positive: 0.0, negative: margin } }
     }
+    // Margins are never NaN, so plain comparisons replace `f32::max`/`min` and their NaN handling.
     #[inline]
     pub fn collapse_with_margin(self, margin: f32) -> Self {
-        if margin >= 0.0 {
-            Self { positive: self.positive.max(margin), negative: self.negative }
-        } else {
-            Self { positive: self.positive, negative: self.negative.min(margin) }
+        Self {
+            positive: if margin > self.positive { margin } else { self.positive },
+            negative: if margin < self.negative { margin } else { self.negative },
         }
     }
     #[inline]
     pub fn collapse_with_set(self, other: Self) -> Self {
-        Self { positive: self.positive.max(other.positive), negative: self.negative.min(other.negative) }
+        Self {
+            positive: if other.positive > self.positive { other.positive } else { self.positive },
+            negative: if other.negative < self.negative { other.negative } else { self.negative },
+        }
     }
     #[inline]
     pub fn resolve(self) -> f32 {
@@ -81,6 +84,8 @@ pub struct LayoutInput {
     pub known_dimensions_are_definite: Size<bool>,
     /// Percentage basis.
     pub parent_size: Size<Option<f32>>,
+    /// Space for the border box: the parent has already subtracted the child's margins (`auto`
+    /// ones counting as zero), and no algorithm subtracts a node's own margins again.
     pub available_space: Size<AvailableSpace>,
     /// Whether the block-start/end margins may collapse with the parent's.
     pub vertical_margins_are_collapsible: Line<bool>,
@@ -130,6 +135,11 @@ pub struct LayoutOutput {
     pub top_margin: CollapsibleMarginSet,
     pub bottom_margin: CollapsibleMarginSet,
     pub margins_can_collapse_through: bool,
+    /// Out-of-flow boxes whose containing block is above this node exist in its subtree, as a set
+    /// of [`crate::compute::oof::OOF_ABSOLUTE`] and [`crate::compute::oof::OOF_FIXED`]; set on
+    /// final-layout answers only. The containing block finds them through recorded
+    /// [`crate::tree::AbsoluteContext`]s.
+    pub oof: u8,
 }
 
 impl LayoutOutput {
@@ -138,12 +148,7 @@ impl LayoutOutput {
     /// Parents read a child's overflow rectangle only on axes where it propagates (visible
     /// overflow, no containment); on clipped or scrolled axes only the size matters.
     pub fn same_for_parent(&self, old: &Self, overflow: Point<crate::style::Overflow>, contain: crate::style::Contain) -> bool {
-        if self.size != old.size
-            || self.baselines != old.baselines
-            || self.top_margin != old.top_margin
-            || self.bottom_margin != old.bottom_margin
-            || self.margins_can_collapse_through != old.margins_can_collapse_through
-        {
+        if !self.same_except_overflow(old) {
             return false;
         }
         let is_scroll_container = overflow.x.is_scroll_container() || overflow.y.is_scroll_container();
@@ -154,6 +159,26 @@ impl LayoutOutput {
         let propagates_x = !is_scroll_container && !contained && overflow.x == crate::style::Overflow::Visible;
         let propagates_y = !is_scroll_container && !contained && overflow.y == crate::style::Overflow::Visible;
         (same_x || !propagates_x) && (same_y || !propagates_y)
+    }
+
+    /// Whether `self` equals `old` apart from the overflow rectangles.
+    #[inline]
+    pub fn same_except_overflow(&self, old: &Self) -> bool {
+        self.size == old.size
+            && self.baselines == old.baselines
+            && self.top_margin == old.top_margin
+            && self.bottom_margin == old.bottom_margin
+            && self.margins_can_collapse_through == old.margins_can_collapse_through
+            && self.oof == old.oof
+    }
+
+    /// What `self` specifies as the answer to a `ComputeSize` question: the size, baselines and
+    /// collapsible margins. The overflow rectangles and out-of-flow bits of a size answer are
+    /// unspecified, since no caller of a size question reads them; here they are zero, as in a
+    /// cached size answer. Caches keep only this much.
+    #[inline]
+    pub const fn size_answer(self) -> Self {
+        Self { scrollable_overflow_rect: Rect::ZERO, inflow_overflow_rect: Rect::ZERO, oof: 0, ..self }
     }
 
     pub const HIDDEN: Self = Self::from_outer_size(Size::ZERO);
@@ -169,6 +194,7 @@ impl LayoutOutput {
             top_margin: CollapsibleMarginSet::ZERO,
             bottom_margin: CollapsibleMarginSet::ZERO,
             margins_can_collapse_through: false,
+            oof: 0,
         }
     }
     #[inline]

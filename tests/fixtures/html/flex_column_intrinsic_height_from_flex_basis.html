@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    The content height of a column flex container sums its items' hypothetical main sizes: a flex
+    basis overrides an item's height, which no longer raises the container
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; width: 200px;">
+  <div style="display: flex; flex-direction: column;">
+    <div style="display: block; height: 147px; flex-basis: 10px; flex-grow: 2;"></div>
+  </div>
+  <div style="display: flex; flex-direction: column;">
+    <div style="display: block; height: 147px; max-height: 100px; flex-basis: max-content; flex-grow: 1;">X</div>
+  </div>
+</div>
+
+</body>
+</html>

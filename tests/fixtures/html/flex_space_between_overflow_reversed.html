@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    `space-between` falls back to `flex-start` when the items overflow: in a reversed flex
+    container they overflow past the start edge
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; width: 300px;">
+  <div style="display: flex; width: 40px; flex-direction: row-reverse; justify-content: space-between;">
+    <div style="display: block; width: 30px; height: 10px; flex-shrink: 0;"></div>
+    <div style="display: block; width: 30px; height: 10px; flex-shrink: 0;"></div>
+  </div>
+  <div style="display: flex; height: 40px; flex-direction: column-reverse; justify-content: space-between;">
+    <div style="display: block; width: 10px; height: 30px; flex-shrink: 0;"></div>
+    <div style="display: block; width: 10px; height: 30px; flex-shrink: 0;"></div>
+  </div>
+</div>
+
+</body>
+</html>

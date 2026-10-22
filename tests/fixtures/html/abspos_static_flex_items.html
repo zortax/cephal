@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    Absolutely positioned children of static flex items: the static position follows each container's alignment, the containing block is the relative root
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: flex; flex-direction: column; width: 240px; height: 180px; padding: 6px;">
+  <div style="position: static; justify-content: center; align-items: flex-end; height: 60px; padding: 4px;">
+    <div style="position: absolute; width: 20px; height: 10px;"></div>
+    <div style="width: 30px; height: 20px;"></div>
+  </div>
+  <div style="position: static; flex-direction: column; justify-content: flex-end; height: 70px;">
+    <div style="position: absolute; width: 15px; height: 15px; left: 3px;"></div>
+    <div style="position: absolute; width: 10px; height: 10px; bottom: 2px; right: 2px;"></div>
+  </div>
+</div>
+
+</body>
+</html>

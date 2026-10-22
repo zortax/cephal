@@ -3,7 +3,7 @@
 use super::cache::NodeCache;
 use super::{DetailedGridInfo, Layout, LayoutInput, LayoutOutput, NodeId};
 use crate::compute::block::BlockContext;
-use crate::compute::reposition::AbsoluteContext;
+use crate::compute::oof::AbsoluteContext;
 use crate::geometry::{AvailableSpace, Size};
 use crate::style::{CalcId, Ident, Style};
 
@@ -65,6 +65,55 @@ pub struct QueryMeta {
     pub cheap_leaf: bool,
     /// See [`Style::parent_size_dependency`].
     pub dependency: Size<bool>,
+    /// The algorithm that answers the node's questions; lets equivalent questions share a key.
+    pub kind: NodeKind,
+}
+
+/// Which algorithm answers a node's questions, so [`crate::compute::normalize`] can drop inputs it
+/// never reads.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[repr(u8)]
+pub enum NodeKind {
+    /// Unknown; questions are cached as asked.
+    #[default]
+    Opaque,
+    /// The default leaf algorithm around [`LayoutTree::measure`].
+    Leaf,
+    /// [`Self::Leaf`] whose measurement never depends on the available height.
+    LeafIgnoringHeight,
+    /// Block flow with children.
+    Block,
+    /// A flex container with children; `SingleLine` for `nowrap`.
+    FlexRow,
+    FlexColumn,
+    FlexRowSingleLine,
+    FlexColumnSingleLine,
+    /// A grid container with children.
+    Grid,
+}
+
+impl NodeKind {
+    /// The kind of a container from its style; leaves are opaque, since `compute_leaf` may be
+    /// overridden.
+    pub fn of_container(style: &Style) -> Self {
+        use crate::style::Display;
+        match style.display {
+            Display::Flex => match (style.flex_direction.is_row(), style.flex_wrap.is_multi_line()) {
+                (true, true) => Self::FlexRow,
+                (false, true) => Self::FlexColumn,
+                (true, false) => Self::FlexRowSingleLine,
+                (false, false) => Self::FlexColumnSingleLine,
+            },
+            Display::Grid => Self::Grid,
+            Display::None => Self::Opaque,
+            _ => Self::Block,
+        }
+    }
+
+    #[inline]
+    pub fn is_flex(self) -> bool {
+        matches!(self, Self::FlexRow | Self::FlexColumn | Self::FlexRowSingleLine | Self::FlexColumnSingleLine)
+    }
 }
 
 /// A tree the layout algorithms can walk and write into.
@@ -97,14 +146,22 @@ pub trait LayoutTree {
         false
     }
 
+    /// Whether a childless `node` is content the host measures, which its display does not change:
+    /// a childless grid is otherwise sized by its tracks.
+    #[inline]
+    fn is_measured_leaf(&self, _node: NodeId) -> bool {
+        false
+    }
+
     /// Overridable leaf algorithm; the default applies the box model around [`LayoutTree::measure`].
     fn compute_leaf(&mut self, node: NodeId, inputs: LayoutInput, _block_ctx: Option<&mut BlockContext<'_>>) -> LayoutOutput {
         crate::compute::leaf::compute_leaf_layout(self, node, inputs)
     }
 
-    /// The node's style resolved once, when it has no percentages; implementations may cache it.
+    /// The node's style lengths resolved once, when none resolves against a parent size;
+    /// implementations may keep one per interned style. See [`crate::compute::plan::StylePlan`].
     #[inline]
-    fn leaf_box(&self, _node: NodeId) -> Option<crate::compute::leaf::LeafBox> {
+    fn style_plan(&self, _node: NodeId) -> Option<&crate::compute::plan::StylePlan> {
         None
     }
 
@@ -121,11 +178,34 @@ pub trait LayoutTree {
     #[inline]
     fn query_meta(&self, node: NodeId) -> QueryMeta {
         let style = self.style(node);
+        let leaf = self.child_count(node) == 0;
         QueryMeta {
             hidden: style.generates_no_box(),
-            cheap_leaf: self.child_count(node) == 0 && self.leaf_is_cheap(node),
+            cheap_leaf: leaf && self.leaf_is_cheap(node),
             dependency: style.parent_size_dependency(),
+            kind: if leaf { NodeKind::Opaque } else { NodeKind::of_container(style) },
         }
+    }
+
+    /// Returns the axes (`compute::OBSERVED_WIDTH`/`OBSERVED_HEIGHT`) on which answers computed since
+    /// the last call told min-content from max-content available space, and starts afresh.
+    /// [`crate::compute::compute_child_layout`] stores them with each answer so a question
+    /// differing only there can share it. Without storage, every axis counts as observed and
+    /// questions are cached as asked.
+    #[inline]
+    fn take_observed(&mut self) -> u8 {
+        crate::compute::OBSERVED_ALL
+    }
+
+    /// Adds `axes` to what [`Self::take_observed`] will return.
+    #[inline]
+    fn note_observed(&mut self, _axes: u8) {}
+
+    /// Whether [`Self::measure`] never depends on the available height, as with text that wraps
+    /// at the available width only. Lets leaves share answers across available heights.
+    #[inline]
+    fn measure_ignores_available_height(&self) -> bool {
+        false
     }
 
     /// Whether grid containers should produce [`DetailedGridInfo`]; it costs allocations per layout.
@@ -138,16 +218,67 @@ pub trait LayoutTree {
         None
     }
 
-    /// Records the geometry a container used to place its absolutely positioned children.
+    /// Records a container's out-of-flow record from its final layout (never while speculating).
+    ///
+    /// Containing blocks find out-of-flow descendants that are not their children through these
+    /// records, and the scheduler re-runs a containing block's out-of-flow pass from them; a tree
+    /// that stores none lays out only out-of-flow boxes whose parent is their containing block.
     fn set_absolute_context(&mut self, _node: NodeId, _context: AbsoluteContext) {}
 
-    /// The context stored by the last `set_absolute_context`; enables fast re-placement.
-    fn absolute_context(&self, _node: NodeId) -> Option<AbsoluteContext> {
+    /// Forgets `node`'s record: its final layout found no out-of-flow boxes, or it is hidden.
+    fn clear_absolute_context(&mut self, _node: NodeId) {}
+
+    /// The record stored by the last `set_absolute_context`, unless cleared since.
+    fn absolute_context(&self, _node: NodeId) -> Option<&AbsoluteContext> {
         None
+    }
+
+    /// Removes and returns `node`'s record, which the caller stores again; never called while
+    /// speculating. Trees that can move the record out should, rather than clone it.
+    fn take_absolute_context(&mut self, node: NodeId) -> Option<AbsoluteContext> {
+        self.absolute_context(node).cloned()
+    }
+
+    /// Whether out-of-flow passes record what they placed and keep a box's placement when nothing
+    /// it was placed from changed (see [`crate::compute::oof`]). A tree that says so must
+    /// [forget](Self::forget_placement) a box's records whenever its style changes, and every record
+    /// of a box and its ancestors when the box's `position` changes or a subtree is attached below
+    /// it; the scheduler forgets a box's record in its containing block when its answers change.
+    fn keeps_placements(&self) -> bool {
+        false
+    }
+
+    /// Forgets the placement of the out-of-flow `node` that `holder`'s record keeps: in the passes
+    /// `holder` runs as a containing block and, on the root, against the initial containing block.
+    fn forget_placement(&mut self, _holder: NodeId, _node: NodeId) {}
+
+    /// Which out-of-flow descendants `node` is the containing block of, as a set of
+    /// [`crate::compute::oof::OOF_ABSOLUTE`] and [`crate::compute::oof::OOF_FIXED`]. The default is
+    /// CSS's: a positioned box contains absolutely positioned boxes, and only the initial
+    /// containing block contains fixed ones. A tree may claim more, as a `transform` would.
+    #[inline]
+    fn containing_block_claims(&self, node: NodeId) -> u8 {
+        crate::compute::oof::default_claims(self.style(node))
+    }
+
+    /// Which of the out-of-flow boxes `node` lays out add to its scrollable overflow, as the same
+    /// bits. CSS says all it contains do. A tree whose boxes only stand in for the viewport as the
+    /// containing block of fixed boxes, which scroll with nothing, can leave those out.
+    #[inline]
+    fn out_of_flow_overflow(&self, node: NodeId) -> u8 {
+        self.containing_block_claims(node)
     }
 
     /// Lays out one child; implementations normally forward to [`crate::compute::compute_child_layout`].
     fn compute_child_layout(&mut self, node: NodeId, inputs: LayoutInput, block_ctx: Option<&mut BlockContext<'_>>) -> LayoutOutput;
+
+    /// Whether [`Self::compute_child_layout`] only forwards to
+    /// [`crate::compute::compute_child_layout`], so an algorithm that knows a child is a cheap leaf
+    /// may answer it as that function would, without the call.
+    #[inline]
+    fn forwards_child_layout(&self) -> bool {
+        false
+    }
 
     /// Sees every answer [`crate::compute::compute_child_layout`] hands out, before the asking
     /// algorithm reads it; hidden answers excepted. Runs during speculative passes too (see

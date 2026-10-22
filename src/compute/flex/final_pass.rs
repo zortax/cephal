@@ -1,16 +1,18 @@
 //! Final placement of in-flow items.
 
+use super::axis::FlexDir;
 use super::axis::{FlexAxisRect, FlexAxisSize, FlexAxisSum};
 use super::{AlgoConstants, FlexItem, FlexLine, item_known_dimension_definiteness};
 use crate::compute::common::overflow::{scrollable_overflow_contribution, union};
-use crate::compute::scratch::Scratch;
+use crate::compute::Questions;
+use crate::compute::oof::OofEntry;
 use crate::tree::{ChildRequest, LayoutOutput};
 use crate::geometry::{AvailableSpace, Line, Point, Rect, Size};
 use crate::style::{Direction, Overflow};
 use crate::tree::{CacheAccess, Layout, LayoutInput, LayoutTree, RequestedAxis, RunMode, SizingMode};
 
 /// The final-layout question asked of an item.
-fn item_request(item: &FlexItem, c: &AlgoConstants) -> ChildRequest {
+fn item_request<D: FlexDir>(item: &FlexItem, c: &AlgoConstants<D>) -> ChildRequest {
     ChildRequest {
         node: item.node,
         input: LayoutInput {
@@ -19,7 +21,8 @@ fn item_request(item: &FlexItem, c: &AlgoConstants) -> ChildRequest {
             axis: RequestedAxis::Both,
             known_dimensions: item.target_size.map(Some),
             known_dimensions_are_definite: item_known_dimension_definiteness(c, item),
-            parent_size: c.node_inner_size,
+            parent_size: c.percent_basis(),
+            // Both axes are known, and the item reads them instead (see `compute::normalize`).
             available_space: c.container_size.map(AvailableSpace::Definite),
             vertical_margins_are_collapsible: Line::FALSE,
             context_key: 0,
@@ -27,7 +30,7 @@ fn item_request(item: &FlexItem, c: &AlgoConstants) -> ChildRequest {
     }
 }
 
-fn calculate_flex_item<T: LayoutTree + CacheAccess + ?Sized>(
+fn calculate_flex_item<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     item: &mut FlexItem,
     out: LayoutOutput,
@@ -35,7 +38,8 @@ fn calculate_flex_item<T: LayoutTree + CacheAccess + ?Sized>(
     total_offset_cross: f32,
     line_offset_cross: f32,
     total_overflow_rect: &mut Rect<f32>,
-    c: &AlgoConstants,
+    through: &mut Vec<OofEntry>,
+    c: &AlgoConstants<D>,
 ) {
     let dir = c.dir;
     let container_size = c.container_size;
@@ -44,15 +48,29 @@ fn calculate_flex_item<T: LayoutTree + CacheAccess + ?Sized>(
     let is_rtl_row = dir.is_row() && c.layout_direction == Direction::Rtl;
     let is_rtl_column = dir.is_column() && c.layout_direction == Direction::Rtl;
 
+    // Insets are read only here; resolve them as item generation would have.
+    let inset = match tree.style_plan(item.node) {
+        Some(p) if p.offsets_in_flow => p.inset,
+        Some(_) => Rect::NONE,
+        None => {
+            let style = tree.style(item.node);
+            if style.position.offsets_in_flow() {
+                let calc = |id, basis| tree.resolve_calc(id, basis);
+                style.inset.zip_size(c.inset_basis, |i, basis| i.resolve(basis, &calc))
+            } else {
+                Rect::NONE
+            }
+        }
+    };
     let main_relative_inset = if is_rtl_row {
-        item.inset.main_end(dir).or(item.inset.main_start(dir).map(|p| -p)).unwrap_or(0.0)
+        inset.main_end(dir).or(inset.main_start(dir).map(|p| -p)).unwrap_or(0.0)
     } else {
-        item.inset.main_start(dir).or(item.inset.main_end(dir).map(|p| -p)).unwrap_or(0.0)
+        inset.main_start(dir).or(inset.main_end(dir).map(|p| -p)).unwrap_or(0.0)
     };
     let cross_relative_inset = if is_rtl_column {
-        item.inset.cross_end(dir).map(|p| -p).or(item.inset.cross_start(dir)).unwrap_or(0.0)
+        inset.cross_end(dir).map(|p| -p).or(inset.cross_start(dir)).unwrap_or(0.0)
     } else {
-        item.inset.cross_start(dir).or(item.inset.cross_end(dir).map(|p| -p)).unwrap_or(0.0)
+        inset.cross_start(dir).or(inset.cross_end(dir).map(|p| -p)).unwrap_or(0.0)
     };
     let effective_line_offset_cross = if is_rtl_column { 0.0 } else { line_offset_cross };
     let offset_main = if is_rtl_row {
@@ -96,6 +114,10 @@ fn calculate_flex_item<T: LayoutTree + CacheAccess + ?Sized>(
         },
     );
 
+    if out.oof != 0 {
+        through.push(OofEntry::Through { node: item.node, order: item.order, bits: out.oof, location });
+    }
+
     if is_rtl_row {
         *total_offset_main -= item.offset_main + item.margin.main_axis_sum(dir) + size.main(dir);
     } else {
@@ -120,14 +142,15 @@ fn calculate_flex_item<T: LayoutTree + CacheAccess + ?Sized>(
     );
 }
 
-fn calculate_layout_line<T: LayoutTree + CacheAccess + ?Sized>(
+fn calculate_layout_line<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     line: &FlexLine,
     items: &mut [FlexItem],
-    outputs: &[LayoutOutput],
+    outputs: Option<&[LayoutOutput]>,
     total_offset_cross: &mut f32,
     overflow_rect: &mut Rect<f32>,
-    c: &AlgoConstants,
+    through: &mut Vec<OofEntry>,
+    c: &AlgoConstants<D>,
 ) {
     let dir = c.dir;
     let padding_border = c.content_box_inset;
@@ -143,14 +166,26 @@ fn calculate_layout_line<T: LayoutTree + CacheAccess + ?Sized>(
     }
     let (start, end) = (line.start, line.end);
     let line_items = line.items_mut(items);
-    let line_outputs = &outputs[start..end];
-    if dir.is_reverse() {
-        for (item, out) in line_items.iter_mut().zip(line_outputs).rev() {
-            calculate_flex_item(tree, item, *out, &mut total_offset_main, *total_offset_cross, line_offset_cross, overflow_rect, c);
+    match outputs {
+        // Streamed: each item is laid out just before it is placed.
+        None => {
+            for item in line_items.iter_mut() {
+                let request = item_request(item, c);
+                let out = tree.compute_child_layout(request.node, request.input, None);
+                calculate_flex_item(tree, item, out, &mut total_offset_main, *total_offset_cross, line_offset_cross, overflow_rect, through, c);
+            }
         }
-    } else {
-        for (item, out) in line_items.iter_mut().zip(line_outputs) {
-            calculate_flex_item(tree, item, *out, &mut total_offset_main, *total_offset_cross, line_offset_cross, overflow_rect, c);
+        Some(outputs) => {
+            let line_outputs = &outputs[start..end];
+            if dir.is_reverse() {
+                for (item, out) in line_items.iter_mut().zip(line_outputs).rev() {
+                    calculate_flex_item(tree, item, *out, &mut total_offset_main, *total_offset_cross, line_offset_cross, overflow_rect, through, c);
+                }
+            } else {
+                for (item, out) in line_items.iter_mut().zip(line_outputs) {
+                    calculate_flex_item(tree, item, *out, &mut total_offset_main, *total_offset_cross, line_offset_cross, overflow_rect, through, c);
+                }
+            }
         }
     }
     if !is_rtl_column {
@@ -158,11 +193,14 @@ fn calculate_layout_line<T: LayoutTree + CacheAccess + ?Sized>(
     }
 }
 
-pub(super) fn final_layout_pass<T: LayoutTree + CacheAccess + ?Sized>(
+/// Places the items; returns their overflow, and records in `through` each item passing
+/// out-of-flow boxes through.
+pub(super) fn final_layout_pass<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     lines: &[FlexLine],
     items: &mut [FlexItem],
-    c: &AlgoConstants,
+    through: &mut Vec<OofEntry>,
+    c: &AlgoConstants<D>,
 ) -> Rect<f32> {
     let dir = c.dir;
     let mut total_offset_cross = if c.is_column && c.layout_direction == Direction::Rtl {
@@ -171,17 +209,25 @@ pub(super) fn final_layout_pass<T: LayoutTree + CacheAccess + ?Sized>(
         c.content_box_inset.cross_start(dir)
     };
     let mut overflow_rect = Rect::ZERO;
-    // Every item's final layout is independent of the others; ask for them as one batch.
-    let requests: Scratch<ChildRequest> = Scratch::collect(items.iter().map(|item| item_request(item, c)));
-    let mut outputs: Scratch<LayoutOutput> = Scratch::with_capacity(requests.len());
-    tree.compute_child_layouts(&requests, &mut outputs);
+    // Every item's final layout is independent of the others. A tree answering one question at a
+    // time lays each item out just before placing it, in the order it would ask them, and keeps no
+    // answer; a distributing tree asks them as one batch.
+    let streamed = !tree.batches_help() && !dir.is_reverse() && !c.is_wrap_reverse;
+    let mut questions: Questions<LayoutOutput> = Questions::new(tree, if streamed { 0 } else { items.len() });
+    if !streamed {
+        for item in items.iter() {
+            questions.ask(tree, item_request(item, c), |out| *out);
+        }
+        questions.finish(tree, |out| *out);
+    }
+    let outputs = (!streamed).then(|| questions.answers());
     if c.is_wrap_reverse {
         for line in lines.iter().rev() {
-            calculate_layout_line(tree, line, items, &outputs, &mut total_offset_cross, &mut overflow_rect, c);
+            calculate_layout_line(tree, line, items, outputs, &mut total_offset_cross, &mut overflow_rect, through, c);
         }
     } else {
         for line in lines.iter() {
-            calculate_layout_line(tree, line, items, &outputs, &mut total_offset_cross, &mut overflow_rect, c);
+            calculate_layout_line(tree, line, items, outputs, &mut total_offset_cross, &mut overflow_rect, through, c);
         }
     }
     if c.is_scroll_container {

@@ -1,4 +1,4 @@
-//! cephal against taffy 0.14: cold layout, tree construction and incremental updates.
+//! cephal against taffy 0.15: cold layout, tree construction and incremental updates.
 
 #[path = "../tests/common/mod.rs"]
 mod common;

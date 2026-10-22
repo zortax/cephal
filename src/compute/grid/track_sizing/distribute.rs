@@ -118,22 +118,27 @@ pub(super) fn distribute_item_space_to_growth_limit(
     if space == 0.0 || !tracks.iter().any(&track_is_affected) {
         return;
     }
-    let track_sizes: f32 = tracks.iter().map(|t| if t.growth_limit == f32::INFINITY { t.base_size } else { t.growth_limit }).sum();
+    let growth_limit_or_base_size = |t: &GridTrack| if t.growth_limit == f32::INFINITY { t.base_size } else { t.growth_limit };
+    let track_sizes: f32 = tracks.iter().map(growth_limit_or_base_size).sum();
     let extra = (space - track_sizes).max(0.0);
-    let is_growable = |t: &GridTrack| t.infinitely_growable || t.fit_content_limited_growth_limit(axis_inner_node_size) == f32::INFINITY;
-    let growable_count = tracks.iter().filter(|t| track_is_affected(t) && is_growable(t)).count();
-    if growable_count > 0 {
-        let increase = extra / growable_count as f32;
-        for t in tracks.iter_mut().filter(|t| track_is_affected(t) && is_growable(t)) {
-            t.item_incurred_increase = increase;
-        }
-    } else {
+    // Up to limits: only infinitely growable tracks (or ones still without a growth limit) grow,
+    // up to their `fit-content()` argument; any other track's limit is its growth limit itself.
+    let extra = distribute_space_up_to_limits(
+        extra,
+        tracks,
+        |t| track_is_affected(t) && (t.infinitely_growable || t.growth_limit == f32::INFINITY),
+        |_| 1.0,
+        growth_limit_or_base_size,
+        move |t| t.fit_content_limit(axis_inner_node_size),
+    );
+    // Beyond limits: every affected track.
+    if extra > 0.0 {
         distribute_space_up_to_limits(
             extra,
             tracks,
             track_is_affected,
             |_| 1.0,
-            |t| if t.growth_limit == f32::INFINITY { t.base_size } else { t.growth_limit },
+            growth_limit_or_base_size,
             move |t| t.fit_content_limit(axis_inner_node_size),
         );
     }

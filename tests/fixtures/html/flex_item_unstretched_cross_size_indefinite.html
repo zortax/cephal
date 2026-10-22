@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    A flex item that is not stretched (here for its auto margin) gets an indefinite cross size
+    (css-flexbox-1 §9.8): when it is a flex container, its items' percentage cross sizes, minimum
+    cross sizes and row gaps behave as auto
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: flex; width: 200px; height: 100px;">
+  <div style="display: flex; flex-wrap: wrap; margin-top: auto; row-gap: 10%; width: 50px;">
+    <div style="display: block; width: 50px; height: 20px;"></div>
+    <div style="display: block; width: 50px; min-height: 40%;"></div>
+    <div style="display: block; width: 50px; height: 30%;"></div>
+  </div>
+  <div style="display: flex; align-self: center;">
+    <div style="display: block; width: 30px; height: 50%; padding-top: 10px;"></div>
+  </div>
+</div>
+
+</body>
+</html>

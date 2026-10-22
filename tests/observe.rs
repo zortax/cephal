@@ -98,6 +98,8 @@ fn row(host: &mut Host) -> (NodeId, [NodeId; 3]) {
 }
 
 #[test]
+// Verification recomputes cache hits, which the hook observes too.
+#[cfg_attr(feature = "verify-cache", ignore)]
 fn every_answer_is_seen_once_computed_and_then_from_the_cache() {
     let mut host = Host::default();
     let (root, [a, b, hidden]) = row(&mut host);

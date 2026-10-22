@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    A row flex container of shrink-to-fit width is no wider than the space its containing block
+    gives it, unless its items cannot shrink below their minimum sizes: here absolutely positioned
+    in 0px and 25px wide containing blocks
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; width: 300px; height: 200px;">
+  <div style="display: block; position: absolute;">
+    <div style="display: flex; position: absolute;">
+      <div style="display: block;">X&#8203;X&#8203;X</div>
+    </div>
+  </div>
+  <div style="display: block; position: absolute; left: 100px; width: 25px; height: 10px;">
+    <div style="display: flex; position: absolute;">
+      <div style="display: block;">X&#8203;X&#8203;X</div>
+      <div style="display: block; width: 10px; flex-shrink: 0;"></div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

@@ -228,8 +228,14 @@ fn cold_groups<Ctx>(tree: &Tree<Ctx>, requests: &[ChildRequest]) -> Vec<Group> {
     // A warm frame is the common case; probing every request of a wide container would cost
     // more than the batch could save, so give up once the first few are all cached.
     const WARM_SAMPLE: usize = 16;
+    // Likewise a row of cheap leaves, which are never distributed: give up when the first ones
+    // all are.
+    const LEAF_SAMPLE: usize = 64;
     let mut probed = 0;
     for (r, req) in requests.iter().enumerate() {
+        if r == LEAF_SAMPLE && probed == 0 {
+            return Vec::new();
+        }
         let i = tree.index(req.node);
         let cheap_leaf = tree.links[i].child_count == 0 && tree.context_slot[i] == NONE;
         if cheap_leaf || tree.style(req.node).generates_no_box() {
@@ -262,24 +268,30 @@ fn cold_groups<Ctx>(tree: &Tree<Ctx>, requests: &[ChildRequest]) -> Vec<Group> {
 pub struct Log {
     /// Nodes whose layout the worker rewrote, with the layout before the frame.
     pub(super) touched: Vec<(NodeId, Layout)>,
+    /// Indices of nodes written that had no layout before the frame.
+    pub(super) fresh: Vec<u32>,
     pub(super) detailed: Vec<(u32, DetailedGridInfo)>,
-    pub(super) absolute: Vec<(u32, AbsoluteContext)>,
+    /// Records set (`Some`) and cleared (`None`).
+    pub(super) absolute: Vec<(u32, Option<AbsoluteContext>)>,
     /// Outputs of the batch's requests, by request index; the caller must use these rather than
     /// ask the cache again, since a later store in the same group may have evicted them.
-    pub(super) answers: Vec<(usize, LayoutOutput)>,
+    /// Each with the axes its answer observed, which the asking frame inherits.
+    pub(super) answers: Vec<(usize, LayoutOutput, u8)>,
 }
 
 impl Log {
     fn detailed(&self, i: u32) -> Option<DetailedGridInfo> {
         self.detailed.iter().rev().find(|(n, _)| *n == i).map(|(_, d)| d.clone())
     }
-    fn absolute(&self, i: u32) -> Option<AbsoluteContext> {
-        self.absolute.iter().rev().find(|(n, _)| *n == i).map(|(_, c)| c.clone())
+    /// The record last set or cleared for `i` in this log; `None` when it holds neither.
+    fn absolute(&self, i: u32) -> Option<Option<&AbsoluteContext>> {
+        self.absolute.iter().rev().find(|(n, _)| *n == i).map(|(_, c)| c.as_ref())
     }
 
     /// Folds a nested batch's results in, as if this worker had computed them.
     fn absorb(&mut self, other: Log) {
         self.touched.extend(other.touched);
+        self.fresh.extend(other.fresh);
         self.detailed.extend(other.detailed);
         self.absolute.extend(other.absolute);
     }
@@ -298,8 +310,9 @@ pub(super) fn finish_batch<T: LayoutTree + ?Sized>(
     if let Some(logs) = logs {
         answered.resize(requests.len(), None);
         for log in logs {
-            for &(r, output) in &log.answers {
+            for &(r, output, observed) in &log.answers {
                 answered[r] = Some(output);
+                tree.note_observed(observed);
             }
             commit(tree, log);
         }
@@ -317,11 +330,15 @@ impl<Ctx> Tree<Ctx> {
     /// Applies what a worker could not write directly.
     pub(super) fn commit(&mut self, log: Log) {
         self.touched.extend(log.touched);
+        self.fresh.extend(log.fresh);
         for (i, info) in log.detailed {
             self.detailed_grid.insert(i, info);
         }
         for (i, ctx) in log.absolute {
-            self.absolute_contexts.insert(i, ctx);
+            match ctx {
+                Some(ctx) => self.absolute_contexts.insert(i, ctx),
+                None => self.absolute_contexts.remove(&i),
+            };
         }
     }
 

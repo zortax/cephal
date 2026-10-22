@@ -84,7 +84,7 @@ impl Style {
         display: Display::Block,
         box_sizing: BoxSizing::BorderBox,
         direction: Direction::Ltr,
-        position: Position::Relative,
+        position: Position::Static,
         overflow: Point { x: Overflow::Visible, y: Overflow::Visible },
         contain: Contain::NONE,
         float: Float::None,

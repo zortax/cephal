@@ -1,19 +1,21 @@
 //! Estimating implicit track counts from item placements.
 
-use super::coordinates::{MAX_OZ_LINE, MIN_OZ_LINE, NonNamedPlacement, OriginZeroPlacement, PlacementLine, TrackCounts};
+use super::coordinates::{MAX_OZ_LINE, MIN_OZ_LINE, OriginZeroPlacement, PlacementLine, TrackCounts};
+use super::placement::Placement;
 use crate::geometry::Line;
-use crate::style::{OriginZeroLine, Style};
+use crate::style::OriginZeroLine;
 
+/// Track counts the placements imply, from their (named lines resolved) origin-zero lines.
 pub(super) fn compute_grid_size_estimate<'a>(
     explicit_col_count: u16,
     explicit_row_count: u16,
-    child_styles: impl Iterator<Item = &'a Style>,
+    placements: impl Iterator<Item = &'a Placement>,
 ) -> (TrackCounts, TrackCounts) {
     let (mut col_min, mut col_max, mut col_max_span) = (OriginZeroLine(0), OriginZeroLine(0), 0u16);
     let (mut row_min, mut row_max, mut row_max_span) = (OriginZeroLine(0), OriginZeroLine(0), 0u16);
-    for style in child_styles {
-        let (cmin, cmax, cspan) = child_min_line_max_line_span(style.grid_column, explicit_col_count);
-        let (rmin, rmax, rspan) = child_min_line_max_line_span(style.grid_row, explicit_row_count);
+    for p in placements {
+        let (cmin, cmax, cspan) = child_min_line_max_line_span(p.horizontal);
+        let (rmin, rmax, rspan) = child_min_line_max_line_span(p.vertical);
         col_min = col_min.min(cmin);
         col_max = col_max.max(cmax);
         col_max_span = col_max_span.max(cspan);
@@ -37,15 +39,8 @@ pub(super) fn compute_grid_size_estimate<'a>(
     )
 }
 
-fn child_min_line_max_line_span(
-    line: Line<crate::style::GridPlacement>,
-    explicit_track_count: u16,
-) -> (OriginZeroLine, OriginZeroLine, u16) {
+fn child_min_line_max_line_span(oz: Line<OriginZeroPlacement>) -> (OriginZeroLine, OriginZeroLine, u16) {
     use OriginZeroPlacement as P;
-    let oz: Line<OriginZeroPlacement> = Line {
-        start: NonNamedPlacement::from_style(line.start).into_origin_zero(explicit_track_count),
-        end: NonNamedPlacement::from_style(line.end).into_origin_zero(explicit_track_count),
-    };
     let min = match (oz.start, oz.end) {
         (P::Line(a), P::Line(b)) => a.min(b),
         (P::Line(t), P::Auto) | (P::Line(t), P::Span(_)) => t,

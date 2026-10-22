@@ -72,7 +72,7 @@ fn split_safety(s: &str) -> (AlignmentSafety, &str) {
     } else if let Some(r) = s.strip_prefix("unsafe ") {
         (AlignmentSafety::Unsafe, r.trim())
     } else {
-        (AlignmentSafety::Unsafe, s)
+        (AlignmentSafety::Default, s)
     }
 }
 
@@ -123,9 +123,11 @@ pub fn parse_display(s: &str) -> Option<Display> {
 
 pub fn parse_position(s: &str) -> Option<Position> {
     Some(match s.trim() {
+        "static" => Position::Static,
         "relative" => Position::Relative,
         "absolute" => Position::Absolute,
         "fixed" => Position::Fixed,
+        "sticky" => Position::Sticky,
         _ => return None,
     })
 }
@@ -264,7 +266,7 @@ pub fn parse_grid_placement(s: &str, intern: &mut impl FnMut(&str) -> Ident) -> 
         ["auto"] => Some(GridPlacement::Auto),
         [n] => match n.parse::<i16>() {
             Ok(i) => Some(GridPlacement::Line(i)),
-            Err(_) => Some(GridPlacement::NamedLine(intern(n), 1)),
+            Err(_) => Some(GridPlacement::NamedLine(intern(n), 0)),
         },
         ["span", n] => match n.parse::<u16>() {
             Ok(i) => Some(GridPlacement::Span(i)),

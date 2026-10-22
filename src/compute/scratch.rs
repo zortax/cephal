@@ -4,8 +4,9 @@ use core::ops::{Deref, DerefMut};
 
 /// Buffers kept per element type; more than this many idle ones are freed.
 const KEEP: usize = 32;
-/// Buffers larger than this are freed rather than kept.
-const MAX_KEPT_CAPACITY: usize = 1 << 16;
+/// Buffers larger than this many bytes are freed rather than kept. Wide containers reuse theirs
+/// every layout; freeing them would hand the pages back and fault them in again.
+const MAX_KEPT_BYTES: usize = 64 << 20;
 
 /// An element type with its own thread-local pool of vectors.
 pub trait Pooled: Sized + 'static {
@@ -56,7 +57,7 @@ impl<T: Pooled> Drop for Scratch<T> {
     fn drop(&mut self) {
         let mut vec = core::mem::take(&mut self.0);
         vec.clear();
-        if vec.capacity() == 0 || vec.capacity() > MAX_KEPT_CAPACITY {
+        if vec.capacity() == 0 || vec.capacity() * core::mem::size_of::<T>().max(1) > MAX_KEPT_BYTES {
             return;
         }
         T::with_pool(|pool| {
@@ -98,4 +99,4 @@ impl<T: Pooled> DerefMut for Scratch<T> {
     }
 }
 
-pooled!(crate::tree::ChildRequest, crate::tree::LayoutOutput, crate::tree::NodeId, (usize, crate::tree::NodeId));
+pooled!(crate::tree::ChildRequest, crate::tree::LayoutOutput, crate::tree::NodeId, (usize, crate::tree::NodeId), f32, (f32, Option<f32>));

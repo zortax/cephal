@@ -3,7 +3,7 @@
 use crate::geometry::{AvailableSpace, MaybeMath, Rect, Size};
 use crate::style::{BoxSizing, Overflow};
 use crate::tree::{
-    Baselines, CollapsibleMarginSet, LayoutInput, LayoutOutput, LayoutTree, MeasureInput, NodeId, RunMode, SizingMode,
+    Baselines, CollapsibleMarginSet, LayoutInput, LayoutOutput, LayoutTree, MeasureInput, MeasureOutput, NodeId, RunMode, SizingMode,
 };
 
 /// A leaf style's lengths resolved once; valid when none of them is a percentage or `calc()`.
@@ -16,6 +16,20 @@ pub struct LeafBox {
     pub size: Size<Option<f32>>,
     pub min_size: Size<Option<f32>>,
     pub max_size: Size<Option<f32>>,
+    /// Padding plus border, summed per axis.
+    pub padding_border_sum: Size<f32>,
+    /// Padding, border and scrollbar gutter around the content box.
+    pub content_box_inset: Rect<f32>,
+    /// Inline-start and inline-end padding.
+    pub content_start: (f32, f32),
+    pub aspect_ratio: Option<f32>,
+    /// A scroll container on either axis.
+    pub scrolls: bool,
+    /// The height the aspect ratio gives is a minimum the content may exceed (see
+    /// [`crate::compute::block::ratio_height_is_minimum`]); otherwise it is the height.
+    pub ratio_is_minimum: bool,
+    /// The style alone keeps the box from collapsing through.
+    pub style_prevents_collapse: bool,
 }
 
 impl LeafBox {
@@ -39,8 +53,16 @@ impl LeafBox {
         }
         let calc = |_, _| 0.0;
         let none: Size<Option<f32>> = Size::NONE;
-        let r = resolve_box(style, none, &calc);
-        Some(Self { margin: r.margin, padding: r.padding, border: r.border, size: r.size, min_size: r.min_size, max_size: r.max_size })
+        Some(resolve_box(style, none, &calc))
+    }
+
+    /// Resolves `style` against `parent_size`, for any style.
+    pub fn resolve(
+        style: &crate::style::Style,
+        parent_size: Size<Option<f32>>,
+        calc: &impl Fn(crate::style::CalcId, f32) -> f32,
+    ) -> Self {
+        resolve_box(style, parent_size, calc)
     }
 }
 
@@ -53,11 +75,16 @@ fn resolve_box(style: &crate::style::Style, parent_size: Size<Option<f32>>, calc
     let pb_sum = (padding + border).sum_axes();
     let box_sizing_adjustment = if style.box_sizing == BoxSizing::ContentBox { pb_sum } else { Size::ZERO };
     let aspect_ratio = style.aspect_ratio;
-    let size = Size {
+    let raw_size = Size {
         width: style.size.width.resolve(parent_size.width, calc),
         height: style.size.height.resolve(parent_size.height, calc),
+    };
+    // A height the ratio gives is only a minimum the content may exceed (see `compute_leaf_layout_with`).
+    let size = if crate::compute::block::ratio_height_is_minimum(style, raw_size) {
+        raw_size
+    } else {
+        raw_size.maybe_apply_aspect_ratio(aspect_ratio)
     }
-    .maybe_apply_aspect_ratio(aspect_ratio)
     .maybe_add(box_sizing_adjustment);
     let min_size = Size {
         width: style.min_size.width.resolve(parent_size.width, calc),
@@ -70,27 +97,6 @@ fn resolve_box(style: &crate::style::Style, parent_size: Size<Option<f32>>, calc
         height: style.max_size.height.resolve(parent_size.height, calc),
     }
     .maybe_add(box_sizing_adjustment);
-    LeafBox { margin, padding, border, size, min_size, max_size }
-}
-
-pub fn compute_leaf_layout<T: LayoutTree + ?Sized>(tree: &mut T, node: NodeId, inputs: LayoutInput) -> LayoutOutput {
-    let LayoutInput { known_dimensions, parent_size, available_space, sizing_mode, run_mode, .. } = inputs;
-    let style = tree.style(node);
-    let resolved = match tree.leaf_box(node) {
-        Some(b) => b,
-        None => {
-            let calc = |id, basis| tree.resolve_calc(id, basis);
-            resolve_box(style, parent_size, &calc)
-        }
-    };
-    let LeafBox { margin, padding, border, .. } = resolved;
-    let padding_border = padding + border;
-    let pb_sum = padding_border.sum_axes();
-
-    let (node_size, node_min_size, node_max_size, aspect_ratio) = match sizing_mode {
-        SizingMode::ContentSize => (known_dimensions, Size::NONE, Size::NONE, None),
-        SizingMode::InherentSize => (known_dimensions.or(resolved.size), resolved.min_size, resolved.max_size, style.aspect_ratio),
-    };
 
     // A vertically scrolling box reserves horizontal space and vice versa.
     let overflow = style.overflow;
@@ -98,24 +104,130 @@ pub fn compute_leaf_layout<T: LayoutTree + ?Sized>(tree: &mut T, node: NodeId, i
         width: if overflow.y == Overflow::Scroll { style.scrollbar_width } else { 0.0 },
         height: if overflow.x == Overflow::Scroll { style.scrollbar_width } else { 0.0 },
     };
+    let padding_border = padding + border;
     let content_box_inset = Rect {
         left: padding_border.left,
         right: padding_border.right + scrollbar_gutter.width,
         top: padding_border.top,
         bottom: padding_border.bottom + scrollbar_gutter.height,
     };
-
-    let has_styles_preventing_being_collapsed_through = !style.is_block()
-        || overflow.x.is_scroll_container()
-        || overflow.y.is_scroll_container()
+    let scrolls = overflow.x.is_scroll_container() || overflow.y.is_scroll_container();
+    let style_prevents_collapse = !style.is_block()
+        || scrolls
         || style.position.is_out_of_flow()
         || style.contain.establishes_independent_formatting_context()
         || padding.top > 0.0
         || padding.bottom > 0.0
         || border.top > 0.0
-        || border.bottom > 0.0
+        || border.bottom > 0.0;
+    let content_start =
+        if style.direction == crate::style::Direction::Rtl { (padding.right, padding.left) } else { (padding.left, padding.right) };
+    LeafBox {
+        margin,
+        padding,
+        border,
+        size,
+        min_size,
+        max_size,
+        padding_border_sum: padding_border.sum_axes(),
+        content_box_inset,
+        content_start,
+        aspect_ratio,
+        scrolls,
+        ratio_is_minimum: crate::compute::block::ratio_height_is_minimum(style, Size::NONE),
+        style_prevents_collapse,
+    }
+}
+
+pub fn compute_leaf_layout<T: LayoutTree + ?Sized>(tree: &mut T, node: NodeId, inputs: LayoutInput) -> LayoutOutput {
+    compute_leaf_layout_with(tree, node, inputs, true, |tree, input| tree.measure(node, input))
+}
+
+/// [`compute_leaf_layout`] with an empty leaf's measurement: the known size, else nothing.
+#[inline(always)]
+pub fn compute_empty_leaf_layout<T: LayoutTree + ?Sized>(tree: &mut T, node: NodeId, inputs: LayoutInput) -> LayoutOutput {
+    compute_leaf_layout_with(tree, node, inputs, false, |_, input| MeasureOutput::from_size(input.known_dimensions.unwrap_or(Size::ZERO)))
+}
+
+/// What the box model reads of a leaf's resolved box, for one question.
+struct Prepared {
+    node_size: Size<Option<f32>>,
+    node_min_size: Size<Option<f32>>,
+    node_max_size: Size<Option<f32>>,
+    aspect_ratio: Option<f32>,
+    has_styles_preventing_being_collapsed_through: bool,
+    content_box_inset_sum: Size<f32>,
+    content_box_inset_top: f32,
+    pb_sum: Size<f32>,
+    content_start: (f32, f32),
+    scrolls: bool,
+    ratio_is_minimum: bool,
+    padding_top: f32,
+    padding_bottom: f32,
+}
+
+/// Reads `resolved` in place, so a planned box is not copied whole.
+#[inline(always)]
+fn prepare(resolved: &LeafBox, known_dimensions: Size<Option<f32>>, sizing_mode: SizingMode) -> Prepared {
+    let (node_size, node_min_size, node_max_size, aspect_ratio) = match sizing_mode {
+        SizingMode::ContentSize => (known_dimensions, Size::NONE, Size::NONE, None),
+        SizingMode::InherentSize => (known_dimensions.or(resolved.size), resolved.min_size, resolved.max_size, resolved.aspect_ratio),
+    };
+    let has_styles_preventing_being_collapsed_through = resolved.style_prevents_collapse
         || matches!(node_size.height, Some(h) if h > 0.0)
         || matches!(node_min_size.height, Some(h) if h > 0.0);
+    Prepared {
+        node_size,
+        node_min_size,
+        node_max_size,
+        aspect_ratio,
+        has_styles_preventing_being_collapsed_through,
+        content_box_inset_sum: resolved.content_box_inset.sum_axes(),
+        content_box_inset_top: resolved.content_box_inset.top,
+        pb_sum: resolved.padding_border_sum,
+        content_start: resolved.content_start,
+        scrolls: resolved.scrolls,
+        ratio_is_minimum: resolved.ratio_is_minimum,
+        padding_top: resolved.padding.top,
+        padding_bottom: resolved.padding.bottom,
+    }
+}
+
+/// The leaf algorithm around any measurement, for trees whose leaves measure through the tree
+/// itself, e.g. by laying out nested content.
+///
+/// `measured`: whether `measure` may read the available space, which is then recorded through
+/// [`LayoutTree::note_observed`] on the axes it leaves indefinite.
+#[inline(always)]
+pub fn compute_leaf_layout_with<T: LayoutTree + ?Sized>(
+    tree: &mut T,
+    node: NodeId,
+    inputs: LayoutInput,
+    measured: bool,
+    measure: impl FnOnce(&mut T, MeasureInput) -> MeasureOutput,
+) -> LayoutOutput {
+    let LayoutInput { known_dimensions, parent_size, available_space, sizing_mode, run_mode, .. } = inputs;
+    let Prepared {
+        node_size,
+        node_min_size,
+        node_max_size,
+        aspect_ratio,
+        has_styles_preventing_being_collapsed_through,
+        content_box_inset_sum,
+        content_box_inset_top,
+        pb_sum,
+        content_start,
+        scrolls,
+        ratio_is_minimum,
+        padding_top,
+        padding_bottom,
+    } = match tree.style_plan(node) {
+        Some(p) => prepare(&p.leaf, known_dimensions, sizing_mode),
+        None => {
+            let calc = |id, basis| tree.resolve_calc(id, basis);
+            prepare(&resolve_box(tree.style(node), parent_size, &calc), known_dimensions, sizing_mode)
+        }
+    };
 
     if run_mode == RunMode::ComputeSize
         && has_styles_preventing_being_collapsed_through
@@ -130,63 +242,76 @@ pub fn compute_leaf_layout<T: LayoutTree + ?Sized>(tree: &mut T, node: NodeId, i
             top_margin: CollapsibleMarginSet::ZERO,
             bottom_margin: CollapsibleMarginSet::ZERO,
             margins_can_collapse_through: false,
+            oof: 0,
         };
     }
 
-    // Content-box available space: margins subtracted, clamped by min/max.
+    // Content-box available space, clamped by min/max. The parent subtracted the margins.
     let available_for_measure = Size {
         width: known_dimensions
             .width
             .map(AvailableSpace::Definite)
             .unwrap_or(available_space.width)
-            .maybe_sub(margin.horizontal_axis_sum())
             .maybe_set(node_size.width)
-            .map_definite(|w| w.maybe_clamp(node_min_size.width, node_max_size.width) - content_box_inset.horizontal_axis_sum()),
+            .map_definite(|w| w.maybe_clamp(node_min_size.width, node_max_size.width) - content_box_inset_sum.width),
         height: known_dimensions
             .height
             .map(AvailableSpace::Definite)
             .unwrap_or(available_space.height)
-            .maybe_sub(margin.vertical_axis_sum())
             .maybe_set(node_size.height)
-            .map_definite(|h| h.maybe_clamp(node_min_size.height, node_max_size.height) - content_box_inset.vertical_axis_sum()),
+            .map_definite(|h| h.maybe_clamp(node_min_size.height, node_max_size.height) - content_box_inset_sum.height),
     };
 
+    // The measure function sees content-box sizes.
     let measure_known = match run_mode {
-        RunMode::ComputeSize => known_dimensions,
+        RunMode::ComputeSize => Size {
+            width: known_dimensions.width.map(|w| (w - content_box_inset_sum.width).max(0.0)),
+            height: known_dimensions.height.map(|h| (h - content_box_inset_sum.height).max(0.0)),
+        },
         RunMode::PerformLayout => Size::NONE,
         RunMode::PerformHiddenLayout => unreachable!("hidden layout never measures"),
     };
     #[cfg(feature = "stats")]
     crate::compute::stats::bump(&crate::compute::stats::MEASURE);
-    let measured = tree.measure(node, MeasureInput { known_dimensions: measure_known, available_space: available_for_measure });
+    if measured {
+        // The measure function may tell min-content from max-content space on an axis it is not
+        // given a size for.
+        let width = measure_known.width.is_none() && !available_for_measure.width.is_definite();
+        let height = measure_known.height.is_none() && !available_for_measure.height.is_definite();
+        if width | height {
+            let height = height && !tree.measure_ignores_available_height();
+            tree.note_observed((crate::compute::OBSERVED_WIDTH * width as u8) | (crate::compute::OBSERVED_HEIGHT * height as u8));
+        }
+    }
+    let measured = measure(tree, MeasureInput { known_dimensions: measure_known, available_space: available_for_measure });
     let measured_size = measured.size;
 
     let clamped = known_dimensions
         .or(node_size)
-        .unwrap_or(measured_size + content_box_inset.sum_axes())
+        .unwrap_or(measured_size + content_box_inset_sum)
         .maybe_clamp(node_min_size, node_max_size);
-    let size = Size {
-        width: clamped.width,
-        height: clamped.height.max(aspect_ratio.map_or(0.0, |r| clamped.width / r)),
-    }
-    .f32_max(pb_sum);
-
-    let content_start = if tree.style(node).direction == crate::style::Direction::Rtl {
-        (padding.right, padding.left)
-    } else {
-        (padding.left, padding.right)
+    let height = match aspect_ratio {
+        // The ratio gives the height, which the content may exceed only where that is its
+        // automatic minimum.
+        Some(r) if known_dimensions.height.is_none() && node_size.height.is_none() => {
+            let ratio_height = (clamped.width / r).maybe_clamp(node_min_size.height, node_max_size.height);
+            if ratio_is_minimum { clamped.height.max(ratio_height) } else { ratio_height }
+        }
+        Some(r) => clamped.height.max((clamped.width / r).maybe_min(node_max_size.height)),
+        None => clamped.height,
     };
-    let (is_scroll_x, is_scroll_y) = (overflow.x.is_scroll_container(), overflow.y.is_scroll_container());
+    let size = Size { width: clamped.width, height }.f32_max(pb_sum);
+
     let scrollable_overflow_rect = Rect {
         left: 0.0,
         top: 0.0,
-        right: content_start.0 + measured_size.width + if is_scroll_x || is_scroll_y { content_start.1 } else { 0.0 },
-        bottom: padding.top + measured_size.height + if is_scroll_x || is_scroll_y { padding.bottom } else { 0.0 },
+        right: content_start.0 + measured_size.width + if scrolls { content_start.1 } else { 0.0 },
+        bottom: padding_top + measured_size.height + if scrolls { padding_bottom } else { 0.0 },
     };
 
     let baselines = Baselines {
-        first: measured.baselines.first.map(|b| b + content_box_inset.top),
-        last: measured.baselines.last.map(|b| b + content_box_inset.top),
+        first: measured.baselines.first.map(|b| b + content_box_inset_top),
+        last: measured.baselines.last.map(|b| b + content_box_inset_top),
     };
 
     LayoutOutput {
@@ -199,6 +324,7 @@ pub fn compute_leaf_layout<T: LayoutTree + ?Sized>(tree: &mut T, node: NodeId, i
         margins_can_collapse_through: !has_styles_preventing_being_collapsed_through
             && size.height == 0.0
             && measured_size.height == 0.0,
+        oof: 0,
     }
 }
 

@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    An absolutely positioned box of automatic size with an aspect ratio takes its height from its
+    shrink-to-fit width
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; position: relative; width: 300px; height: 100px;">
+  <div style="display: block; position: absolute; aspect-ratio: 1;">X&#8203;X</div>
+  <div style="display: flex; position: absolute; top: 30px; aspect-ratio: 2;">
+    <div style="display: block; width: 40px;"></div>
+  </div>
+</div>
+
+</body>
+</html>

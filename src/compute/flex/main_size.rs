@@ -1,25 +1,40 @@
 //! §9.2 step 4: the container's main size when it is not known.
 
+use super::axis::FlexDir;
 use super::axis::{FlexAxisSize, FlexAxisSum, abs_main, sum_axis_gaps};
 use super::{AlgoConstants, FlexItem, FlexLine};
 use crate::compute::LayoutTreeExt;
 use crate::compute::common::sizing_keyword::SizingKeywordResolution;
 use crate::geometry::{AvailableSpace, Line, MaybeMath, Size};
-use crate::style::AlignSelf;
 use crate::tree::{CacheAccess, LayoutTree, SizingMode};
 
+/// A contribution held to the flex base size where the item cannot shrink or grow (css-flexbox-1
+/// §9.9.1), then to its min and max sizes, which win (as Chrome).
 #[inline]
-fn item_main_length(child: &FlexItem, dir: crate::style::FlexDirection) -> f32 {
-    let padding_border_sum = (child.padding + child.border).main_axis_sum(dir);
-    (child.flex_basis.maybe_max(child.min_size.main(dir)) + child.margin.main_axis_sum(dir)).max(padding_border_sum)
+pub(super) fn within_limits(
+    size: f32,
+    flex_basis_min: Option<f32>,
+    flex_basis_max: Option<f32>,
+    style_min: Option<f32>,
+    style_max: Option<f32>,
+    resolved_minimum: f32,
+) -> f32 {
+    let size = size.maybe_min(flex_basis_max).maybe_max(flex_basis_min);
+    size.maybe_min(style_max).max(style_min.unwrap_or(resolved_minimum).max(resolved_minimum))
 }
 
-pub(super) fn determine_container_main_size<T: LayoutTree + CacheAccess + ?Sized>(
+/// The item's hypothetical outer main size: its flex base size clamped by its min and max sizes.
+#[inline]
+fn item_main_length(child: &FlexItem, dir: impl FlexDir) -> f32 {
+    child.hypothetical_outer_size.main(dir)
+}
+
+pub(super) fn determine_container_main_size<D: FlexDir, T: LayoutTree + CacheAccess + ?Sized>(
     tree: &mut T,
     available_space: Size<AvailableSpace>,
     lines: &mut [FlexLine],
     items: &mut [FlexItem],
-    c: &mut AlgoConstants,
+    c: &mut AlgoConstants<D>,
 ) {
     let dir = c.dir;
     let main_content_box_inset = c.content_box_inset.main_axis_sum(dir);
@@ -84,7 +99,10 @@ pub(super) fn determine_container_main_size<T: LayoutTree + CacheAccess + ?Sized
                         let style_min = item.min_size.main(dir);
                         let style_preferred = item.size.main(dir);
                         let style_max = item.max_size.main(dir);
-                        let clamping_basis = Some(item.flex_basis).maybe_max(style_preferred);
+                        // A column item's `height` does not raise its contribution past its flex base size
+                        // (§9.9.3); a row item's `width` does, as in Chrome and Firefox.
+                        let clamping_basis =
+                            if c.is_row { Some(item.flex_basis).maybe_max(style_preferred) } else { Some(item.flex_basis) };
                         let flex_basis_min = clamping_basis.filter(|_| item.flex_shrink == 0.0);
                         let flex_basis_max = clamping_basis.filter(|_| item.flex_grow == 0.0);
                         let min_main_size = style_min
@@ -94,32 +112,42 @@ pub(super) fn determine_container_main_size<T: LayoutTree + CacheAccess + ?Sized
                             .max(item.resolved_minimum_main_size);
                         let max_main_size = style_max.maybe_min(flex_basis_max).or(flex_basis_max).unwrap_or(f32::INFINITY);
                         let content_contribution = match (min_main_size, style_preferred, max_main_size) {
-                            (min, Some(pref), max) if max <= min || max <= pref => {
-                                pref.min(max).max(min) + item.margin.main_axis_sum(dir)
+                            (min, Some(pref), max) if c.is_row && (max <= min || max <= pref) => {
+                                within_limits(pref, flex_basis_min, flex_basis_max, style_min, style_max, item.resolved_minimum_main_size) + item.margin.main_axis_sum(dir)
                             }
-                            (min, _, max) if max <= min => min + item.margin.main_axis_sum(dir),
-                            _ if item.is_scroll_container() => item.flex_basis + item.margin.main_axis_sum(dir),
+                            (min, _, max) if max <= min => {
+                                within_limits(min, flex_basis_min, flex_basis_max, style_min, style_max, item.resolved_minimum_main_size)
+                                    + item.margin.main_axis_sum(dir)
+                            }
                             (_, Some(pref), _) => {
                                 let item_pb_main = item.padding.main_axis_sum(dir) + item.border.main_axis_sum(dir);
                                 let inner_main_size = pref.max(item_pb_main);
                                 if c.is_row {
                                     (inner_main_size + item.margin.main_axis_sum(dir)).maybe_clamp(style_min, style_max)
                                 } else {
-                                    (inner_main_size.max(item.flex_basis) + item.margin.main_axis_sum(dir))
+                                    // A column item contributes its hypothetical main size: its
+                                    // flex base size clamped, whatever its `height` (as Chrome).
+                                    (item.flex_basis.max(min_main_size).min(max_main_size) + item.margin.main_axis_sum(dir))
                                         .maybe_clamp(style_min, style_max)
                                 }
                             }
                             _ => {
                                 let cross_axis_parent_size = c.node_inner_size.cross(dir);
-                                let cross_axis_margin_sum = c.margin.cross_axis_sum(dir);
-                                let child_min_cross = item.min_size.cross(dir).maybe_add(cross_axis_margin_sum);
-                                let child_max_cross = item.max_size.cross(dir).maybe_add(cross_axis_margin_sum);
+                                let child_min_cross = item.min_size.cross(dir);
+                                let child_max_cross = item.max_size.cross(dir);
+                                // The space for the item's border box.
                                 let mut cross_axis_available_space = available_space
                                     .cross(dir)
-                                    .map_definite(|val| c.divided_cross_space(cross_axis_parent_size.unwrap_or(val)))
+                                    .map_definite(|val| {
+                                        (c.divided_cross_space(cross_axis_parent_size.unwrap_or(val)) - item.margin.cross_axis_sum(dir)).max(0.0)
+                                    })
                                     .maybe_clamp(child_min_cross, child_max_cross);
                                 let child_known_dimensions = {
                                     let mut ckd = item.size.with_main(dir, None);
+                                    // Measured at its clamped cross size, as for its flex base size.
+                                    let min_cross = super::transfer_limits(item.min_size, item).cross(dir);
+                                    let max_cross = super::transfer_limits(item.max_size, item).cross(dir);
+                                    ckd.set_cross(dir, ckd.cross(dir).maybe_clamp(min_cross, max_cross));
                                     let keyword = match ckd.cross(dir) {
                                         Some(_) => None,
                                         None => super::base_size::cross_sizing_keyword(c, item),
@@ -128,22 +156,31 @@ pub(super) fn determine_container_main_size<T: LayoutTree + CacheAccess + ?Sized
                                         Some(SizingKeywordResolution::Exact(size)) => ckd.set_cross(dir, Some(size)),
                                         Some(SizingKeywordResolution::Measure(space)) => cross_axis_available_space = space,
                                         None => {
-                                            if item.align_self == AlignSelf::STRETCH && ckd.cross(dir).is_none() {
-                                                let stretched = c.indefinite_stretch_cross.or(cross_axis_available_space.into_option());
-                                                ckd.set_cross(
-                                                    dir,
-                                                    stretched.maybe_sub(item.margin.cross_axis_sum(dir)).maybe_max(0.0),
-                                                );
+                                            if item.align_self.keyword == crate::style::AlignItemsKeyword::Stretch && ckd.cross(dir).is_none() {
+                                                let stretched = match c.indefinite_stretch_cross {
+                                                    Some(cross) => Some((cross - item.margin.cross_axis_sum(dir)).max(0.0)),
+                                                    None => cross_axis_available_space.into_option(),
+                                                };
+                                                ckd.set_cross(dir, stretched);
                                             }
                                         }
                                     }
                                     ckd
                                 };
-                                let child_available_space = available_space.with_cross(dir, cross_axis_available_space);
+                                // A content-sized main size keyword contributes that size.
+                                let main_space = match crate::compute::common::sizing_keyword::resolve_sizing_keyword(
+                                    item.size_style.main(dir).raw(),
+                                    None,
+                                    None,
+                                ) {
+                                    Some(SizingKeywordResolution::Measure(space)) => space,
+                                    _ => available_space.main(dir),
+                                };
+                                let child_available_space = available_space.with_cross(dir, cross_axis_available_space).with_main(dir, main_space);
                                 let measured_main_size = tree.measure_child_size(
                                     item.node,
                                     child_known_dimensions,
-                                    c.node_inner_size,
+                                    c.percent_basis(),
                                     child_available_space,
                                     SizingMode::ContentSize,
                                     abs_main(dir),
@@ -154,11 +191,12 @@ pub(super) fn determine_container_main_size<T: LayoutTree + CacheAccess + ?Sized
                                     .zip(child_known_dimensions.cross(dir))
                                     .map(|(ratio, cross)| if c.is_row { cross * ratio } else { cross / ratio });
                                 let inner_main_size = measured_main_size.maybe_max(transferred_main_size);
+                                // A row item contributes its content, a column item its hypothetical
+                                // size; within its flex base size where it cannot grow or shrink.
                                 if c.is_row {
-                                    (inner_main_size + item.margin.main_axis_sum(dir)).maybe_clamp(style_min, style_max)
+                                    within_limits(inner_main_size, flex_basis_min, flex_basis_max, style_min, style_max, item.resolved_minimum_main_size) + item.margin.main_axis_sum(dir)
                                 } else {
-                                    (inner_main_size.max(item.flex_basis) + item.margin.main_axis_sum(dir))
-                                        .maybe_clamp(style_min, style_max)
+                                    within_limits(item.flex_basis, flex_basis_min, flex_basis_max, style_min, style_max, item.resolved_minimum_main_size) + item.margin.main_axis_sum(dir)
                                 }
                             }
                         };

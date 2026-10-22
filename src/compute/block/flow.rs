@@ -4,10 +4,11 @@ use super::BlockContext;
 use super::floats::FIT_TOLERANCE;
 use super::items::BlockItem;
 use crate::compute::LayoutTreeExt;
+use crate::compute::common::alignment::resolve_self_alignment_safety;
 use crate::compute::common::overflow::{scrollable_overflow_contribution, union};
 use crate::compute::common::sizing_keyword::{SizingKeywordResolution, resolve_sizing_keyword};
 use crate::geometry::{AbsoluteAxis, AvailableSpace, Line, MaybeMath, Point, Rect, Size};
-use crate::style::{Dimension, Direction, Overflow, TextAlign};
+use crate::style::{AlignItems, AlignItemsKeyword, Dimension, Direction, Length, Overflow, TextAlign};
 use crate::tree::{CacheAccess, CollapsibleMarginSet, Layout, LayoutInput, LayoutTree, RequestedAxis, RunMode, SizingMode};
 
 pub(super) struct FlowParams {
@@ -19,6 +20,7 @@ pub(super) struct FlowParams {
     pub text_align: TextAlign,
     pub direction: Direction,
     pub own_margins_collapse_with_children: Line<bool>,
+    pub children_margins_adjoin_own_edges: Line<bool>,
     pub is_scroll_container: bool,
 }
 
@@ -29,15 +31,33 @@ pub(super) struct FlowResult {
     pub last_child_bottom_margin_set: CollapsibleMarginSet,
     pub first_baseline: Option<f32>,
     pub last_baseline: Option<f32>,
+    /// Some child is out of flow, or passes out-of-flow boxes through.
+    pub has_out_of_flow: bool,
 }
 
 /// `stretch` is the only block-axis keyword that needs resolving; intrinsic keywords equal `auto`.
+///
+/// A margin that could collapse through the container's edge on its side counts as zero
+/// (csswg-drafts#11044, #13260).
 #[inline]
-fn resolve_stretch_height(height: Dimension, container_inner_height: Option<f32>, y_margin_sum: f32) -> Option<f32> {
-    match resolve_sizing_keyword(height.raw(), container_inner_height.maybe_sub(y_margin_sum), container_inner_height) {
-        Some(SizingKeywordResolution::Exact(h)) => Some(h),
-        _ => None,
+fn resolve_stretch_height(height: Dimension, container_inner_height: Option<f32>, margin: Rect<f32>, margins_treated_as_zero: Line<bool>) -> Option<f32> {
+    if !height.raw().is_stretch() {
+        return None;
     }
+    let top = if margins_treated_as_zero.start { 0.0 } else { margin.top };
+    let bottom = if margins_treated_as_zero.end { 0.0 } else { margin.bottom };
+    container_inner_height.map(|h| h - top - bottom)
+}
+
+/// The offset of a block-level box within its alignment container's free space.
+#[inline(never)]
+fn justify_offset(justify_self: AlignItems, free: f32, direction: Direction) -> f32 {
+    let end = match resolve_self_alignment_safety(justify_self, free < 0.0) {
+        AlignItemsKeyword::Center => return free / 2.0,
+        AlignItemsKeyword::End | AlignItemsKeyword::FlexEnd | AlignItemsKeyword::SelfEnd => true,
+        _ => false,
+    };
+    if end != (direction == Direction::Rtl) { free } else { 0.0 }
 }
 
 #[inline]
@@ -83,6 +103,7 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
     // Margins of a self-collapsing cleared box stay inside the parent.
     let mut active_margin_set_has_clearance = false;
     let mut has_active_floats = block_ctx.has_active_floats(committed_y_offset);
+    let mut has_out_of_flow = false;
 
     for item in items.iter_mut() {
         if item.position.is_out_of_flow() {
@@ -91,6 +112,7 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
                 Direction::Rtl => p.container_outer_width - p.resolved_content_box_inset.right,
             };
             item.static_position = Point { x, y: y_offset_for_absolute };
+            has_out_of_flow = true;
             continue;
         }
         let calc = |id, basis| tree.resolve_calc(id, basis);
@@ -112,8 +134,8 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
                     Some(SizingKeywordResolution::Exact(w)) => (Some(w), AvailableSpace::Definite(w)),
                     None => (None, AvailableSpace::Definite(available_width)),
                 };
-            let known_height =
-                resolve_stretch_height(item.size_style.height, container_percentage_resolution_height, item_non_auto_margin.vertical_axis_sum());
+            // The margins of a float never collapse.
+            let known_height = resolve_stretch_height(item.size_style.height, container_percentage_resolution_height, item_non_auto_margin, Line::FALSE);
             let float_inputs = LayoutInput {
                 run_mode: RunMode::PerformLayout,
                 sizing_mode: SizingMode::InherentSize,
@@ -137,6 +159,10 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
             let mut location = block_ctx.place_floated_box(margin_box, y_for_float, float_direction, item.clear, adjoins_unresolved_strut);
             location.y += item_non_auto_margin.top;
             location.x += item_non_auto_margin.left;
+            if item_layout.oof != 0 {
+                item.oof = item_layout.oof;
+                has_out_of_flow = true;
+            }
             item.final_layout = Some(Layout {
                 order: item.order,
                 size: item_layout.size,
@@ -204,12 +230,23 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
             }
         };
 
-        // Tables and replaced boxes size themselves.
-        let known_dimensions = if item.is_table || item.is_replaced {
+        // `justify-self` (css-align-3 §6.1.1) other than `normal` and `stretch`, which lay the box
+        // out by the block rules (`stretch` differs only for tables and replaced boxes).
+        let non_stretch_justify_self = match item.justify_self {
+            Some(a) if a.keyword != AlignItemsKeyword::Stretch => Some(a.resolve_self_relative(tree.style(item.node).direction, p.direction, true)),
+            _ => None,
+        };
+
+        let known_dimensions = if item.sizes_itself {
             Size::NONE
         } else {
+            // Such alignment makes an auto width `fit-content` instead of `stretch`.
+            let width_style = match non_stretch_justify_self {
+                Some(_) if item.size_style.width.is_auto() => Length::FIT_CONTENT,
+                _ => item.size_style.width.raw(),
+            };
             let keyword_width =
-                resolve_sizing_keyword(item.size_style.width.raw(), Some(stretch_width), Some(container_inner_width)).map(|r| match r {
+                resolve_sizing_keyword(width_style, Some(stretch_width), Some(container_inner_width)).map(|r| match r {
                     SizingKeywordResolution::Exact(w) => w,
                     SizingKeywordResolution::Measure(avail) => tree.measure_child_size(
                         item.node,
@@ -221,12 +258,18 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
                         Line::TRUE,
                     ),
                 });
-            let keyword_height =
-                resolve_stretch_height(item.size_style.height, container_percentage_resolution_height, item_non_auto_margin.vertical_axis_sum());
+            let keyword_height = resolve_stretch_height(
+                item.size_style.height,
+                container_percentage_resolution_height,
+                item_non_auto_margin,
+                p.children_margins_adjoin_own_edges,
+            );
             item.size
                 .map_width(|w| Some(w.or(keyword_width).unwrap_or(stretch_width).maybe_clamp(item.min_size.width, item.max_size.width)))
                 .map_height(|h| h.or(keyword_height))
                 .maybe_clamp(item.min_size, item.max_size)
+                // The border box never gets smaller than the padding and border.
+                .maybe_max(item.padding_border_sum.map(Some))
         };
 
         let mut inputs = LayoutInput {
@@ -243,35 +286,44 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
         let clear_threshold = block_ctx.cleared_threshold(item.clear);
         let clear_pos = clear_threshold.unwrap_or(f32::NEG_INFINITY);
 
+        // Height taken by floats inside a same-BFC child, from its border-top.
+        let mut child_float_contribution = f32::NEG_INFINITY;
         let item_layout = if item.is_in_same_bfc {
-            let width = known_dimensions.width.unwrap_or(stretch_width);
+            // The border box is at least as wide as its padding and border.
+            let width = known_dimensions.width.unwrap_or(stretch_width).max(item.padding_border_sum.width);
             let inset_left = item_non_auto_margin.left + p.content_box_inset.left;
             let inset_right = p.container_outer_width - width - inset_left;
-            let mut child_ctx = block_ctx.sub_context((y_offset_for_absolute + item_non_auto_margin.top).max(clear_pos), [inset_left, inset_right]);
+            // The child's own collapsed-through margins are not known yet.
+            let estimated_y = committed_y_offset + active_collapsible_margin_set.collapse_with_margin(item_non_auto_margin.top).resolve();
+            let mut child_ctx = block_ctx.sub_context(estimated_y.max(clear_pos), [inset_left, inset_right]);
             inputs.context_key = child_ctx.key();
             let output = super::compute_block_child(tree, item.node, inputs, Some(&mut child_ctx));
-            let child_contribution = child_ctx.floated_content_height_contribution();
+            child_float_contribution = child_ctx.floated_content_height_contribution();
             let child_top_adjoining = child_ctx.top_adjoining_floats();
-            block_ctx.add_child_floated_content_height_contribution(y_offset_for_absolute + child_contribution);
             block_ctx.merge_adjoining_floats(child_top_adjoining);
             output
         } else {
             super::compute_block_child(tree, item.node, inputs, None)
         };
         let final_size = item_layout.size;
+        if item_layout.oof != 0 {
+            item.oof = item_layout.oof;
+            has_out_of_flow = true;
+        }
 
         let top_margin_set = item_layout.top_margin.collapse_with_margin(item_margin.top.unwrap_or(0.0));
         let bottom_margin_set = item_layout.bottom_margin.collapse_with_margin(item_margin.bottom.unwrap_or(0.0));
 
-        // Auto margins share the free inline space; vertical auto margins are zero.
+        // Auto margins share the free inline space; vertical auto margins are zero. Collapsing
+        // moves the box but leaves its own used margins alone.
         let free_x_space = (stretch_width - final_size.width).max(0.0);
         let auto_margin_count = item_margin.left.is_none() as u8 + item_margin.right.is_none() as u8;
         let x_auto_margin = if auto_margin_count > 0 { free_x_space / auto_margin_count as f32 } else { 0.0 };
         let resolved_margin = Rect {
             left: item_margin.left.unwrap_or(x_auto_margin),
             right: item_margin.right.unwrap_or(x_auto_margin),
-            top: top_margin_set.resolve(),
-            bottom: bottom_margin_set.resolve(),
+            top: item_non_auto_margin.top,
+            bottom: item_non_auto_margin.bottom,
         };
 
         let calc = |id, basis| tree.resolve_calc(id, basis);
@@ -352,8 +404,24 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
             }
         };
 
+        // Floats inside count from the child's final, margin-collapsed position.
+        if item.is_in_same_bfc {
+            block_ctx.add_child_floated_content_height_contribution(location.y - inset_offset.y + child_float_contribution);
+        }
+
+        // `justify-self` aligns the margin box and beats `text-align`; auto margins beat `justify-self`.
         let item_outer_width = final_size.width + resolved_margin.horizontal_axis_sum();
-        if item_outer_width < container_inner_width {
+        if let Some(justify_self) = non_stretch_justify_self {
+            if item_margin.left.is_some() && item_margin.right.is_some() {
+                // Beside floats the alignment container is the slot, already inset by the margins.
+                let (container_start, free) = if item_avoids_floats {
+                    (float_avoiding_position.x - resolved_margin.left, float_avoiding_width - final_size.width)
+                } else {
+                    (p.resolved_content_box_inset.left, container_inner_width - item_outer_width)
+                };
+                location.x = container_start + resolved_margin.left + inset_offset.x + justify_offset(justify_self, free, p.direction);
+            }
+        } else if item_outer_width < container_inner_width {
             let free = container_inner_width - item_outer_width;
             match (p.text_align, p.direction) {
                 (TextAlign::Auto, _) | (TextAlign::LegacyLeft, Direction::Ltr) | (TextAlign::LegacyRight, Direction::Rtl) => {}
@@ -375,6 +443,19 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
             last_baseline = Some(location.y + b);
         }
 
+        // Used auto margins reach the containing block's content edges past any floats
+        // (csswg-drafts#9174); the alignment above used the float-relative ones.
+        let mut used_margin = resolved_margin;
+        if item_avoids_floats {
+            if item_margin.left.is_none() {
+                used_margin.left += float_avoiding_position.x - p.resolved_content_box_inset.left;
+            }
+            if item_margin.right.is_none() {
+                used_margin.right +=
+                    p.container_outer_width - p.resolved_content_box_inset.right - float_avoiding_position.x - float_avoiding_width;
+            }
+        }
+
         item.final_layout = Some(Layout {
             order: item.order,
             size: final_size,
@@ -383,7 +464,7 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
             location,
             padding: item.padding,
             border: item.border,
-            margin: resolved_margin,
+            margin: used_margin,
         });
         inflow_overflow_rect = union(
             inflow_overflow_rect,
@@ -445,5 +526,6 @@ pub(super) fn perform_final_layout_on_in_flow_children<T: LayoutTree + CacheAcce
         last_child_bottom_margin_set,
         first_baseline,
         last_baseline,
+        has_out_of_flow,
     }
 }

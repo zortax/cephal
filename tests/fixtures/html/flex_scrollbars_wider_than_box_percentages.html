@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    Scrollbars wider than a flex container leave its items no room, not negative room: the item's
+    percentage padding is zero, and a reversed container's item stays at the start
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; width: 17px;">
+  <div style="display: flex; width: 4px; border: 1px solid; overflow-x: hidden; overflow-y: scroll;">
+    <div style="display: block; padding-top: 50%;">
+      <div style="display: block; height: 5px;"></div>
+    </div>
+  </div>
+  <div style="display: flex; width: 10px; overflow-x: hidden; overflow-y: scroll; flex-direction: row-reverse; justify-content: space-between;">
+    <div style="display: block; height: 5px;"></div>
+  </div>
+</div>
+
+</body>
+</html>

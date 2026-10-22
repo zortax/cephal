@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <script src="../../scripts/gentest/test_helper.js"></script>
+  <link rel="stylesheet" type="text/css" href="../../scripts/gentest/test_base_style.css">
+  <title>
+    A content-based flex base size includes the item's percentage padding, which resolves against
+    the container's width in a row as in a column container
+  </title>
+</head>
+<body>
+
+<div id="test-root" style="display: block; width: 445px;">
+  <div style="display: flex;">
+    <div style="display: block; padding-right: 8%;">X&#8203;X</div>
+  </div>
+  <div style="display: flex; flex-direction: column; align-items: start;">
+    <div style="display: block; padding-left: 4%; padding-bottom: 2%;">X&#8203;X</div>
+  </div>
+</div>
+
+</body>
+</html>

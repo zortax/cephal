@@ -1,36 +1,37 @@
 //! §9.3 collecting items into lines.
 
+use super::axis::FlexDir;
 use crate::compute::scratch::Scratch;
 use super::axis::FlexAxisSize;
+use super::flexible::Flexible;
 use super::{AlgoConstants, FlexItem, FlexLine};
 use crate::geometry::{AvailableSpace, MaybeMath, Size};
 
-fn single_line(items: &[FlexItem]) -> Scratch<FlexLine> {
+fn single_line<I>(items: &[I]) -> Scratch<FlexLine> {
     Scratch::collect([FlexLine { start: 0, end: items.len(), cross_size: 0.0, offset_cross: 0.0 }])
 }
 
-fn one_item_per_line(items: &[FlexItem]) -> Scratch<FlexLine> {
+fn one_item_per_line<I>(items: &[I]) -> Scratch<FlexLine> {
     Scratch::collect((0..items.len()).map(|i| FlexLine { start: i, end: i + 1, cross_size: 0.0, offset_cross: 0.0 }))
 }
 
 /// Available main space for line breaking, honouring the container's min/max size.
-fn main_axis_available_space(c: &AlgoConstants, available_space: Size<AvailableSpace>) -> AvailableSpace {
+fn main_axis_available_space<D: FlexDir>(c: &AlgoConstants<D>, available_space: Size<AvailableSpace>) -> AvailableSpace {
     match c.max_size.main(c.dir) {
         Some(max_size) => AvailableSpace::Definite({
             let available = available_space.main(c.dir).into_option().unwrap_or(max_size);
             let available = if c.has_definite_main_size { available } else { available.min(max_size) };
             available.maybe_max(c.min_size.main(c.dir))
         }),
-        // A column's automatic main size is content based, so ancestor space does not wrap it.
-        None if !c.dir.is_row() && !c.has_definite_main_size && available_space.main(c.dir).is_definite() => {
-            AvailableSpace::MaxContent
-        }
+        // A column's automatic main size is content based, so ancestor space does not wrap it,
+        // and its min-content height is its max-content height (as Chrome).
+        None if !c.dir.is_row() && !c.has_definite_main_size => AvailableSpace::MaxContent,
         None => available_space.main(c.dir),
     }
 }
 
-pub(super) fn collect_flex_lines(c: &AlgoConstants, available_space: Size<AvailableSpace>, items: &[FlexItem]) -> Scratch<FlexLine> {
-    if !c.is_wrap || !c.known_main_size_is_definite {
+pub(super) fn collect_flex_lines<D: FlexDir, I: Flexible>(c: &AlgoConstants<D>, available_space: Size<AvailableSpace>, items: &[I]) -> Scratch<FlexLine> {
+    if !c.is_wrap {
         return single_line(items);
     }
     match main_axis_available_space(c, available_space) {
@@ -44,8 +45,9 @@ pub(super) fn collect_flex_lines(c: &AlgoConstants, available_space: Size<Availa
                 let mut line_length = 0.0;
                 let mut end = items.len();
                 for (idx, child) in items[start..].iter().enumerate() {
-                    line_length += child.hypothetical_outer_size.main(c.dir) + if idx == 0 { 0.0 } else { gap };
-                    if line_length > limit && idx != 0 {
+                    line_length += child.hypothetical_outer_main(c.dir) + if idx == 0 { 0.0 } else { gap };
+                    // Rounding error does not break a line that fits (Chrome lays out in 1/64px).
+                    if line_length > limit + 1.0 / 128.0 && idx != 0 {
                         end = start + idx;
                         break;
                     }
@@ -58,8 +60,8 @@ pub(super) fn collect_flex_lines(c: &AlgoConstants, available_space: Size<Availa
     }
 }
 
-pub(super) fn collect_balanced_flex_lines(
-    c: &AlgoConstants,
+pub(super) fn collect_balanced_flex_lines<D: FlexDir>(
+    c: &AlgoConstants<D>,
     available_space: Size<AvailableSpace>,
     items: &[FlexItem],
 ) -> Scratch<FlexLine> {

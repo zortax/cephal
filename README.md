@@ -9,9 +9,13 @@ The engine supports:
 - flexbox, including `flex-wrap: balance`;
 - CSS grid, named lines, named areas, and auto-repeat;
 - `calc()`, sizing keywords, `box-sizing`, scroll containers, and containment;
-- absolute positioning and pixel snapping.
+- absolute and fixed positioning against the containing block (out-of-flow boxes are laid out by
+  their nearest positioned ancestor or the viewport, with static positions and self-alignment);
+- pixel snapping.
 
-Cephal passes 6,084 Chrome-generated layout fixtures vendored from taffy.
+Cephal passes the 6,504 Chrome-generated layout fixtures of taffy 0.15 and 188 of its own. Where
+cephal and taffy disagree, Chrome decides: `tests/fixtures/TAFFY_DIVERGENCES.md` lists the cases
+where taffy differs from the CSS specification and Chrome, with the fixtures that pin them.
 
 ## Incremental layout
 
@@ -20,7 +24,9 @@ affected nodes to a dirty queue. The scheduler processes the deepest dirty nodes
 Propagation stops when a recomputed answer stays unchanged.
 
 Clipped overflow changes stay inside the clipping node. An absolute box can move after a
-position-only update. Pixel snapping processes changed nodes and subtrees whose origin moved.
+position-only update without its containing block's in-flow content being laid
+out again. Pixel snapping processes changed nodes and subtrees whose origin
+moved.
 
 This model follows *Spineless Traversal for Layout Invalidation* by Kirisame, Wang, and
 Panchekha (PLDI 2025). The test suite checks that incremental and parallel results equal a
@@ -70,31 +76,34 @@ Frameworks that own their tree can implement `LayoutTree`, `CacheAccess`, and
 
 ## Performance
 
-These results use an Intel Core i9-13900K and 24 threads. Measurements come from
-`cargo bench` and `cargo run --release --example scaling`.
+Run on an Intel Core i9-13900K (one core, parallel: 16 cores), every layout
+read back after each frame.
 
-| Scenario | Serial | Parallel | taffy |
+| Cold layout (ns per node) | cephal | cephal (parallel) | taffy 0.15 | Yoga 3.2.1 | Clay 0.14 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Flex column with gap (10,001 nodes) | 59 | 88 | 212 | 339 | 84 |
+| Wrapping text in a flex row (10,001 nodes) | 184 | 314 | 281 | 1,034 | – |
+| 100×100 grid of auto tracks with text (10,001 nodes) | 441 | 788 | 585 | – | – |
+| Grid of flex cards with text (8,751 nodes) | 429 | 132 | 1,052 | – | – |
+| Nested intrinsic flex rows (101,111 nodes) | 68 | 26 | 317 | 640 | – |
+
+| One edit, then layout (about 100,000 nodes) | cephal | taffy 0.15 | Speed-up |
 | --- | ---: | ---: | ---: |
-| Contained edit in a 100,000-node list | 2 µs | 2.5 µs | 5 ms |
-| Move an absolute box in a 100,000-node tree | 2.4 µs | | 21 ms |
-| Leaf-width edit in a 100,000-node random tree | 8.4 ms | 10.0 ms | 18 ms |
-| Cold layout of 100,000 nested flex nodes | 34 ms | 12 ms | 39 ms |
-| Cold layout of 10,000 leaves in one flex row | 1.7 ms | 1.9 ms | 2.0 ms |
-| Cold layout of a 100×100 grid | 8.4 ms | 8.6 ms | 9.2 ms |
-| Cold layout of 10,000 random nodes | 25 ms | 12 ms | 22 ms |
-| Resize a 10,000-node random tree | 2.0 ms | 2.1 ms | 2.0 ms |
-
-Run `cargo run --release --example scaling` to measure trees from 1,000 to 100,000 nodes.
-Use `scripts/plot_bench.py` to plot the results.
+| Change the text of a list item | 0.14 ms | 6.1 ms | 44× |
+| Change the width of a list item | 0.15 ms | 6.1 ms | 39× |
+| Move an absolutely positioned box in a dashboard | 0.13 ms | 5.5 ms | 41× |
+| Resize the viewport of a text document | 0.26 ms | 4.6 ms | 18× |
+| Change `align-self` in a random tree | 0.15 ms | 17.2 ms | 116× |
+| Move a relatively positioned box in a random tree | 0.17 ms | 17.3 ms | 102× |
 
 ## Tests
 
-- `tests/fixtures.rs` runs 6,084 Chrome-generated fixtures from taffy.
-- `tests/differential.rs` compares random trees with taffy.
-- `tests/incremental.rs` compares incremental and parallel results with cold serial layouts.
-
-Use `CEPHAL_SEEDS` and `CEPHAL_STEPS` to set the size of the random test suites. Use
-`CEPHAL_FIXTURE=name` to select fixtures.
+- **Chrome fixtures**: trees whose layout Chrome rendered, taffy's set and cephal's own, must lay
+  out the same in cephal.
+- **Differential testing**: random trees are laid out by cephal and taffy; where they disagree,
+  rendering the tree in Chrome decides which engine is right.
+- **Incremental equivalence**: random edit sequences are applied to random trees, and after every
+  edit the incremental and parallel layouts must equal a cold layout bit for bit.
 
 ## License
 
